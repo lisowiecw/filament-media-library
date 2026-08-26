@@ -17,6 +17,7 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 <!-- Resolved tickets are indexed here; their full decisions remain in the child issues. -->
 
 - [Define Platform and Package Contract](issues/01-platform-and-package-contract.md): Guarantee Laravel 13/PHP 8.3+ and Filament 5; keep Filament 4 best effort behind shared public APIs and a compatibility matrix.
+- [Define Media Asset and Relationship Model](issues/02-media-asset-and-relationship-model.md): Plugin-owned reusable assets attach polymorphically to host models through ordered, field-scoped relationships without duplicate selections.
 
 ## Not yet specified
 
@@ -27,7 +28,6 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 - Authorization baseline and the exact permissions for library operations and private URL issuance.
 - Whether uploader identity is stored always or only when authentication is required.
 - How legacy hashed uploads are discovered, mapped to assets, and handled when ownership or disk is unknown.
-- Attachment pivot details, repeat selections, and field-level context.
 - Picker UX details such as search, filters, previews, pagination, bulk actions, rename, and delete controls.
 - Multi-disk or tenant-aware asset behavior and whether assets can move between buckets.
 - Whether Filament 4 compatibility ships in the same Composer line or a separately tested release, plus the exact package namespace and release tags.
