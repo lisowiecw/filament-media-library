@@ -16,5 +16,11 @@
 - **Media Picker**: The single field component that renders a host model's attachments for one field context and opens the library modal. The only picker surface; it never exposes delete or a visibility choice.
 - **Placement**: The disk, directory and visibility a Media Picker applies to **new uploads**. Placement is fixed on the asset at upload and never re-applied by attaching, so a shared asset keeps its own placement wherever it is reused.
   _Avoid_: Destination, location (these read as the object key, which placement is not)
-- **Offer**: To show an asset in a picker's library grid as selectable. A picker offers an asset when its mime matches the field's accepted file types and the asset is public, or the field's placement is private. Disk and directory never affect what is offered.
+- **Offer**: To show an asset in a picker's library grid as selectable. A picker offers an asset when its mime matches the field's accepted file types and the asset is public, or the field's placement is private. Disk and directory never affect what is offered. Offering is unauthenticated by default and distinct from View: a grid may offer an asset without ever checking View, since offering shows metadata, not content.
+- **View**: The authorization ability that governs access to a Media Asset's actual content — the bytes, not its listing. View is checked only when content is being delivered (through the Delivery route, or a forced download), never merely to appear in a picker's grid. Public assets never require View, since their content is already publicly addressable.
+  _Avoid_: Read, access
+- **Delivery route**: The single endpoint the plugin registers to serve a private Media Asset's content. It re-checks View on every request, then either redirects to the storage disk's own temporary URL or streams the file directly. A public asset never uses the Delivery route; it resolves straight to the disk's native URL.
+  _Avoid_: Signed URL, presigned URL (these name a mechanism the Delivery route may use internally, not the contract itself)
+- **Uploader**: The authenticated user recorded on a Media Asset at the moment it is uploaded, or absent when the upload was unauthenticated. The Uploader is a fact about provenance, not a grant of authority; the plugin defines no ownership or permission implied by being the Uploader.
+  _Avoid_: Owner, creator
 - **Orphan asset**: A Media Asset with zero Attachments. Surfaced for review by a report-only sweep after a configurable grace period; never deleted automatically.

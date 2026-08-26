@@ -1,0 +1,5 @@
+# Private Media Assets are always served through a plugin-owned Delivery route
+
+Private Media Asset content is never handed to the browser as a raw disk-generated presigned URL. Instead the plugin registers its own signed route (the Delivery route) that every request for private content passes through; the route re-checks the View authorization ability on each hit, then either redirects to the storage disk's own temporary URL (R2/S3-style disks) or streams the file directly (disks without temporary-URL support).
+
+The obvious alternative — generate a disk presigned URL once, after an authorization check, and give it straight to the browser — is cheaper and CDN-friendlier, but a presigned URL is a bearer token: once issued it can't be revoked or re-checked, so authorization decided at issuance time may no longer hold by the time (or every time) the URL is used. Routing every request through the plugin's own signed route guarantees View is evaluated fresh on every fetch, at the cost of an extra hop and no CDN caching for private content. Public assets are unaffected: they bypass the Delivery route entirely and resolve straight to the disk's native URL.
