@@ -23,13 +23,16 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 - [Define Asset Lifecycle and Deletion Policy](issues/05-asset-lifecycle-and-deletion-policy.md): Detach never deletes; replace creates a new asset and detaches the old; explicit delete soft-deletes and queues backing-object cleanup, blocked by default when shared (force delete overrides, showing the usage list); orphan cleanup is report-only; all package-global.
 - [Define Picker API and Selection Workflow](issues/06-picker-api-and-selection-workflow.md): One `MediaPicker` field opening one library modal, accepting drops at every surface including the inline trigger; the grid offers an asset only when its mime matches `acceptedFileTypes` and it is public or the field uploads private; disk and directory are upload placement and never scope; visibility is field config, never a picker control.
 - [Define Authorization and Private Delivery](issues/07-authorization-and-private-delivery.md): One `MediaAssetPolicy` (view/update/delete/forceDelete/detach) plus `uploadMedia`/`attachMedia` gates, fail-closed by default except public reads; grid listing is never row-gated, only content delivery is; private content always flows through a single plugin-owned Delivery route (never a raw presigned URL), 5-minute default signed TTL, inline-by-default disposition; `uploaded_by` always recorded as provenance.
+- [Define Legacy Hashed Upload Import](issues/08-legacy-hashed-upload-import.md): Import registers legacy objects in place and never writes to the source disk (`--copy` is an explicit opt-in, never a move); discovery is column-driven by default with lazy disk traversal as the degraded fallback; the legacy key becomes the `object_key` verbatim and its basename the original filename; unknown disk fails hard, unknown uploader stays null, and visibility is never read from an s3-driver disk; identity is a unique `(disk, object_key)` index with `firstOrCreate`, so re-runs are idempotent.
 
 ## Not yet specified
 
 - Upload validation limits and security treatment for arbitrary file types, including executable or browser-active formats.
 - Exact readable-name algorithm, collision behavior, Unicode normalization, and whether the name ever influences the object key.
-- How legacy hashed uploads are discovered, mapped to assets, and handled when ownership or disk is unknown.
 - Multi-disk or tenant-aware asset behavior and whether assets can move between buckets. Ticket 06 fixed that tenant scoping must be a global query scope rather than a per-field setting, and left `->scopeLibrary()` as the sanctioned per-picker escape hatch; how tenancy resolves that scope is still open.
+- Multi-value legacy columns: how the importer discovers and orders paths held in a JSON array column, rather than the single-value column ticket 08 assumed.
+- Whether the importer is exposed as a Filament action on the management page or stays CLI-only; ticket 10 may absorb this once that surface is fixed.
+- Legacy objects on a bucket the application no longer configures, where no disk name can be supplied.
 - Whether Filament 4 compatibility ships in the same Composer line or a separately tested release, plus the exact package namespace and release tags.
 
 ## Out of scope
