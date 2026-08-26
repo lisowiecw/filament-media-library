@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PROTOTYPE — Media Picker Workflow (ticket 06)</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --ink:#e6e9ef; --dim:#9aa4b6; --accent:#f59e0b; --accent2:#38bdf8;
+    --ok:#34d399; --warn:#fb7185;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0;font-weight:650}
+  .tag{background:var(--warn);color:#1a0d10;font-weight:700;font-size:10px;letter-spacing:.08em;padding:2px 7px;border-radius:4px}
+  header p{margin:0;color:var(--dim);font-size:12px}
+  main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:0;min-height:calc(100vh - 55px)}
+  @media(max-width:1000px){main{grid-template-columns:1fr}}
+  .stage{padding:22px 24px 120px}
+  .side{border-left:1px solid var(--line);background:var(--panel);padding:18px 18px 120px;overflow:auto}
+  @media(max-width:1000px){.side{border-left:0;border-top:1px solid var(--line)}}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);margin:0 0 10px;font-weight:650}
+  .form{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;max-width:720px}
+  .form h3{margin:0 0 2px;font-size:14px}
+  .form .hint{color:var(--dim);font-size:12px;margin:0 0 18px}
+  .field{margin-bottom:22px}
+  .label{font-size:12px;font-weight:600;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+  .label small{font-weight:400;color:var(--dim)}
+  button{font:inherit;cursor:pointer;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);padding:6px 11px}
+  button:hover{border-color:#3b4252}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#1a1206;font-weight:600}
+  button.ghost{background:transparent}
+  button.danger{color:var(--warn)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .thumbs{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+  .thumb{width:104px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);overflow:hidden;position:relative}
+  .thumb .art{height:70px;display:grid;place-items:center;font-size:26px;background:#232833;overflow:hidden}
+  .art img{width:100%;height:100%;object-fit:cover;display:block}
+  .em img{width:26px;height:20px;object-fit:cover;border-radius:3px;display:block}
+  .thumb .nm{font-size:10.5px;padding:5px 6px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .thumb .bar{display:flex;border-top:1px solid var(--line)}
+  .thumb .bar button{flex:1;border:0;border-radius:0;background:transparent;padding:4px;font-size:10px;color:var(--dim)}
+  .thumb .bar button:hover{background:#262c38;color:var(--ink)}
+  .thumb .ord{position:absolute;top:4px;left:4px;background:var(--accent);color:#1a1206;font-size:10px;font-weight:700;width:17px;height:17px;border-radius:50%;display:grid;place-items:center}
+  .thumb .lock{position:absolute;top:4px;right:4px;font-size:11px}
+  .slot{width:104px;height:70px;border:1px dashed #39404e;border-radius:8px;display:grid;place-items:center;color:var(--dim);font-size:11px;cursor:pointer;text-align:center;padding:6px}
+  .slot:hover,.slot.hot{border-color:var(--accent);color:var(--ink);background:#1f1a10}
+  .mb.hot{outline:2px dashed var(--accent2);outline-offset:-10px;background:#111820}
+  .dropveil{display:none;position:sticky;top:0;z-index:5;margin:-4px 0 10px;padding:9px 12px;
+    border-radius:8px;background:#14212b;border:1px solid var(--accent2);color:var(--accent2);font-size:12px}
+  .mb.hot .dropveil{display:block}
+  .drop{border:1.5px dashed #39404e;border-radius:9px;padding:16px;text-align:center;color:var(--dim);font-size:12.5px;cursor:pointer}
+  .drop:hover,.drop.hot{border-color:var(--accent2);color:var(--ink);background:#141c24}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  pre{background:#0b0d11;border:1px solid var(--line);border-radius:8px;padding:11px;overflow:auto;font:11.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;margin:0 0 14px;white-space:pre-wrap;word-break:break-word}
+  .k{color:var(--accent2)} .s{color:var(--ok)} .c{color:#6b7484} .f{color:var(--accent)}
+  .log{font:11.5px/1.6 ui-monospace,Menlo,monospace;background:#0b0d11;border:1px solid var(--line);border-radius:8px;padding:10px;max-height:190px;overflow:auto}
+  .log div{color:var(--dim)} .log div b{color:var(--ok);font-weight:600}
+  /* variant bar */
+  .vbar{position:fixed;left:0;right:0;bottom:0;background:#12151c;border-top:1px solid var(--line);padding:9px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:60}
+  .vbar span{font-size:11px;color:var(--dim);margin-right:2px}
+  .vbar a{text-decoration:none;font-size:12px;padding:6px 12px;border-radius:7px;border:1px solid var(--line);color:var(--ink);background:var(--panel2)}
+  .vbar a.on{background:var(--accent);border-color:var(--accent);color:#1a1206;font-weight:650}
+  .vbar .sp{flex:1}
+  /* overlays */
+  .scrim{position:fixed;inset:0;background:rgba(4,6,10,.72);display:none;z-index:70}
+  .scrim.show{display:block}
+  .modal{position:absolute;inset:5% 8%;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;overflow:hidden}
+  .slide{position:absolute;top:0;right:0;bottom:0;width:min(460px,92vw);background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column}
+  .mh{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
+  .mh h3{margin:0;font-size:14px;flex:1}
+  .tabs{display:flex;gap:4px;padding:10px 16px 0}
+  .tabs button.on{background:var(--panel2);border-color:#3b4252;color:var(--ink)}
+  .mb{flex:1;overflow:auto;padding:14px 16px}
+  .mf{padding:11px 16px;border-top:1px solid var(--line);display:flex;gap:9px;align-items:center}
+  .mf .sp{flex:1;color:var(--dim);font-size:12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:11px}
+  .card{border:1px solid var(--line);border-radius:9px;background:var(--panel2);overflow:hidden;cursor:pointer;position:none;position:relative}
+  .card .art{height:82px;display:grid;place-items:center;font-size:30px;background:#232833;overflow:hidden}
+  .card .nm{font-size:11px;padding:6px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .mt{font-size:10px;padding:0 7px 7px;color:var(--dim)}
+  .card.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .card .pick{position:absolute;top:6px;right:6px;background:var(--accent);color:#1a1206;font-size:10px;font-weight:700;min-width:18px;height:18px;padding:0 5px;border-radius:9px;display:none;place-items:center}
+  .card.sel .pick{display:grid}
+  .card .vis{position:absolute;top:6px;left:6px;font-size:10px}
+  input[type=search],input[type=text]{background:#0b0d11;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:6px 9px;font:inherit;font-size:12.5px}
+  input[type=search]{width:100%}
+  /* combobox */
+  .combo{position:relative;max-width:520px}
+  .cbox{border:1px solid var(--line);background:#0b0d11;border-radius:8px;padding:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:38px}
+  .chip{display:flex;gap:6px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px 4px 3px 8px;font-size:12px}
+  .chip .em{font-size:13px}
+  .chip button{border:0;background:transparent;color:var(--dim);padding:0 4px;font-size:13px;line-height:1}
+  .cbox input{flex:1;min-width:120px;border:0;background:transparent;outline:none;color:var(--ink);font:inherit;font-size:12.5px;padding:4px}
+  .menu{position:absolute;left:0;right:0;top:calc(100% + 5px);background:var(--panel);border:1px solid var(--line);border-radius:9px;max-height:290px;overflow:auto;z-index:20;display:none;box-shadow:0 14px 40px rgba(0,0,0,.5)}
+  .menu.show{display:block}
+  .opt{display:flex;gap:10px;align-items:center;padding:7px 10px;cursor:pointer;border-bottom:1px solid #21252e}
+  .opt:hover{background:var(--panel2)}
+  .opt .em{font-size:19px;width:26px;text-align:center}
+  .opt .t{flex:1;min-width:0}
+  .opt .t b{display:block;font-weight:550;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .opt .t small{color:var(--dim);font-size:10.5px}
+  .opt.act{background:#22303b}
+  .opt.up{color:var(--accent2)}
+  .note{color:var(--dim);font-size:12px;border-left:2px solid var(--line);padding-left:10px;margin:14px 0 0}
+  .pill{font-size:10px;border:1px solid var(--line);border-radius:20px;padding:1px 7px;color:var(--dim)}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="tag">PROTOTYPE</span>
+  <h1>Media Picker API &amp; Selection Workflow</h1>
+  <p>wayfinder ticket 06 — throwaway. Drive each variant; the right panel shows the persisted state and the field API it implies.</p>
+</header>
+
+<main>
+  <div class="stage">
+    <h2 id="vtitle"></h2>
+    <div class="form">
+      <h3>Edit Blog Post</h3>
+      <p class="hint">Example consumer. <code>cover_image</code> is single-selection; <code>gallery</code> is multiple + ordered.</p>
+      <div id="fields"></div>
+    </div>
+    <p class="note" id="vnote"></p>
+  </div>
+
+  <div class="side">
+    <h2>Persisted state</h2>
+    <pre id="state"></pre>
+    <h2>Field API this implies</h2>
+    <pre id="api"></pre>
+    <h2>Event log</h2>
+    <div class="log" id="log"></div>
+  </div>
+</main>
+
+<div class="vbar">
+  <span>Variant:</span>
+  <a href="?v=a" id="ta">A · Library modal</a>
+  <a href="?v=b" id="tb">B · Inline dropzone + slide-over</a>
+  <a href="?v=c" id="tc">C · Search-first combobox</a>
+  <div class="sp"></div>
+  <button class="ghost" onclick="reset()">Reset state</button>
+</div>
+
+<div class="scrim" id="scrim"><div id="overlay"></div></div>
+
+<script>
+/* ---------------------------------------------------------------- mock data */
+const ART = {image:'🖼️', pdf:'📄', video:'🎬', zip:'🗜️', audio:'🎵', doc:'📝'};
+
+/* stand-in "photo" so image assets show a real thumbnail, not a glyph.
+   deterministic per asset id, so a card looks the same every render. */
+function genThumb(id){
+  const h=(id*47)%360, h2=(h+28)%360, h3=(h+180)%360;
+  const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='160' height='110'>`+
+    `<defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>`+
+    `<stop offset='0' stop-color='hsl(${h},62%,64%)'/>`+
+    `<stop offset='1' stop-color='hsl(${h2},52%,30%)'/></linearGradient></defs>`+
+    `<rect width='160' height='110' fill='url(#g)'/>`+
+    `<circle cx='${28+(id*17)%100}' cy='27' r='13' fill='hsl(${h3},92%,80%)' opacity='.85'/>`+
+    `<path d='M0 84 L40 56 L74 84 Z' fill='hsl(${h2},42%,22%)' opacity='.9'/>`+
+    `<path d='M48 90 L94 48 L142 90 Z' fill='hsl(${h2},46%,17%)'/>`+
+    `<rect y='89' width='160' height='21' fill='hsl(${h2},52%,13%)'/></svg>`;
+  return 'data:image/svg+xml,'+encodeURIComponent(svg);
+}
+/* preview when we have one (image asset or a really-dropped file), glyph otherwise */
+function art(a){
+  if(a.preview) return `<img src="${a.preview}" alt="">`;
+  if(a.kind==='image') return `<img src="${genThumb(a.id)}" alt="">`;
+  return ART[a.kind];
+}
+const LIB0 = [
+  {id:1,  name:'Autumn hero banner',        kind:'image', mime:'image/jpeg', size:'842 KB', vis:'public',  disk:'media', used:3},
+  {id:2,  name:'Team offsite 2026',         kind:'image', mime:'image/png',  size:'1.4 MB', vis:'public',  disk:'media', used:1},
+  {id:3,  name:'Pricing sheet Q3',          kind:'pdf',   mime:'application/pdf', size:'233 KB', vis:'private', disk:'media', used:0},
+  {id:4,  name:'Product walkthrough',       kind:'video', mime:'video/mp4',  size:'18 MB',  vis:'private', disk:'media', used:2},
+  {id:5,  name:'Brand assets bundle',       kind:'zip',   mime:'application/zip', size:'9.1 MB', vis:'private', disk:'media', used:0},
+  {id:6,  name:'Founder headshot',          kind:'image', mime:'image/jpeg', size:'512 KB', vis:'public',  disk:'media', used:5},
+  {id:7,  name:'Launch podcast clip',       kind:'audio', mime:'audio/mpeg', size:'4.2 MB', vis:'private', disk:'media', used:0},
+  {id:8,  name:'Office exterior',           kind:'image', mime:'image/webp', size:'690 KB', vis:'public',  disk:'media', used:1},
+  {id:9,  name:'Onboarding checklist',      kind:'doc',   mime:'text/markdown', size:'12 KB', vis:'private', disk:'media', used:0},
+  {id:10, name:'Conference booth photo',    kind:'image', mime:'image/jpeg', size:'1.1 MB', vis:'public',  disk:'media', used:0},
+];
+/* per-field config — acceptedFileTypes gates BOTH the library grid and drops */
+const FIELDS = {
+  cover_image: { multiple:false, accept:['image/*'],
+                 disk:'media', dir:'posts/covers',  vis:'public' },
+  gallery:     { multiple:true,  accept:['image/*','application/pdf','video/mp4'],
+                 disk:'media', dir:'posts/gallery', vis:'private' },
+};
+/* one-directional: a public field must not offer a private asset (the page
+   would need a temporary URL); a private field can serve a public one fine. */
+const visOk = (field, a) => FIELDS[field].vis === 'private' || a.vis === 'public';
+/* the two rules the grid enforces, together */
+const offerable = (field, a) => accepts(field, a.mime) && visOk(field, a);
+const mimeFor = n => ({png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',
+  gif:'image/gif',pdf:'application/pdf',mp4:'video/mp4',mov:'video/quicktime',
+  mp3:'audio/mpeg',wav:'audio/wav',zip:'application/zip'})[(n.split('.').pop()||'').toLowerCase()] || 'text/plain';
+/* one rule, used by the grid filter and the drop guard */
+const mimeOk = (mime, accept) => accept.some(p =>
+  p.endsWith('/*') ? mime.startsWith(p.slice(0,-1)) : p === mime);
+const accepts = (field, mime) => mimeOk(mime, FIELDS[field].accept);
+
+let lib, state, nextId;
+function reset(){
+  lib = LIB0.map(a=>({...a}));
+  nextId = 11;
+  state = { cover_image: 1, gallery: [2,8] };   // attachment ids, ordered
+  logs = [];
+  say('state reset');
+  render();
+}
+let logs=[];
+function say(msg){ logs.unshift(msg); const el=document.getElementById('log');
+  el.innerHTML = logs.map((m,i)=>`<div>${i===0?'<b>▸ '+m+'</b>':'· '+m}</div>`).join(''); }
+const asset = id => lib.find(a=>a.id===id);
+
+/* ---------------------------------------------------------------- variants */
+const V = new URLSearchParams(location.search).get('v') || 'a';
+const META = {
+  a:{ title:'Variant A — Library modal, drop-anywhere (chosen)',
+      note:'One component, one mental model, identical for single and multiple. Dropping is accepted at every surface: on the field trigger (skips the modal entirely), on the Library tab, and on the Upload tab — so the modal round-trip is never forced on a plain "here is a new file". Image assets render real thumbnails in the grid; non-image kinds fall back to a type glyph. The library grid is scoped to the field&rsquo;s acceptedFileTypes, and the same rule rejects non-matching drops — cover_image never offers you a PDF.' },
+  b:{ title:'Variant B — Inline dropzone + library slide-over',
+      note:'The field itself is the dropzone: dragging a file in uploads and attaches in one gesture, and "Browse library" opens a narrow slide-over for reuse. Fastest for the common case (new file), but two distinct surfaces to build and to teach.' },
+  c:{ title:'Variant C — Search-first combobox',
+      note:'The field behaves like a Filament Select: type to search the library inline, Enter to attach, upload is an option in the same menu. Compact enough for ten media fields on one form; weakest for visual browsing and bulk selection.' }
+};
+
+/* ---------------------------------------------------------------- state pane */
+function render(){
+  document.getElementById('vtitle').textContent = META[V].title;
+  document.getElementById('vnote').textContent  = META[V].note;
+  document.getElementById('ta').className = V==='a'?'on':'';
+  document.getElementById('tb').className = V==='b'?'on':'';
+  document.getElementById('tc').className = V==='c'?'on':'';
+  ({a:renderA,b:renderB,c:renderC})[V]();
+  paintState(); paintApi();
+}
+
+function paintState(){
+  const rows = [];
+  rows.push('<span class="c">// media_attachments rows for BlogPost #17</span>');
+  const push=(f,id,ord)=>{const a=asset(id);rows.push(
+    `{ <span class="k">host</span>:<span class="s">"BlogPost#17"</span>, <span class="k">field</span>:<span class="s">"${f}"</span>, `+
+    `<span class="k">asset_id</span>:<span class="f">${id}</span>, <span class="k">order</span>:${ord} }`+
+    `  <span class="c">// ${a.name} · ${a.vis}</span>`);};
+  state.cover_image ? push('cover_image', state.cover_image, 0)
+                    : rows.push('<span class="c">// cover_image: no attachment</span>');
+  state.gallery.length ? state.gallery.forEach((id,i)=>push('gallery',id,i))
+                       : rows.push('<span class="c">// gallery: no attachments</span>');
+  rows.push('');
+  rows.push('<span class="c">// form payload the field casts to/from</span>');
+  rows.push(`cover_image => <span class="f">${state.cover_image ?? 'null'}</span>   <span class="c">// int|null</span>`);
+  rows.push(`gallery     => [<span class="f">${state.gallery.join(', ')}</span>]  <span class="c">// ordered int[]</span>`);
+  document.getElementById('state').innerHTML = rows.join('\n');
+}
+
+const API = {
+a:`<span class="c">// A: one modal component; the field is a thin trigger.</span>
+<span class="c">// acceptedFileTypes does double duty: it gates uploads AND</span>
+<span class="c">// scopes which existing assets the library grid will show.</span>
+MediaPicker::make(<span class="s">'cover_image'</span>)
+    -&gt;label(<span class="s">'Cover image'</span>)
+    -&gt;acceptedFileTypes([<span class="s">'image/*'</span>])
+    -&gt;disk(<span class="s">'media'</span>)-&gt;directory(<span class="s">'posts/covers'</span>)
+    -&gt;visibility(<span class="s">'public'</span>),
+
+MediaPicker::make(<span class="s">'gallery'</span>)
+    -&gt;multiple()
+    -&gt;reorderable()
+    -&gt;maxItems(<span class="f">12</span>)
+    -&gt;acceptedFileTypes([<span class="s">'image/*'</span>, <span class="s">'application/pdf'</span>, <span class="s">'video/mp4'</span>]),
+
+<span class="c">// Modal is the only surface, so its knobs live on the field:</span>
+    -&gt;modalWidth(<span class="s">'7xl'</span>)
+    -&gt;defaultTab(<span class="s">'library'</span>)   <span class="c">// or 'upload'</span>
+
+<span class="c">// Drop is on by default at every surface (trigger + both tabs).</span>
+<span class="c">// Only a reuse-only field ever turns it off:</span>
+    -&gt;droppable(<span class="k">false</span>)
+
+<span class="c">// Grid previews: images render thumbnails, others show a</span>
+<span class="c">// type glyph. Override per mime family if needed:</span>
+    -&gt;thumbnailUsing(<span class="k">fn</span> (MediaAsset <span class="f">$a</span>) =&gt; <span class="f">$a</span>-&gt;previewUrl())
+
+<span class="c">// Host model side, all variants:</span>
+<span class="k">class</span> BlogPost {
+    <span class="k">use</span> HasMediaAttachments;
+    <span class="k">protected</span> <span class="f">$mediaFields</span> = [<span class="s">'cover_image'</span>, <span class="s">'gallery'</span>];
+}`,
+
+b:`<span class="c">// B: two surfaces — the field renders a real dropzone.</span>
+MediaPicker::make(<span class="s">'cover_image'</span>)
+    -&gt;acceptedFileTypes([<span class="s">'image/*'</span>])
+    -&gt;disk(<span class="s">'media'</span>)-&gt;directory(<span class="s">'posts/covers'</span>)
+    -&gt;visibility(<span class="s">'public'</span>)
+    -&gt;dropzone()                 <span class="c">// upload without opening anything</span>
+    -&gt;browsable(),               <span class="c">// show "Browse library" link</span>
+
+MediaPicker::make(<span class="s">'gallery'</span>)
+    -&gt;multiple()-&gt;reorderable()
+    -&gt;dropzoneLabel(<span class="s">'Drop images or browse'</span>),
+
+<span class="c">// Reuse-only field: drop the dropzone.</span>
+MediaPicker::make(<span class="s">'attachment'</span>)-&gt;dropzone(<span class="k">false</span>),
+
+<span class="c">// Host model side, all variants:</span>
+<span class="k">class</span> BlogPost {
+    <span class="k">use</span> HasMediaAttachments;
+    <span class="k">protected</span> <span class="f">$mediaFields</span> = [<span class="s">'cover_image'</span>, <span class="s">'gallery'</span>];
+}`,
+
+c:`<span class="c">// C: Select-shaped, so it inherits Select's vocabulary.</span>
+MediaPicker::make(<span class="s">'cover_image'</span>)
+    -&gt;searchable()
+    -&gt;searchDebounce(<span class="f">300</span>)
+    -&gt;optionsLimit(<span class="f">20</span>)
+    -&gt;allowUpload()              <span class="c">// "Upload new…" row in the menu</span>
+    -&gt;disk(<span class="s">'media'</span>)-&gt;directory(<span class="s">'posts/covers'</span>),
+
+MediaPicker::make(<span class="s">'gallery'</span>)
+    -&gt;multiple()-&gt;reorderable()   <span class="c">// chips, dragged to reorder</span>
+    -&gt;maxItems(<span class="f">12</span>),
+
+<span class="c">// No modal knobs at all; needs a separate</span>
+<span class="c">// MediaLibrary page for browsing/managing.</span>
+
+<span class="c">// Host model side, all variants:</span>
+<span class="k">class</span> BlogPost {
+    <span class="k">use</span> HasMediaAttachments;
+    <span class="k">protected</span> <span class="f">$mediaFields</span> = [<span class="s">'cover_image'</span>, <span class="s">'gallery'</span>];
+}`};
+function paintApi(){ document.getElementById('api').innerHTML = API[V]; }
+
+/* ---------------------------------------------------------------- shared ops */
+function attach(field, id){
+  if(field==='cover_image'){
+    const prev = state.cover_image;
+    if(prev===id) return say(`#${id} already attached to cover_image`);
+    state.cover_image = id;
+    say(prev ? `replace cover_image: attach #${id}, detach #${prev} (asset kept)` : `attach #${id} → cover_image`);
+  }else{
+    if(state.gallery.includes(id)) return say(`#${id} already in gallery — duplicate blocked`);
+    state.gallery.push(id);
+    say(`attach #${id} → gallery (order ${state.gallery.length-1})`);
+  }
+  /* attaching is not a placement decision — a shared asset keeps its own
+     visibility, or every other attachment's delivery would change with it */
+  const a = asset(id);
+  if(a.vis !== FIELDS[field].vis)
+    say(`#${id} stays ${a.vis} — ${field} is a ${FIELDS[field].vis} field, but attach never re-places a shared asset`);
+  render();
+}
+function detach(field, id){
+  if(field==='cover_image'){ state.cover_image=null; }
+  else { state.gallery = state.gallery.filter(x=>x!==id); }
+  say(`detach #${id} from ${field} — asset row + object untouched`);
+  render();
+}
+function move(field, id, dir){
+  const g=state.gallery, i=g.indexOf(id), j=i+dir;
+  if(j<0||j>=g.length) return;
+  [g[i],g[j]]=[g[j],g[i]];
+  say(`reorder gallery → [${g.join(', ')}]`);
+  render();
+}
+function upload(field, name, preview){
+  const kind = /\.(png|jpe?g|webp|gif)$/i.test(name) ? 'image'
+             : /\.pdf$/i.test(name) ? 'pdf' : /\.(mp4|mov)$/i.test(name) ? 'video'
+             : /\.(mp3|wav)$/i.test(name) ? 'audio' : /\.zip$/i.test(name) ? 'zip' : 'doc';
+  const clash = lib.find(a=>a.name.toLowerCase()===name.replace(/\.[^.]+$/,'').toLowerCase());
+  if(clash) say(`name collision with #${clash.id} — ticket 04: new asset created, storage untouched`);
+  const a = {id:nextId++, name:name.replace(/\.[^.]+$/,''), kind, mime:mimeFor(name), size:'—',
+             vis: FIELDS[field].vis, disk: FIELDS[field].disk, used:0, fresh:true,
+             preview: preview||null};
+  lib.unshift(a);
+  say(`upload "${name}" → asset #${a.id} on ${a.disk}:${FIELDS[field].dir} as ${a.vis} (from ${field} config, ticket 03)`);
+  attach(field, a.id);
+  return a;
+}
+/* accept a real OS drop anywhere a dropzone is declared; fall back to a fake
+   file when the drag carries no files (or the click path is used instead) */
+function takeDrop(ev, field){
+  ev.preventDefault();
+  const many = FIELDS[field].multiple;
+  let files = [...(ev.dataTransfer?.files || [])];
+  if(!files.length){                                   // click path / no OS files
+    let n; do { n = fakeName(); } while(!accepts(field, mimeFor(n)));
+    upload(field, n); return 1;
+  }
+  /* same acceptedFileTypes rule the grid uses — rejected client-side, before upload */
+  const bad = files.filter(f => !accepts(field, f.type || mimeFor(f.name)));
+  files = files.filter(f => accepts(field, f.type || mimeFor(f.name)));
+  bad.forEach(f => say(`rejected "${f.name}" — ${f.type||mimeFor(f.name)} not in ${field} acceptedFileTypes [${FIELDS[field].accept}]`));
+  if(!files.length) return 0;
+  (many ? files : files.slice(0,1)).forEach(f=>{
+    const preview = f.type.startsWith('image/') ? URL.createObjectURL(f) : null;
+    upload(field, f.name, preview);
+  });
+  if(!many && files.length>1) say(`${files.length} accepted files dropped on a single field — only the first was used`);
+  return files.length;
+}
+function hot(el, on){ el.classList.toggle('hot', on); }
+
+function fakeName(){ const n=['Draft screenshot','Scanned invoice','Keynote recording','Sketch v2','Press kit'];
+  const e=['.png','.pdf','.mp4','.jpg','.zip']; const i=Math.floor(Math.random()*n.length);
+  return n[i]+' '+(1+Math.floor(Math.random()*90))+e[i]; }
+
+/* thumb strip shared by A and B */
+function thumbHtml(field, id, ord, showOrd){
+  const a=asset(id);
+  return `<div class="thumb">
+    ${showOrd?`<div class="ord">${ord+1}</div>`:''}
+    <div class="lock" title="${a.vis}">${a.vis==='private'?'🔒':'🌐'}</div>
+    <div class="art">${art(a)}</div>
+    <div class="nm" title="${a.name}">${a.name}</div>
+    <div class="bar">
+      ${showOrd?`<button onclick="move('${field}',${id},-1)">←</button>
+                 <button onclick="move('${field}',${id},1)">→</button>`:''}
+      <button onclick="detach('${field}',${id})" title="Detach — never deletes">✕</button>
+    </div></div>`;
+}
+
+/* ---------------------------------------------------------------- variant A */
+function renderA(){
+  const cover = state.cover_image;
+  document.getElementById('fields').innerHTML = `
+  <div class="field">
+    <div class="label">Cover image <small>single · replaceable</small>
+      <span class="pill">accepts image/*</span>
+      <span class="pill">uploads → media:posts/covers · 🌐 public</span></div>
+    <div class="thumbs">
+      ${cover ? thumbHtml('cover_image',cover,0,false) : ''}
+      ${slotHtml('cover_image', cover?'↻ Replace<br><small>click or drop</small>':'+ Add media<br><small>click or drop</small>')}
+    </div>
+  </div>
+  <div class="field">
+    <div class="label">Gallery <small>multiple · ordered · max 12</small>
+      <span class="pill">accepts image/* · application/pdf · video/mp4</span>
+      <span class="pill">uploads → media:posts/gallery · 🔒 private</span></div>
+    <div class="thumbs">
+      ${state.gallery.map((id,i)=>thumbHtml('gallery',id,i,true)).join('')}
+      ${slotHtml('gallery', '+ Add media<br><small>click or drop</small>')}
+    </div>
+  </div>`;
+}
+/* the browse trigger is itself a dropzone: click opens the library,
+   dropping a file skips the modal entirely */
+function slotHtml(field, label){
+  return `<div class="slot" onclick="openModal('${field}')"
+    ondragover="event.preventDefault();hot(this,true)"
+    ondragleave="hot(this,false)"
+    ondrop="hot(this,false);takeDrop(event,'${field}')">${label}</div>`;
+}
+
+let mField='', mTab='library', mSel=[], mQuery='';
+function openModal(field){
+  mField=field; mTab='library'; mSel=[]; mQuery='';
+  document.getElementById('scrim').className='scrim show';
+  drawModal();
+}
+function closeOverlay(){ document.getElementById('scrim').className='scrim';
+  document.getElementById('overlay').innerHTML=''; }
+function mToggle(id){
+  const multi = mField==='gallery';
+  if(mSel.includes(id)) mSel=mSel.filter(x=>x!==id);
+  else if(multi) mSel.push(id); else mSel=[id];
+  drawModal();
+}
+function mConfirm(){
+  mSel.forEach(id=>attach(mField,id));
+  closeOverlay();
+}
+function mSearch(v){ mQuery=v; drawModal(); }
+/* drop anywhere in the modal body — Library tab included */
+function mDrop(ev){
+  takeDrop(ev.preventDefault ? ev : {preventDefault(){}}, mField);
+  if(mField==='gallery'){ mTab='library'; mQuery=''; drawModal(); }  // stay open, new asset is at the top
+  else closeOverlay();
+}
+/* the grid never shows an asset the field could not accept */
+function filtered(){
+  const q=mQuery.trim().toLowerCase();
+  return lib.filter(a=>offerable(mField, a))
+            .filter(a=>!q || a.name.toLowerCase().includes(q) || a.kind.includes(q));
+}
+function drawModal(){
+  const multi = mField==='gallery';
+  const already = multi ? state.gallery : (state.cover_image?[state.cover_image]:[]);
+  document.getElementById('overlay').innerHTML = `<div class="modal">
+    <div class="mh"><h3>Media Library — ${mField}</h3>
+      <span class="pill">${multi?'select many, ordered':'select one'}</span>
+      <span class="pill">uploads land ${FIELDS[mField].vis==='private'?'🔒 private':'🌐 public'}</span>
+      <button class="ghost" onclick="closeOverlay()">✕</button></div>
+    <div class="tabs">
+      <button class="${mTab==='library'?'on':''}" onclick="mTab='library';drawModal()">Library</button>
+      <button class="${mTab==='upload'?'on':''}"  onclick="mTab='upload';drawModal()">Upload new</button>
+    </div>
+    <div class="mb" ondragover="event.preventDefault();hot(this,true)"
+         ondragleave="if(event.target===this)hot(this,false)"
+         ondrop="hot(this,false);mDrop(event)">
+      <div class="dropveil">⬆ Release to upload into <b>${mField}</b> —
+        lands on <b>${FIELDS[mField].disk}:${FIELDS[mField].dir}</b> as
+        <b>${FIELDS[mField].vis==='private'?'🔒 private':'🌐 public'}</b>, then attaches.</div>
+      ${ mTab==='library' ? `
+      <div style="margin-bottom:10px"><input type="search" placeholder="Search by readable name or type…"
+        value="${mQuery}" oninput="mSearch(this.value)"></div>
+      <p style="margin:0 0 12px;color:var(--dim);font-size:11.5px">
+        Showing <b>${filtered().length}</b> of ${lib.length} assets — scoped to <code>${mField}</code>
+        <span class="pill">${FIELDS[mField].accept.join('  ')}</span>
+        ${FIELDS[mField].vis==='public'
+          ? `<span class="pill">🌐 public only — ${lib.filter(a=>accepts(mField,a.mime)&&a.vis==='private').length} private asset(s) hidden</span>`
+          : `<span class="pill">🔒 private field — public assets offered too</span>`}</p>
+      <div class="grid">${filtered().map(a=>`
+        <div class="card ${mSel.includes(a.id)?'sel':''}" onclick="mToggle(${a.id})">
+          <div class="vis">${a.vis==='private'?'🔒':'🌐'}</div>
+          <div class="pick">${multi ? (mSel.indexOf(a.id)+1||'') : '✓'}</div>
+          <div class="art">${art(a)}</div>
+          <div class="nm" title="${a.name}">${a.name}</div>
+          <div class="mt">${a.size} · ${already.includes(a.id)?'attached here':(a.used?a.used+' uses':'unused')}</div>
+        </div>`).join('')}</div>`
+    : `<div class="drop" onclick="mDrop({});"
+           ondragover="event.preventDefault();this.classList.add('hot')"
+           ondragleave="this.classList.remove('hot')"
+           ondrop="this.classList.remove('hot');event.stopPropagation();mDrop(event)">
+         ⬆ Drop files here or click to pick<br><small>uploads, creates assets, attaches to <b>${mField}</b></small></div>
+       <p class="note">Same handler as the Library tab — this tab is a convenience, not the only way in.
+         Upload lands on the field's configured disk/path (ticket 03) and keeps its readable name (ticket 04).</p>`}
+    </div>
+    <div class="mf"><span class="sp">${mSel.length?mSel.length+' selected':'nothing selected'}</span>
+      <button class="ghost" onclick="closeOverlay()">Cancel</button>
+      <button class="primary" onclick="mConfirm()" ${mSel.length?'':'disabled'}>
+        ${multi?'Attach selected':'Use this'}</button></div>
+  </div>`;
+}
+
+/* ---------------------------------------------------------------- variant B */
+function renderB(){
+  const cover = state.cover_image;
+  document.getElementById('fields').innerHTML = `
+  <div class="field">
+    <div class="label">Cover image <small>single · replaceable</small></div>
+    ${cover ? `<div class="thumbs" style="margin-bottom:9px">${thumbHtml('cover_image',cover,0,false)}</div>`:''}
+    <div class="drop" ondragover="event.preventDefault();this.classList.add('hot')"
+         ondragleave="this.classList.remove('hot')"
+         onclick="upload('cover_image', fakeName())">
+      ⬆ ${cover?'Drop a file to replace':'Drop a file to upload'} —
+      <a href="#" onclick="event.preventDefault();event.stopPropagation();openSlide('cover_image')"
+         style="color:var(--accent2)">or browse library</a>
+    </div>
+  </div>
+  <div class="field">
+    <div class="label">Gallery <small>multiple · ordered · max 12</small></div>
+    ${state.gallery.length?`<div class="thumbs" style="margin-bottom:9px">
+      ${state.gallery.map((id,i)=>thumbHtml('gallery',id,i,true)).join('')}</div>`:''}
+    <div class="drop" ondragover="event.preventDefault();this.classList.add('hot')"
+         ondragleave="this.classList.remove('hot')"
+         onclick="upload('gallery', fakeName())">
+      ⬆ Drop images to upload —
+      <a href="#" onclick="event.preventDefault();event.stopPropagation();openSlide('gallery')"
+         style="color:var(--accent2)">or browse library</a>
+    </div>
+  </div>`;
+}
+let sField='', sQuery='';
+function openSlide(field){ sField=field; sQuery='';
+  document.getElementById('scrim').className='scrim show'; drawSlide(); }
+function sSearch(v){ sQuery=v; drawSlide(); }
+function drawSlide(){
+  const multi = sField==='gallery';
+  const already = multi ? state.gallery : (state.cover_image?[state.cover_image]:[]);
+  const q=sQuery.trim().toLowerCase();
+  const list = lib.filter(a=>offerable(sField, a)).filter(a=>!q||a.name.toLowerCase().includes(q));
+  document.getElementById('overlay').innerHTML = `<div class="slide">
+    <div class="mh"><h3>Library</h3><span class="pill">${sField}</span>
+      <button class="ghost" onclick="closeOverlay()">✕</button></div>
+    <div style="padding:12px 16px 0"><input type="search" placeholder="Search…" value="${sQuery}"
+      oninput="sSearch(this.value)"></div>
+    <div class="mb">${list.map(a=>`
+      <div class="opt" onclick="attach('${sField}',${a.id});${multi?'drawSlide()':'closeOverlay()'}">
+        <div class="em">${art(a)}</div>
+        <div class="t"><b>${a.name}</b><small>${a.size} · ${a.vis}${already.includes(a.id)?' · attached':''}</small></div>
+        <button class="ghost">${already.includes(a.id)?'✓':'Attach'}</button>
+      </div>`).join('')}</div>
+    <div class="mf"><span class="sp">${multi?'stays open for multi-select':'closes on pick'}</span>
+      <button class="ghost" onclick="closeOverlay()">Done</button></div>
+  </div>`;
+}
+
+/* ---------------------------------------------------------------- variant C */
+let cQuery='', cOpen='';
+function renderC(){
+  document.getElementById('fields').innerHTML = `
+  <div class="field">
+    <div class="label">Cover image <small>single · replaceable</small></div>
+    ${combo('cover_image')}
+  </div>
+  <div class="field">
+    <div class="label">Gallery <small>multiple · ordered · chips drag to reorder</small></div>
+    ${combo('gallery')}
+  </div>`;
+  if(cOpen){ const i=document.getElementById('ci-'+cOpen); if(i) i.focus(); }
+}
+function combo(field){
+  const multi = field==='gallery';
+  const ids = multi ? state.gallery : (state.cover_image?[state.cover_image]:[]);
+  const chips = ids.map((id,i)=>{const a=asset(id);return `<span class="chip">
+      ${multi?`<button onclick="move('${field}',${id},-1)">‹</button>`:''}
+      <span class="em">${art(a)}</span>${a.name}${a.vis==='private'?' 🔒':''}
+      ${multi?`<button onclick="move('${field}',${id},1)">›</button>`:''}
+      <button onclick="detach('${field}',${id})">✕</button></span>`;}).join('');
+  const q=cQuery.trim().toLowerCase();
+  const hits = cOpen===field ? lib.filter(a=>offerable(field,a))
+    .filter(a=>(!q||a.name.toLowerCase().includes(q)) && !ids.includes(a.id)).slice(0,6):[];
+  return `<div class="combo">
+    <div class="cbox" onclick="cOpen='${field}';renderC()">
+      ${chips}
+      <input id="ci-${field}" placeholder="${ids.length&&!multi?'Type to replace…':'Search the library…'}"
+        value="${cOpen===field?cQuery:''}"
+        oninput="cQuery=this.value;cOpen='${field}';renderC()"
+        onfocus="cOpen='${field}';renderC()">
+    </div>
+    <div class="menu ${cOpen===field?'show':''}">
+      ${hits.map(a=>`<div class="opt" onclick="cQuery='';cOpen='';attach('${field}',${a.id})">
+        <div class="em">${art(a)}</div>
+        <div class="t"><b>${a.name}</b><small>${a.mime} · ${a.size} · ${a.vis}</small></div></div>`).join('')}
+      <div class="opt up" onclick="cQuery='';cOpen='';upload('${field}', (${JSON.stringify('')}||fakeName()))">
+        <div class="em">⬆</div><div class="t"><b>Upload new file…</b>
+        <small>opens the file dialog, attaches on completion</small></div></div>
+      <div class="opt" onclick="cOpen='';renderC()" style="color:var(--dim)">
+        <div class="em">⤢</div><div class="t"><b>Open full Media Library</b>
+        <small>separate page — browse, rename, delete</small></div></div>
+    </div></div>`;
+}
+
+document.getElementById('scrim').addEventListener('click', e=>{ if(e.target.id==='scrim') closeOverlay(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeOverlay(); cOpen=''; if(V==='c') renderC(); }});
+reset();
+</script>
+</body>
+</html>
