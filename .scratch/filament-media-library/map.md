@@ -19,6 +19,7 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 - [Define Platform and Package Contract](issues/01-platform-and-package-contract.md): Guarantee Laravel 13/PHP 8.3+ and Filament 5; keep Filament 4 best effort behind shared public APIs and a compatibility matrix.
 - [Define Media Asset and Relationship Model](issues/02-media-asset-and-relationship-model.md): Plugin-owned reusable assets attach polymorphically to host models through ordered, field-scoped relationships without duplicate selections.
 - [Define Storage Bucket and Visibility Contract](issues/03-storage-bucket-and-visibility-contract.md): Use configured Laravel disk names for bucket selection, default new objects to `media` and private visibility, and keep database asset selection and opaque storage identity separate from readable names.
+- [Define Readable Name and Upload Identity](issues/04-readable-name-and-upload-identity.md): Preserve original and editable names as metadata, detect server-derived file facts, and make name collisions explicit choices between creating a new asset or cancelling without overwriting storage.
 
 ## Not yet specified
 
