@@ -52,7 +52,14 @@
           background: #fff; position: relative; transition: box-shadow .1s; }
   .card:hover { box-shadow: 0 0 0 1px var(--line), 0 4px 10px rgba(0,0,0,.07); }
   .card.sel { outline: 2px solid var(--sel); outline-offset: -1px; border-color: var(--sel); }
-  .thumb { aspect-ratio: 4/3; display: grid; place-items: center; font-size: 24px; color: #fff; }
+  .thumb { aspect-ratio: 4/3; position: relative; overflow: hidden; background: #e4e4e7; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .glyphbox { width: 100%; height: 100%; display: grid; place-items: center; font-size: 26px; }
+  .thumb .play { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+  .thumb .play span { width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff;
+                      display: grid; place-items: center; font-size: 12px; padding-left: 2px; }
+  .thumb .dur { position: absolute; right: 4px; bottom: 4px; background: rgba(0,0,0,.7); color: #fff;
+                font-size: 9.5px; padding: 1px 4px; border-radius: 3px; font-variant-numeric: tabular-nums; }
   .meta { padding: 6px 8px; }
   .name { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sub { font-size: 10.5px; color: var(--muted); display: flex; gap: 5px; align-items: center; margin-top: 2px; }
@@ -147,6 +154,35 @@ let _s = 1337;
 const rnd = () => (_s = (_s * 1664525 + 1013904223) % 4294967296) / 4294967296;
 const pick = a => a[Math.floor(rnd() * a.length)];
 
+/* Procedural SVG "photographs" so the grid has real visual density with no network.
+   Three compositions keyed off the asset id, so every card is stable across renders. */
+function photoSVG(seed, kind) {
+  const h1 = (seed * 47) % 360, h2 = (h1 + 40 + (seed % 90)) % 360;
+  const lightTop = kind === 'video' ? 38 : 62, lightBot = kind === 'video' ? 20 : 38;
+  const g = `<defs><linearGradient id="g${seed}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="hsl(${h1} 68% ${lightTop}%)"/>
+      <stop offset="1" stop-color="hsl(${h2} 58% ${lightBot}%)"/></linearGradient></defs>`;
+  let body;
+  switch (seed % 3) {
+    case 0:   // landscape with sun
+      body = `<circle cx="${30 + seed % 60}" cy="${28 + seed % 14}" r="${11 + seed % 7}" fill="hsl(${(h1 + 180) % 360} 90% 78%)" opacity=".9"/>
+        <path d="M0 78 L${26 + seed % 20} ${42 + seed % 12} L${58 + seed % 14} 74 L${74 + seed % 10} ${52 + seed % 10} L120 78 Z" fill="hsl(${h2} 45% 24%)" opacity=".85"/>
+        <rect y="78" width="120" height="12" fill="hsl(${h2} 40% 18%)"/>`;
+      break;
+    case 1:   // portrait subject
+      body = `<ellipse cx="60" cy="${40 + seed % 6}" rx="${16 + seed % 5}" ry="${19 + seed % 5}" fill="hsl(${(h1 + 20) % 360} 45% 82%)" opacity=".92"/>
+        <path d="M${28 + seed % 6} 90 Q60 ${58 + seed % 8} ${92 - seed % 6} 90 Z" fill="hsl(${h2} 55% 42%)"/>`;
+      break;
+    default:  // flat-lay blocks
+      body = `<rect x="${8 + seed % 10}" y="${12 + seed % 8}" width="${34 + seed % 16}" height="${30 + seed % 18}" rx="4" fill="hsl(${(h1 + 90) % 360} 62% 72%)" opacity=".95"/>
+        <rect x="${56 + seed % 12}" y="${34 + seed % 14}" width="${30 + seed % 18}" height="${34 + seed % 14}" rx="4" fill="hsl(${(h2 + 30) % 360} 66% 58%)" opacity=".95"/>
+        <circle cx="${34 + seed % 40}" cy="${66 - seed % 16}" r="${8 + seed % 6}" fill="hsl(${(h1 + 200) % 360} 70% 80%)" opacity=".9"/>`;
+  }
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" preserveAspectRatio="xMidYMid slice">
+      ${g}<rect width="120" height="90" fill="url(#g${seed})"/>${body}</svg>`);
+}
+
 const TYPES = [
   { key: 'image', mime: 'image/jpeg', glyph: '🖼', hue: 200, exts: ['jpg', 'png', 'webp'] },
   { key: 'image', mime: 'image/png',  glyph: '🖼', hue: 190, exts: ['png'] },
@@ -180,8 +216,11 @@ const ASSETS = Array.from({ length: 260 }, (_, i) => {
     days: daysAgo,
     uses,
     alt: rnd() < .5 ? pick(WORDS) + ' ' + pick(WORDS) : '',
+    secs: 8 + Math.floor(rnd() * 400),
   };
 });
+// Images and video get a rendered preview; everything else keeps a tinted type glyph.
+ASSETS.forEach(a => a.preview = (a.type === 'image' || a.type === 'video') ? photoSVG(a.id, a.type) : null);
 
 const fmtDate = ms => new Date(ms).toISOString().slice(0, 10);
 const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -260,8 +299,15 @@ function onQueryChange(what) {
 }
 
 /* -------------------------------------------------------------- pieces */
-function thumb(a, q) {
-  return `<div class="thumb" style="background:hsl(${a.hue} 55% ${a.type === 'image' ? 62 : 45}%)">${a.glyph}</div>`;
+const mmss = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+function thumb(a) {
+  if (a.preview) {
+    return `<div class="thumb"><img src="${a.preview}" alt="" loading="lazy">
+      ${a.type === 'video' ? `<div class="play"><span>&#9654;</span></div><div class="dur">${mmss(a.secs)}</div>` : ''}
+    </div>`;
+  }
+  const bg = a.type === 'pdf' ? '#fee2e2' : a.type === 'audio' ? '#dcfce7' : '#e0e7ff';
+  return `<div class="thumb" style="background:${bg}"><div class="glyphbox">${a.glyph}</div></div>`;
 }
 function hl(text, q) {
   const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
