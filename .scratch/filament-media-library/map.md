@@ -24,6 +24,7 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 - [Define Picker API and Selection Workflow](issues/06-picker-api-and-selection-workflow.md): One `MediaPicker` field opening one library modal, accepting drops at every surface including the inline trigger; the grid offers an asset only when its mime matches `acceptedFileTypes` and it is public or the field uploads private; disk and directory are upload placement and never scope; visibility is field config, never a picker control.
 - [Define Authorization and Private Delivery](issues/07-authorization-and-private-delivery.md): One `MediaAssetPolicy` (view/update/delete/forceDelete/detach) plus `uploadMedia`/`attachMedia` gates, fail-closed by default except public reads; grid listing is never row-gated, only content delivery is; private content always flows through a single plugin-owned Delivery route (never a raw presigned URL), 5-minute default signed TTL, inline-by-default disposition; `uploaded_by` always recorded as provenance.
 - [Define Legacy Hashed Upload Import](issues/08-legacy-hashed-upload-import.md): Import registers legacy objects in place and never writes to the source disk (`--copy` is an explicit opt-in, never a move); discovery is column-driven by default with lazy disk traversal as the degraded fallback; the legacy key becomes the `object_key` verbatim and its basename the original filename; unknown disk fails hard, unknown uploader stays null, and visibility is never read from an s3-driver disk; identity is a unique `(disk, object_key)` index with `firstOrCreate`, so re-runs are idempotent.
+- [Define Library Grid Search, Filtering and Pagination](issues/09-library-grid-search-filtering-and-pagination.md): Substring AND search over name, filename, alt and uploader; a faceted sidebar (type, visibility, usage, uploader, date) whose counts are live and cross-computed; infinite scroll in batches of 48 with no numbered pages; a multiple selection resets on any filter or search change, announced rather than silent, with the footer always showing the live count.
 
 ## Not yet specified
 
@@ -33,6 +34,7 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 - Multi-value legacy columns: how the importer discovers and orders paths held in a JSON array column, rather than the single-value column ticket 08 assumed.
 - Whether the importer is exposed as a Filament action on the management page or stays CLI-only; ticket 10 may absorb this once that surface is fixed.
 - Legacy objects on a bucket the application no longer configures, where no disk name can be supplied.
+- Debounce and query budget for the picker grid: ticket 09 accepted one aggregate per facet dimension per query change, but not what happens to that budget on a very large library or a slow connection.
 - Whether Filament 4 compatibility ships in the same Composer line or a separately tested release, plus the exact package namespace and release tags.
 
 ## Out of scope
