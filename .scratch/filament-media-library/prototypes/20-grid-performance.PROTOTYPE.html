@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE: Library Grid Performance Budget (ticket 20)</title>
+<style>
+  :root {
+    --bg: #12131a;
+    --panel: #1a1c26;
+    --panel-2: #21242f;
+    --line: #2e3242;
+    --ink: #e6e8f0;
+    --dim: #9aa0b4;
+    --accent: #7c9cff;
+    --warn: #e0a33e;
+    --bad: #e0655f;
+    --ok: #5fbf8a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 32px 24px 96px; }
+  h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dim); margin: 0 0 12px; font-weight: 600; }
+  h3 { font-size: 14px; margin: 0 0 6px; }
+  p { margin: 0 0 10px; }
+  .lede { color: var(--dim); max-width: 78ch; }
+  .badge { display: inline-block; background: var(--warn); color: #241a05; font-weight: 700;
+    font-size: 11px; letter-spacing: 0.08em; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin: 20px 0; }
+  .cols { display: grid; grid-template-columns: 264px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  label.ctl { display: block; margin-bottom: 14px; }
+  label.ctl > span { display: block; font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+  select, input[type=text], input[type=range] { width: 100%; }
+  select, input[type=text] {
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 9px; font: inherit;
+  }
+  input[type=text]:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button {
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 11px; font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #10142b; border-color: var(--accent); font-weight: 600; }
+  button.step { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
+  button.step.done { opacity: 0.45; }
+  button.step.next { border-color: var(--accent); }
+  .facets { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--panel-2); }
+  .facet { margin-bottom: 14px; }
+  .facet > .fname { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin-bottom: 5px; }
+  .opt { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 3px 6px; border-radius: 5px; cursor: pointer; }
+  .opt:hover { background: #2a2e3d; }
+  .opt.on { background: #2b3350; color: #cfd9ff; }
+  .cnt { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--dim); }
+  .cnt.stale { color: var(--warn); }
+  .cnt.hidden-count { color: #4d5265; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px;
+    max-height: 470px; overflow-y: auto; padding-right: 4px;
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #16181f; }
+  .card { aspect-ratio: 1; border-radius: 7px; overflow: hidden; position: relative; background: #262a37; }
+  .card .art { position: absolute; inset: 0; }
+  .card .nm { position: absolute; left: 0; right: 0; bottom: 0; font-size: 10px; padding: 3px 5px;
+    background: linear-gradient(transparent, rgba(0,0,0,.78)); color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .glyph { position: absolute; inset: 0; display: grid; place-items: center; color: #565c70; font-size: 22px; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .m { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .m .k { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+  .m .v { font-size: 19px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .m .v small { font-size: 12px; color: var(--dim); }
+  .v.good { color: var(--ok); } .v.warn { color: var(--warn); } .v.bad { color: var(--bad); }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs button.on { background: var(--accent); color: #10142b; border-color: var(--accent); }
+  .log { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: #0d0e14;
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; max-height: 240px; overflow: auto; }
+  .log div { white-space: pre-wrap; }
+  .log .t { color: #626a80; }
+  .log .req { color: var(--accent); }
+  .log .drop { color: var(--bad); }
+  .log .arr { color: var(--ok); }
+  .note { color: var(--dim); font-size: 13px; }
+  .flag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
+  .flag.on { border-color: var(--warn); color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="badge">Prototype, throwaway</span>
+  <h1>Library Grid Performance Budget</h1>
+  <p class="lede">
+    Ticket 09 accepted one aggregate query per facet dimension per query change, with live counts computed
+    across every filter except their own. Ticket 12 ruled that a card with no derivative yet renders a dimmed
+    glyph tile, with no spinner and no polling. Neither said what that costs on a very large library or a slow
+    connection. This demo simulates the server so you can feel it: type in the search box, flip facets, and
+    watch when the grid paints, when the counts catch up, and how long the numbers on screen are lying.
+  </p>
+  <p class="lede">
+    <strong>Three decisions to make here.</strong> How long to wait after a keystroke before querying
+    (the debounce). Whether the facet counts ride the same round trip as the results or trail behind them,
+    and what gives way first when the budget blows. And whether a tiny blurred placeholder ships inside the
+    grid payload so cards paint before their thumbnail arrives.
+  </p>
+
+  <section>
+    <h2>Settings</h2>
+    <div class="cols">
+      <div>
+        <label class="ctl"><span>Library size (assets in field scope)</span>
+          <select id="size">
+            <option value="800">800, a small site</option>
+            <option value="12000" selected>12,000, a busy site</option>
+            <option value="140000">140,000, the pathological case</option>
+          </select>
+        </label>
+        <label class="ctl"><span>Connection</span>
+          <select id="conn">
+            <option value="fast">Office wifi (30ms + server)</option>
+            <option value="typical" selected>Typical broadband (90ms + server)</option>
+            <option value="slow">Hotel wifi (450ms + server)</option>
+          </select>
+        </label>
+        <label class="ctl"><span>Search debounce</span>
+          <select id="debounce">
+            <option value="0">0ms, fire every keystroke</option>
+            <option value="150">150ms</option>
+            <option value="300" selected>300ms</option>
+            <option value="600">600ms</option>
+          </select>
+        </label>
+        <label class="ctl"><span>Facet counts</span>
+          <select id="countMode">
+            <option value="inline" selected>Same round trip as the results</option>
+            <option value="trailing">Second request, trailing the results</option>
+            <option value="deferred">Trailing, and only once typing settles</option>
+            <option value="approx">Trailing, approximate above a threshold</option>
+            <option value="off">No counts at all</option>
+          </select>
+        </label>
+        <label class="ctl"><span>Card placeholder before the thumbnail lands</span>
+          <select id="ph">
+            <option value="none" selected>Dimmed glyph tile (ticket 12 as written)</option>
+            <option value="colour">Dominant colour, 4 bytes a card</option>
+            <option value="blurhash">BlurHash string, ~30 bytes a card</option>
+            <option value="lqip">Inline 20px WEBP data URI, ~450 bytes a card</option>
+          </select>
+        </label>
+        <div style="display:flex; gap:8px; margin-top:4px;">
+          <button id="reset">Reset metrics</button>
+          <button id="clearq">Clear query</button>
+        </div>
+      </div>
+
+      <div>
+        <label class="ctl"><span>Search the library</span>
+          <input type="text" id="q" placeholder="Try typing hero banner 2024 at speed" autocomplete="off">
+        </label>
+        <div class="cols" style="grid-template-columns: 210px 1fr;">
+          <div class="facets" id="facets"></div>
+          <div>
+            <div id="gridmeta" class="note" style="margin-bottom:8px"></div>
+            <div class="grid" id="grid"></div>
+            <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+              <button id="more">Load next 48</button>
+              <span class="note" id="batchnote"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What it is costing</h2>
+    <div class="metrics" id="metrics"></div>
+    <p class="note" style="margin-top:12px" id="verdict"></p>
+  </section>
+
+  <section>
+    <h2>Guided walkthroughs</h2>
+    <div class="tabs" id="tabs"></div>
+    <div class="cols">
+      <div>
+        <h3 id="scName"></h3>
+        <p class="note" id="scDesc"></p>
+        <div id="scSteps"></div>
+      </div>
+      <div>
+        <h2>Request log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Payload arithmetic for one batch of 48</h2>
+    <table id="payload"></table>
+    <p class="note" style="margin-top:10px">
+      Card metadata is the id, name, filename, mime, visibility, dimensions, a duration for video and the
+      derivative URL, budgeted at 220 bytes a card. Everything above that is the placeholder. The column that
+      matters is the last one: what a person on hotel wifi waits before the first pixel of the batch appears.
+    </p>
+  </section>
+
+</div>
+
+<script>
+/* ==========================================================================
+   THE PURE MODULE. This is the part worth keeping.
+
+   A scheduler for a faceted grid whose results and facet counts may travel
+   on different round trips. It owns no DOM, no timers and no transport: the
+   page feeds it events with a clock reading and gets back the next state plus
+   a list of effects to perform. Lift it into the real plugin as the thing that
+   decides when to query and which in-flight answers are still wanted.
+   ====================================================================== */
+const Sched = (() => {
+
+  const APPROX_THRESHOLD = 50000;   // rows scanned above which counts go approximate
+  const IDLE_FOR_DEFERRED = 700;    // ms of no typing before deferred counts fire
+
+  function init(config) {
+    return {
+      config,
+      query: { text: '', facets: { type: 'all', visibility: 'any', usage: 'any' } },
+      revision: 0,          // bumped on every query change
+      lastEditAt: 0,        // clock reading of the last keystroke
+      pendingSince: null,   // revision awaiting its first result
+      dueAt: null,          // when the debounced results request should fire
+      countsDueAt: null,    // when a separate counts request should fire
+      results: { revision: -1, rows: [], total: 0, batches: 1 },
+      counts: { revision: -1, values: null, approximate: false },
+      inflight: [],         // [{id, kind, revision, sentAt}]
+      nextId: 1,
+      stats: { resultRequests: 0, countRequests: 0, discarded: 0,
+               lastKeystrokeAt: null, paintLatencies: [], countLagTotal: 0, staleSince: null },
+    };
+  }
+
+  // Facet counts are trustworthy only when they describe the same query the
+  // grid is showing. Anything else is a number that is lying to the user.
+  function countsAreStale(s) {
+    if (s.config.countMode === 'off') return false;
+    return s.counts.revision !== s.revision;
+  }
+  function resultsAreStale(s) { return s.results.revision !== s.revision; }
+
+  function bumpQuery(s, now, mutate, isTyping) {
+    const next = { ...s, query: { ...s.query, facets: { ...s.query.facets } } };
+    mutate(next.query);
+    next.revision = s.revision + 1;
+    next.lastEditAt = now;
+    if (isTyping) next.stats = { ...s.stats, lastKeystrokeAt: now };
+    // A facet click is a deliberate act, so it queries at once. Typing waits.
+    next.dueAt = now + (isTyping ? s.config.debounceMs : 0);
+    next.countsDueAt = countsDueFor(next, now, isTyping);
+    if (next.stats.staleSince === null) next.stats = { ...next.stats, staleSince: now };
+    return next;
+  }
+
+  function countsDueFor(s, now, isTyping) {
+    switch (s.config.countMode) {
+      case 'off':       return null;
+      case 'inline':    return null;                 // rides the results request
+      case 'deferred':  return now + Math.max(s.config.debounceMs, IDLE_FOR_DEFERRED);
+      default:          return now + (isTyping ? s.config.debounceMs : 0);
+    }
+  }
+
+  const EVENTS = {
+    typed:   (s, now, e) => bumpQuery(s, now, q => { q.text = e.text; }, true),
+    facet:   (s, now, e) => bumpQuery(s, now, q => { q.facets[e.dim] = e.value; }, false),
+    more:    (s, now) => ({ ...s, results: { ...s.results, batches: s.results.batches + 1 },
+                            dueAt: now, appendOnly: true }),
+    tick:    (s, now) => s,
+    arrived: (s, now, e) => receive(s, now, e),
+  };
+
+  function receive(s, now, e) {
+    const req = s.inflight.find(r => r.id === e.id);
+    if (!req) return s;
+    const inflight = s.inflight.filter(r => r.id !== e.id);
+    // An answer to a superseded query is thrown away, not rendered. Counting
+    // these is how you see what the debounce is buying.
+    if (req.revision !== s.revision) {
+      return { ...s, inflight, stats: { ...s.stats, discarded: s.stats.discarded + 1 } };
+    }
+    let s2 = { ...s, inflight };
+    if (e.rows) {
+      const paint = s.stats.lastKeystrokeAt === null ? null : now - s.stats.lastKeystrokeAt;
+      s2 = { ...s2,
+        results: { revision: req.revision, rows: e.rows, total: e.total,
+                   batches: s.results.batches },
+        stats: { ...s2.stats,
+                 paintLatencies: paint === null ? s2.stats.paintLatencies
+                                                : s2.stats.paintLatencies.concat(paint) } };
+    }
+    if (e.counts) {
+      s2 = { ...s2, counts: { revision: req.revision, values: e.counts, approximate: !!e.approximate } };
+    }
+    // The stale window closes only when the grid and the counts agree again.
+    if (!resultsAreStale(s2) && !countsAreStale(s2) && s2.stats.staleSince !== null) {
+      s2 = { ...s2, stats: { ...s2.stats,
+        countLagTotal: s2.stats.countLagTotal + (now - s2.stats.staleSince), staleSince: null } };
+    }
+    return s2;
+  }
+
+  // The only entry point. Returns the next state and the effects to perform.
+  function step(state, event, now) {
+    const handler = EVENTS[event.kind];
+    let s = handler ? handler(state, now, event) : state;
+    const effects = [];
+
+    if (s.dueAt !== null && now >= s.dueAt) {
+      const wantsCounts = s.config.countMode === 'inline';
+      const id = s.nextId;
+      effects.push({ kind: 'request', id, revision: s.revision, results: true,
+                     counts: wantsCounts, approximate: false, batches: s.results.batches,
+                     append: !!s.appendOnly });
+      s = { ...s, nextId: id + 1, dueAt: null, appendOnly: false,
+            inflight: s.inflight.concat({ id, kind: 'results', revision: s.revision, sentAt: now }),
+            stats: { ...s.stats, resultRequests: s.stats.resultRequests + 1,
+                     countRequests: s.stats.countRequests + (wantsCounts ? 1 : 0) } };
+    }
+
+    if (s.countsDueAt !== null && now >= s.countsDueAt) {
+      const approximate = s.config.countMode === 'approx' && s.config.scannedRows > APPROX_THRESHOLD;
+      const id = s.nextId;
+      effects.push({ kind: 'request', id, revision: s.revision, results: false,
+                     counts: true, approximate });
+      s = { ...s, nextId: id + 1, countsDueAt: null,
+            inflight: s.inflight.concat({ id, kind: 'counts', revision: s.revision, sentAt: now }),
+            stats: { ...s.stats, countRequests: s.stats.countRequests + 1 } };
+    }
+
+    return { state: s, effects };
+  }
+
+  return { init, step, countsAreStale, resultsAreStale, APPROX_THRESHOLD, IDLE_FOR_DEFERRED };
+})();
+
+/* ==========================================================================
+   THROWAWAY SHELL BELOW. Fake server, fake assets, DOM wiring.
+   ====================================================================== */
+
+const WORDS = ['hero','banner','logo','team','product','invoice','poster','headshot','map','chart',
+               'launch','summer','winter','press','draft','final','mobile','desktop','og','avatar'];
+const TYPES = [
+  { t: 'image', mime: 'image/jpeg', ext: 'jpg', w: 6 },
+  { t: 'image', mime: 'image/png',  ext: 'png', w: 3 },
+  { t: 'video', mime: 'video/mp4',  ext: 'mp4', w: 2 },
+  { t: 'pdf',   mime: 'application/pdf', ext: 'pdf', w: 2 },
+];
+function pickType(r) {
+  const total = TYPES.reduce((a, x) => a + x.w, 0);
+  let n = r * total;
+  for (const x of TYPES) { n -= x.w; if (n <= 0) return x; }
+  return TYPES[0];
+}
+// Deterministic pseudo-random so the same seed gives the same library.
+function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+
+let LIBRARY = [];
+function buildLibrary(n) {
+  const r = rng(20250827);
+  LIBRARY = Array.from({ length: n }, (_, i) => {
+    const ty = pickType(r());
+    const name = `${WORDS[Math.floor(r()*WORDS.length)]}-${WORDS[Math.floor(r()*WORDS.length)]}-${2020 + Math.floor(r()*6)}`;
+    return { id: i + 1, name, filename: `${name}.${ty.ext}`, type: ty.t, mime: ty.mime,
+             visibility: r() < 0.68 ? 'public' : 'private',
+             used: r() < 0.55,
+             hue: Math.floor(r() * 360), sat: 35 + Math.floor(r() * 40), lit: 30 + Math.floor(r() * 35),
+             hue2: Math.floor(r() * 360),
+             hasDerivative: r() < 0.85 };
+  });
+}
+
+function matches(a, q) {
+  const terms = q.text.toLowerCase().split(/\s+/).filter(Boolean);
+  for (const t of terms) if (!(a.name + ' ' + a.filename).toLowerCase().includes(t)) return false;
+  if (q.facets.type !== 'all' && a.type !== q.facets.type) return false;
+  if (q.facets.visibility !== 'any' && a.visibility !== q.facets.visibility) return false;
+  if (q.facets.usage !== 'any' && (q.facets.usage === 'used') !== a.used) return false;
+  return true;
+}
+// Ticket 09: each dimension's counts ignore its own filter.
+function computeCounts(q) {
+  const without = dim => LIBRARY.filter(a => matches(a, { text: q.text,
+    facets: { ...q.facets, [dim]: dim === 'type' ? 'all' : 'any' } }));
+  const ty = without('type'), vi = without('visibility'), us = without('usage');
+  return {
+    type: { all: ty.length, image: ty.filter(a => a.type === 'image').length,
+            video: ty.filter(a => a.type === 'video').length, pdf: ty.filter(a => a.type === 'pdf').length },
+    visibility: { any: vi.length, public: vi.filter(a => a.visibility === 'public').length,
+                  private: vi.filter(a => a.visibility === 'private').length },
+    usage: { any: us.length, used: us.filter(a => a.used).length, unused: us.filter(a => !a.used).length },
+  };
+}
+function approximate(counts) {
+  const fuzz = v => v < 200 ? v : Math.round(v / Math.pow(10, String(v).length - 2)) * Math.pow(10, String(v).length - 2);
+  const out = {};
+  for (const dim in counts) { out[dim] = {}; for (const k in counts[dim]) out[dim][k] = fuzz(counts[dim][k]); }
+  return out;
+}
+
+const CONN = { fast: 30, typical: 90, slow: 450 };
+const PH_BYTES = { none: 0, colour: 4, blurhash: 30, lqip: 450 };
+const CARD_BYTES = 220;
+
+const ui = {
+  q: document.getElementById('q'), grid: document.getElementById('grid'),
+  facets: document.getElementById('facets'), metrics: document.getElementById('metrics'),
+  log: document.getElementById('log'), gridmeta: document.getElementById('gridmeta'),
+  batchnote: document.getElementById('batchnote'), verdict: document.getElementById('verdict'),
+};
+function config() {
+  return {
+    debounceMs: +document.getElementById('debounce').value,
+    countMode: document.getElementById('countMode').value,
+    scannedRows: +document.getElementById('size').value,
+    latency: CONN[document.getElementById('conn').value],
+    placeholder: document.getElementById('ph').value,
+    size: +document.getElementById('size').value,
+  };
+}
+
+let state = null, t0 = performance.now(), thumbTimers = [];
+const now = () => performance.now() - t0;
+
+function log(cls, text) {
+  const d = document.createElement('div');
+  d.innerHTML = `<span class="t">${String(Math.round(now())).padStart(6)}ms</span> <span class="${cls}">${text}</span>`;
+  ui.log.prepend(d);
+  while (ui.log.children.length > 120) ui.log.lastChild.remove();
+}
+
+// Server cost model: a fixed hop, plus scan cost for the result page, plus a
+// per-dimension aggregate cost when counts are asked for.
+function serverCost(cfg, req) {
+  const scan = Math.pow(cfg.scannedRows, 0.62) / 26;      // ms, index-assisted scan
+  let ms = cfg.latency + (req.results ? 8 + scan : 0);
+  if (req.counts) {
+    const per = req.approximate ? scan * 0.18 : scan * 1.0;
+    ms += 3 * per;                                         // three facet dimensions
+  }
+  return ms;
+}
+
+function dispatch(event) {
+  const cfg = config();
+  if (!state) state = Sched.init(cfg);
+  state = { ...state, config: cfg };
+  const out = Sched.step(state, event, now());
+  state = out.state;
+  for (const eff of out.effects) if (eff.kind === 'request') send(eff, cfg);
+  render();
+}
+
+function send(req, cfg) {
+  const cost = serverCost(cfg, req);
+  const what = [req.results ? 'results' : null, req.counts ? (req.approximate ? 'counts~approx' : 'counts') : null]
+    .filter(Boolean).join(' + ');
+  log('req', `-> #${req.id} ${what} (rev ${req.revision}) ${Math.round(cost)}ms`);
+  setTimeout(() => {
+    const q = state.query;
+    const payload = { kind: 'arrived', id: req.id };
+    if (req.results) {
+      const all = LIBRARY.filter(a => matches(a, q));
+      payload.rows = all.slice(0, 48 * req.batches);
+      payload.total = all.length;
+    }
+    if (req.counts) {
+      const c = computeCounts(q);
+      payload.counts = req.approximate ? approximate(c) : c;
+      payload.approximate = req.approximate;
+    }
+    const stillWanted = state.inflight.some(r => r.id === req.id && r.revision === state.revision);
+    log(stillWanted ? 'arr' : 'drop',
+        `<- #${req.id} ${what}${stillWanted ? '' : ' DISCARDED, query moved on'}`);
+    dispatch(payload);
+  }, cost);
+}
+
+const FACET_DEFS = [
+  { dim: 'type', name: 'Type', opts: [['all','All'],['image','Images'],['video','Video'],['pdf','PDF']] },
+  { dim: 'visibility', name: 'Visibility', opts: [['any','Any'],['public','Public'],['private','Private']] },
+  { dim: 'usage', name: 'Usage', opts: [['any','Any'],['unused','Not attached'],['used','In use']] },
+];
+
+function render() {
+  const cfg = state.config;
+  const stale = Sched.countsAreStale(state);
+
+  ui.facets.innerHTML = FACET_DEFS.map(f => {
+    const vals = state.counts.values ? state.counts.values[f.dim] : null;
+    return `<div class="facet"><div class="fname">${f.name}</div>` + f.opts.map(([v, lbl]) => {
+      const on = state.query.facets[f.dim] === v;
+      let cnt = '';
+      if (cfg.countMode === 'off') cnt = `<span class="cnt hidden-count">&middot;</span>`;
+      else if (!vals) cnt = `<span class="cnt hidden-count">&hellip;</span>`;
+      else cnt = `<span class="cnt ${stale ? 'stale' : ''}">${state.counts.approximate && vals[v] >= 200 ? '~' : ''}${vals[v].toLocaleString()}</span>`;
+      return `<div class="opt ${on ? 'on' : ''}" data-dim="${f.dim}" data-v="${v}"><span>${lbl}</span>${cnt}</div>`;
+    }).join('') + `</div>`;
+  }).join('') + (stale && cfg.countMode !== 'off'
+      ? `<span class="flag on">counts describe an older query</span>`
+      : `<span class="flag">counts match the grid</span>`);
+
+  ui.facets.querySelectorAll('.opt').forEach(el => el.onclick = () =>
+    dispatch({ kind: 'facet', dim: el.dataset.dim, value: el.dataset.v }));
+
+  const rows = state.results.rows;
+  const resultsStale = Sched.resultsAreStale(state);
+  ui.gridmeta.innerHTML = state.results.revision < 0
+    ? 'Waiting for the first result set.'
+    : `${state.results.total.toLocaleString()} assets match. Showing ${rows.length}.` +
+      (resultsStale ? ` <span class="flag on">grid is one query behind</span>` : '');
+
+  ui.grid.innerHTML = rows.map(a => card(a, cfg)).join('');
+  paintThumbs(cfg);
+
+  ui.batchnote.textContent =
+    `Batch ${state.results.batches}. Payload for the last 48 cards: ${fmtKb(48 * (CARD_BYTES + PH_BYTES[cfg.placeholder]))}.`;
+
+  renderMetrics(cfg);
+  renderPayloadTable(cfg);
+}
+
+function card(a, cfg) {
+  const art = (cfg.placeholder === 'none' || !a.hasDerivative && cfg.placeholder === 'none')
+    ? `<div class="glyph">${a.type === 'video' ? '&#9654;' : a.type === 'pdf' ? '&#128196;' : '&#128247;'}</div>`
+    : placeholderArt(a, cfg.placeholder);
+  return `<div class="card" data-id="${a.id}" data-real="${a.hasDerivative}">
+    <div class="art ph">${art}</div><div class="nm">${a.name}</div></div>`;
+}
+function placeholderArt(a, mode) {
+  if (mode === 'colour')
+    return `<div style="position:absolute;inset:0;background:hsl(${a.hue} ${a.sat}% ${a.lit}%)"></div>`;
+  // BlurHash and LQIP both read as a soft two-tone smear at this size; the
+  // difference between them is bytes and fidelity, not shape.
+  const blur = mode === 'lqip' ? 6 : 11;
+  return `<div style="position:absolute;inset:-14px;filter:blur(${blur}px);
+    background:radial-gradient(60% 70% at 32% 28%, hsl(${a.hue} ${a.sat}% ${a.lit + 16}%), transparent 70%),
+               radial-gradient(70% 60% at 72% 78%, hsl(${a.hue2} ${a.sat}% ${Math.max(12, a.lit - 12)}%), transparent 72%),
+               hsl(${a.hue} ${Math.round(a.sat * 0.7)}% ${a.lit}%)"></div>`;
+}
+
+// The real thumbnail arrives on its own request, after the JSON. That gap is
+// exactly the window a placeholder is meant to cover.
+function paintThumbs(cfg) {
+  thumbTimers.forEach(clearTimeout); thumbTimers = [];
+  const cards = [...ui.grid.querySelectorAll('.card')];
+  cards.forEach((el, i) => {
+    if (el.dataset.real !== 'true') return;
+    const a = LIBRARY[+el.dataset.id - 1];
+    // Six concurrent connections, so cards land in waves.
+    const wave = Math.floor(i / 6);
+    const delay = cfg.latency + 40 + wave * (cfg.latency * 0.5 + 25);
+    thumbTimers.push(setTimeout(() => {
+      const art = el.querySelector('.art');
+      if (!art) return;
+      art.classList.remove('ph');
+      art.innerHTML = `<div style="position:absolute;inset:0;
+        background:linear-gradient(135deg, hsl(${a.hue} ${a.sat}% ${a.lit + 14}%), hsl(${a.hue2} ${a.sat}% ${Math.max(10, a.lit - 14)}%));"></div>
+        <div style="position:absolute;inset:0;background:
+          repeating-linear-gradient(${a.hue % 90}deg, rgba(255,255,255,.09) 0 6px, transparent 6px 14px);"></div>` +
+        (a.type === 'video' ? `<div class="glyph" style="color:#fff;text-shadow:0 1px 6px #000">&#9654;</div>` : '');
+    }, delay));
+  });
+}
+
+function fmtKb(b) { return b < 1024 ? `${b} B` : `${(b / 1024).toFixed(1)} kB`; }
+function avg(xs) { return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; }
+
+function renderMetrics(cfg) {
+  const s = state.stats;
+  const paint = avg(s.paintLatencies.slice(-6));
+  const staleNow = s.staleSince === null ? 0 : now() - s.staleSince;
+  const totalStale = s.countLagTotal + staleNow;
+  const wasteRatio = s.resultRequests + s.countRequests === 0 ? 0
+    : s.discarded / (s.resultRequests + s.countRequests);
+  const firstPixel = cfg.placeholder === 'none'
+    ? Math.round(cfg.latency * 2.5 + 60) : Math.round(cfg.latency + 8);
+
+  const cells = [
+    ['Requests issued', `${s.resultRequests + s.countRequests}`, '',
+      `${s.resultRequests} result, ${s.countRequests} count`],
+    ['Answers thrown away', `${s.discarded}`, wasteRatio > 0.4 ? 'bad' : wasteRatio > 0.15 ? 'warn' : 'good',
+      `${Math.round(wasteRatio * 100)}% of all traffic`],
+    ['Keystroke to grid paint', paint === null ? '&mdash;' : `${Math.round(paint)}<small>ms</small>`,
+      paint === null ? '' : paint > 900 ? 'bad' : paint > 500 ? 'warn' : 'good', 'mean of the last 6'],
+    ['Counts disagreed with grid', `${(totalStale / 1000).toFixed(1)}<small>s</small>`,
+      totalStale > 6000 ? 'bad' : totalStale > 2000 ? 'warn' : 'good', 'cumulative this session'],
+    ['First pixel in a card', `${firstPixel}<small>ms</small>`,
+      cfg.placeholder === 'none' ? 'warn' : 'good',
+      cfg.placeholder === 'none' ? 'waits for the thumbnail' : 'painted from the JSON'],
+    ['Batch payload', fmtKb(48 * (CARD_BYTES + PH_BYTES[cfg.placeholder])), '',
+      `${PH_BYTES[cfg.placeholder]} B a card of placeholder`],
+  ];
+  ui.metrics.innerHTML = cells.map(([k, v, cls, sub]) =>
+    `<div class="m"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="k" style="text-transform:none;letter-spacing:0">${sub}</div></div>`).join('');
+
+  ui.verdict.textContent = verdictFor(cfg, wasteRatio, paint, totalStale);
+}
+
+function verdictFor(cfg, waste, paint, stale) {
+  const bits = [];
+  if (cfg.debounceMs === 0) bits.push('Zero debounce turns every keystroke into a fan of aggregate queries, most of which are discarded before they paint.');
+  if (cfg.countMode === 'inline' && cfg.size >= 140000) bits.push('Inline counts hold the results hostage to the slowest aggregate, so the grid itself waits on numbers nobody has looked at yet.');
+  if (cfg.countMode === 'trailing' && stale > 2000) bits.push('Trailing counts let the grid paint first, at the price of a window where the sidebar numbers describe a query that is already gone.');
+  if (cfg.countMode === 'off') bits.push('With no counts the grid is fast and the user is flying blind, which is the failure ticket 09 was trying to avoid.');
+  if (cfg.placeholder === 'none') bits.push('With a glyph tile only, the card stays empty until its thumbnail request returns, so the whole grid appears to arrive late even when the JSON was quick.');
+  if (cfg.placeholder === 'lqip') bits.push('A 20px WEBP data URI is 15 times the bytes of a BlurHash for a difference you cannot see at 104px.');
+  return bits.join(' ');
+}
+
+function renderPayloadTable(cfg) {
+  const rows = Object.entries(PH_BYTES).map(([mode, b]) => {
+    const total = 48 * (CARD_BYTES + b);
+    const label = { none: 'Glyph tile, nothing inlined', colour: 'Dominant colour (4 bytes)',
+                    blurhash: 'BlurHash string (~30 bytes)', lqip: 'Inline 20px WEBP (~450 bytes)' }[mode];
+    const transfer = Math.round(total / 1024 / (cfg.latency > 300 ? 0.35 : 1.6));
+    const first = mode === 'none' ? Math.round(cfg.latency * 2.5 + 60) : Math.round(cfg.latency + 8 + transfer);
+    return `<tr${mode === cfg.placeholder ? ' style="background:#232a44"' : ''}>
+      <td>${label}</td><td class="num">${b}</td><td class="num">${fmtKb(total)}</td>
+      <td class="num">+${transfer}ms</td><td class="num">${first}ms</td></tr>`;
+  }).join('');
+  document.getElementById('payload').innerHTML =
+    `<tr><th>Placeholder</th><th class="num">Bytes a card</th><th class="num">48 cards</th>
+     <th class="num">Extra transfer</th><th class="num">First pixel</th></tr>` + rows;
+}
+
+/* ---------- guided walkthroughs ---------- */
+const SCENARIOS = [
+  { name: 'A fast typist on hotel wifi',
+    desc: 'The case the debounce exists for. Set the connection to hotel wifi and type a nine character query at speed. Watch the request log: with no debounce almost every answer is discarded, and the grid paints from a query the user already abandoned.',
+    steps: [
+      ['Hotel wifi, 12,000 assets, no debounce', () => { set('conn','slow'); set('size','12000'); set('debounce','0'); rebuild(); }],
+      ['Type "hero bann" one character at a time', () => typeOut('hero bann')],
+      ['Now set the debounce to 300ms', () => set('debounce','300')],
+      ['Clear and type the same query again', () => { ui.q.value=''; dispatch({kind:'typed', text:''}); setTimeout(()=>typeOut('hero bann'), 400); }],
+      ['Compare: requests issued against answers thrown away', () => {}],
+    ]},
+  { name: 'The pathological library',
+    desc: '140,000 assets in field scope. The facet aggregates now dominate the round trip. Flip between the count modes on the same query and watch which one the grid waits for, and how long the sidebar numbers stay wrong when they are allowed to trail.',
+    steps: [
+      ['140,000 assets, typical broadband', () => { set('size','140000'); set('conn','typical'); rebuild(); }],
+      ['Counts on the same round trip', () => set('countMode','inline')],
+      ['Filter to Video, then to Private', () => { dispatch({kind:'facet',dim:'type',value:'video'});
+        setTimeout(()=>dispatch({kind:'facet',dim:'visibility',value:'private'}), 250); }],
+      ['Reset metrics, then switch to trailing counts', () => { resetStats(); set('countMode','trailing'); }],
+      ['Run the same two filters again', () => { dispatch({kind:'facet',dim:'type',value:'all'});
+        setTimeout(()=>dispatch({kind:'facet',dim:'type',value:'video'}), 200);
+        setTimeout(()=>dispatch({kind:'facet',dim:'visibility',value:'public'}), 450); }],
+      ['Now try approximate above the threshold', () => { resetStats(); set('countMode','approx');
+        dispatch({kind:'facet',dim:'usage',value:'unused'}); }],
+    ]},
+  { name: 'Counts that lie',
+    desc: 'The specific failure of letting counts trail: the user reads a number, clicks it, and gets a different result set. Type, then click a facet before the counts have caught up.',
+    steps: [
+      ['Hotel wifi, trailing counts, big library', () => { set('conn','slow'); set('countMode','trailing'); set('size','140000'); rebuild(); }],
+      ['Type "poster"', () => typeOut('poster')],
+      ['Immediately click Private while counts are still orange', () => dispatch({kind:'facet',dim:'visibility',value:'private'})],
+      ['Watch the count you clicked change under you', () => {}],
+      ['Now do the same with counts on the same round trip', () => { resetStats(); set('countMode','inline');
+        ui.q.value=''; dispatch({kind:'typed', text:''}); setTimeout(()=>typeOut('poster'), 300); }],
+    ]},
+  { name: 'The empty grid problem',
+    desc: 'Ticket 12 says a card with no derivative renders a dimmed glyph tile with no spinner. That ruling is about missing derivatives, but the same tile is what a card shows while a derivative that does exist is still in flight. Flip the placeholder modes on a slow connection and judge whether the blur is worth its bytes.',
+    steps: [
+      ['Hotel wifi, glyph tile only', () => { set('conn','slow'); set('ph','none'); set('size','12000'); rebuild(); }],
+      ['Load a fresh batch and watch it fill in', () => dispatch({kind:'facet',dim:'type',value:'image'})],
+      ['Switch to BlurHash and reload the batch', () => { set('ph','blurhash');
+        dispatch({kind:'facet',dim:'type',value:'all'}); setTimeout(()=>dispatch({kind:'facet',dim:'type',value:'image'}), 200); }],
+      ['Compare against the 450 byte inline WEBP', () => { set('ph','lqip');
+        dispatch({kind:'facet',dim:'type',value:'all'}); setTimeout(()=>dispatch({kind:'facet',dim:'type',value:'image'}), 200); }],
+      ['And against a flat dominant colour', () => { set('ph','colour');
+        dispatch({kind:'facet',dim:'type',value:'all'}); setTimeout(()=>dispatch({kind:'facet',dim:'type',value:'image'}), 200); }],
+    ]},
+];
+
+let activeScenario = 0, stepIndex = 0;
+function set(id, v) { document.getElementById(id).value = v; if (id === 'size') rebuild(); else dispatch({kind:'tick'}); }
+function rebuild() { buildLibrary(+document.getElementById('size').value); dispatch({kind:'tick'}); }
+function resetStats() {
+  state.stats = { resultRequests: 0, countRequests: 0, discarded: 0, lastKeystrokeAt: null,
+                  paintLatencies: [], countLagTotal: 0, staleSince: null };
+  ui.log.innerHTML = ''; render();
+}
+function typeOut(text) {
+  ui.q.value = '';
+  [...text].forEach((ch, i) => setTimeout(() => {
+    ui.q.value += ch; dispatch({ kind: 'typed', text: ui.q.value });
+  }, i * 85));
+}
+function renderScenario() {
+  const sc = SCENARIOS[activeScenario];
+  document.getElementById('tabs').innerHTML = SCENARIOS.map((s, i) =>
+    `<button class="${i === activeScenario ? 'on' : ''}" data-i="${i}">${s.name}</button>`).join('');
+  document.getElementById('tabs').querySelectorAll('button').forEach(b => b.onclick = () => {
+    activeScenario = +b.dataset.i; stepIndex = 0; resetStats(); renderScenario();
+  });
+  document.getElementById('scName').textContent = sc.name;
+  document.getElementById('scDesc').textContent = sc.desc;
+  document.getElementById('scSteps').innerHTML = sc.steps.map((s, i) =>
+    `<button class="step ${i < stepIndex ? 'done' : ''} ${i === stepIndex ? 'next' : ''}" data-i="${i}">${i + 1}. ${s[0]}</button>`).join('');
+  document.getElementById('scSteps').querySelectorAll('button').forEach(b => b.onclick = () => {
+    const i = +b.dataset.i; SCENARIOS[activeScenario].steps[i][1]();
+    stepIndex = Math.max(stepIndex, i + 1); renderScenario();
+  });
+}
+
+/* ---------- boot ---------- */
+['size','conn','debounce','countMode','ph'].forEach(id =>
+  document.getElementById(id).addEventListener('change', () => {
+    if (id === 'size') rebuild(); else dispatch({ kind: 'tick' });
+  }));
+ui.q.addEventListener('input', e => dispatch({ kind: 'typed', text: e.target.value }));
+document.getElementById('more').onclick = () => dispatch({ kind: 'more' });
+document.getElementById('reset').onclick = resetStats;
+document.getElementById('clearq').onclick = () => { ui.q.value = ''; dispatch({ kind: 'typed', text: '' }); };
+
+// A slow clock tick so debounced work fires even when nobody is touching anything.
+setInterval(() => { if (state && (state.dueAt !== null || state.countsDueAt !== null)) dispatch({ kind: 'tick' }); }, 40);
+
+buildLibrary(12000);
+state = Sched.init(config());
+dispatch({ kind: 'facet', dim: 'type', value: 'all' });
+renderScenario();
+</script>
+</body>
+</html>
