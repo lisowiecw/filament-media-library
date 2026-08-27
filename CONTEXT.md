@@ -8,11 +8,11 @@
 - **Field context**: The named media field within a host model that scopes ordered selection and duplicate prevention.
 - **Detach**: Removing an Attachment for a given host model and field context. Never affects the Media Asset record or its storage object.
   _Avoid_: Remove, unlink, delete (detach and delete are distinct actions)
-- **Replace**: Attaching a newly uploaded Media Asset into a field context in place of the one currently attached there, then detaching the previous one. The previous asset becomes an orphan asset if nothing else references it; replacing never deletes it.
+- **Replace**: Attaching a newly uploaded Media Asset into a field context in place of the one currently attached there, then detaching the previous one. The previous asset becomes an unattached asset if nothing else references it; replacing never deletes it.
 - **Delete**: The explicit, library-management action that soft-deletes a Media Asset record and queues its storage object for removal. Blocked by default when the asset has other Attachments, unless performed as a force delete.
   _Avoid_: Destroy, remove
 - **Force delete**: A delete performed on a Media Asset that still has other Attachments, overriding the default block after the requester reviews the usage list.
-- **Usage list**: The resolved, human-readable list of Attachments referencing a Media Asset, shown when a delete is blocked. Each entry names the host model instance and field context, using the host model's label callback when configured.
+- **Usage list**: The resolved, human-readable list of Attachments referencing a Media Asset. Shown wherever usage matters: as a count, as a panel on the asset itself, and inside a blocked or forced delete. Each entry names the host model instance and field context, using the host model's label callback when configured.
 - **Media Picker**: The single field component that renders a host model's attachments for one field context and opens the library modal. The only picker surface; it never exposes delete or a visibility choice.
 - **Placement**: The disk, directory and visibility a Media Picker applies to **new uploads**. Placement is fixed on the asset at upload and never re-applied by attaching, so a shared asset keeps its own placement wherever it is reused.
   _Avoid_: Destination, location (these read as the object key, which placement is not)
@@ -23,4 +23,6 @@
   _Avoid_: Signed URL, presigned URL (these name a mechanism the Delivery route may use internally, not the contract itself)
 - **Uploader**: The authenticated user recorded on a Media Asset at the moment it is uploaded, or absent when the upload was unauthenticated. The Uploader is a fact about provenance, not a grant of authority; the plugin defines no ownership or permission implied by being the Uploader.
   _Avoid_: Owner, creator
-- **Orphan asset**: A Media Asset with zero Attachments. Surfaced for review by a report-only sweep after a configurable grace period; never deleted automatically.
+- **Unattached asset**: A Media Asset with zero Attachments. This is evidence that nothing uses it, not proof: a URL may live in a sent email, an export or a third-party system the plugin cannot see. Surfaced for review by a report-only sweep after a configurable grace period; never deleted automatically.
+  _Avoid_: Orphan (it asserts nothing references the asset, which the plugin cannot know)
+- **External reference**: A record that something outside any Host model uses a Media Asset: a campaign, an export, a sent email. It is an Attachment with no host, so it appears in the usage list and blocks deletion like any other use, but belongs to no Field context and is invisible to a Host model's media fields.
