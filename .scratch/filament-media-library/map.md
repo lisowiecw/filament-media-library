@@ -31,6 +31,10 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 
 - [Define Thumbnail and Preview Derivatives](issues/12-thumbnail-and-preview-derivatives.md): The plugin stores two fixed WEBP variants (`thumb` 400px, `preview` 1600px) as child `media_derivatives` rows, never as Media Assets; generated eagerly and queued on upload, lazily on a render miss (which also covers legacy imports, never generated on import), never inline; video poster frames and duration sit behind a probed, swappable `ffmpeg` driver that degrades to a glyph tile rather than a hard dependency; a derivative inherits its parent's visibility, so private thumbnails go through the Delivery route with a variant parameter and immutable long-TTL caching, with public derivatives, presigned derivative URLs, inline `data:` URIs and batch sprite endpoints all rejected; pending and missing cards render a dimmed glyph tile with no polling, and exhausted failures stick as `status: failed` and stop re-dispatching.
 
+- [Define Upload Validation and Active Content Handling](issues/13-upload-validation-and-active-content.md): A package-global `blocked_types` denylist (never an allowlist, so arbitrary types stay the promise) that a field can only narrow; a config size default overridable per field in either direction; every upload sniffed, so the bytes win over the browser's claim and the gate re-runs against the truth; active content stored but never inline, refused outright on public placement, with SVG carved out as a sanitized inline image that is its own thumbnail; disposition earned rather than assumed, so a weak `mime_source` rung serves as a download whatever its type claims; ingest rules never apply to import and never bind retroactively at rest, while serving rules apply to every asset immediately.
+
+- [Choose the SVG Sanitizer Dependency](issues/14-svg-sanitizer-dependency.md): `enshrined/svg-sanitize` `^0.22` as a hard `require` rather than the optional dependency ticket 13 assumed, since Composer can install a Composer package and a silently SVG-less plugin is a functional regression; ticket 13's runtime probe survives as a fail-closed guard. Refusal keys on a three-way check (`false`, thrown, or a non-`svg` root), because a well-formed non-SVG returns a string rather than a failure. Script elements and event-handler attributes are stripped as assumed; external references are not, which amends ticket 13 and opens ticket 15. The package is GPL-2.0-or-later, noted in the README.
+
 ## Not yet specified
 
 - Exact readable-name algorithm, collision behavior, Unicode normalization, and whether the name ever influences the object key.
@@ -41,6 +45,8 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 - Whether Filament 4 compatibility ships in the same Composer line or a separately tested release, plus the exact package namespace and release tags.
 - Perceived grid performance on a slow connection: whether a tiny blurred placeholder is inlined in the grid payload so cards paint before their derivative arrives. Ticket 12 fixed the delivery mechanism and left this as an additive, measurement-driven change rather than an authorization one.
 - Derivative storage growth and reclamation: ticket 12 fixed that an asset's derivatives are removable by key prefix and die with the asset, but not how a dimension change retires the objects generated under the old settings, nor what a very large library's derivative footprint costs.
+- Deployments fronting a public bucket with a CDN on the application's own domain, where ticket 13's assumption that public content is served from a foreign origin does not hold.
+- Whether the migration runbook automates `media:resolve-mimes --sniff` after an import or documents it as a step a human runs, given ticket 13 made a freshly imported library render as downloads until it has run.
 
 ## Out of scope
 
