@@ -3,6 +3,12 @@
 ## Media Library
 
 - **Media Asset**: A reusable file record with human-readable file metadata and storage metadata. Its readable name is distinct from the storage object identity.
+- **Original filename**: The client-supplied filename recorded on a Media Asset at upload, immutable thereafter. It is scrubbed rather than verbatim: reduced to its basename, cleared of control and bidi-override characters, normalized, trimmed and length-capped, because a column has a length and a bidi override is a spoofing vector rather than provenance. Preserved in its own script; never transliterated.
+  _Avoid_: Client name, upload name
+- **Display name**: The editable, human-readable name of a Media Asset, derived at upload from the Original filename with its extension removed and whitespace collapsed, and never prettified further: separators and case are left as the person typed them. It is presentation metadata alone, so editing it never touches the storage object, and it is never an identifier.
+  _Avoid_: Title, label, filename (the Original filename is a different thing)
+- **Name collision**: Two Media Assets whose Display names match once case and whitespace differences are set aside. Collisions are permitted and library-wide; detecting one only informs the uploader, who chooses to create a new asset or cancel. A collision is never an error and never blocks.
+  _Avoid_: Duplicate (that reads as identical bytes, which a collision says nothing about)
 - **Attachment**: A relationship between a Media Asset and a host model. An attachment belongs to a named field context when a host model uses more than one media field.
 - **Host model**: An application-owned model that can attach reusable Media Assets without owning their metadata or storage identity.
 - **Field context**: The named media field within a host model that scopes ordered selection and duplicate prevention.

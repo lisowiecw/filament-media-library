@@ -37,3 +37,8 @@ An external reference is **not** an Attachment for field purposes: null `host_ty
 **Page authorization.** `MediaAssetPolicy` gains **`viewAny`**, governing Resource access and navigation visibility, fail-closed like the rest, so opting the Resource in does not expose the whole library to every panel user. It gates the *page*, not rows.
 
 **Importer stays CLI-only.** It takes a disk name, a column mapping and a `--copy` flag, is idempotent, and is run once or twice in a migration window by someone with shell access, not by the content editor this page serves. A button would need a form modelling every flag and would invite re-running against a live library. Recorded on the map as out of scope.
+
+
+## Comments
+
+- Amended by [Define the Readable Name Algorithm](16-readable-name-algorithm.md) on 2026-08-27: see its object-key lookup obligations.

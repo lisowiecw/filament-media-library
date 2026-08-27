@@ -53,3 +53,8 @@ Selection order is preserved as the field's ordered `int[]` per ticket 06, and c
 ### Thumbnails
 
 Image and video assets render an actual preview in the card, not a type glyph. Video additionally carries a play badge and a duration chip so it is distinguishable from a still at grid size. Types with nothing to preview (PDF, audio, documents) keep a tinted glyph tile. The prototype fakes previews with procedural SVG; the real plugin needs a derivative or poster-frame story, which is now fog.
+
+
+## Comments
+
+- Amended by [Define the Readable Name Algorithm](16-readable-name-algorithm.md) on 2026-08-27: see its object-key lookup obligations.
