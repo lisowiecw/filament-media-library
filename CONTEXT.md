@@ -30,7 +30,8 @@
 - **Derivative**: A plugin-generated, downscaled rendering of a Media Asset, stored as its own object and recorded as a child of the asset. A derivative is never a Media Asset: it cannot be attached, named or offered, and it inherits its parent's placement and visibility rather than carrying its own. Its key is immutable, so it dies with the asset rather than being edited.
   _Avoid_: Thumbnail (that names one variant, not the concept), version, rendition
 - **Variant**: The named size a Derivative was generated at. The set is fixed by the package; only the dimensions are configurable.
-- **Poster frame**: The still image extracted from a video Media Asset so its card can show the video rather than a glyph. Produced by an external tool the application may not have, so its absence is a degraded card, never an error.
+- **Stale derivative**: A Derivative generated under settings the application has since changed. It is detected by comparison, not inspection: the row records a digest of the settings that produced it. Stale is not broken, so a stale derivative is still served; it is refreshed only when an operator asks. Unknown provenance is not staleness.
+  _Avoid_: Expired, invalid, orphaned (nothing is stranded, since a regeneration overwrites in place)
 
 - **Uploader**: The authenticated user recorded on a Media Asset at the moment it is uploaded, or absent when the upload was unauthenticated. The Uploader is a fact about provenance, not a grant of authority; the plugin defines no ownership or permission implied by being the Uploader.
   _Avoid_: Owner, creator
