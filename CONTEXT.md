@@ -59,3 +59,7 @@
   _Avoid_: Global asset, shared asset, orphan (an orphan is an asset with no Attachment, which is a different thing)
 - **Claim**: Assigning a Tenant to an Untenanted asset. Claiming is one-way and permitted once, because an unowned asset gaining an owner is not the same act as an asset changing owner, which never happens.
   _Avoid_: Move, transfer, reassign
+
+- **Promised surface**: The part of the package a host application may depend on and expect to survive an upgrade: the panel plugin and its configuration, the Media Picker field, the Media Asset model as something to read and query, the ability and gate names a host writes into its own policies, the config keys, and the command signatures that end up in deploy scripts. Everything else the package registers is internal and may change in any release, the Delivery route's URL most of all, since it is the internal surface a template is most tempted to hardcode.
+  _Avoid_: Public API (it reads as "every public method", which is far wider than what is promised)
+- **Breaking change**: A release that requires a host application to do something before upgrading. For this package that is defined by behaviour rather than by signatures, because its surface is a field, a policy, a route and a config file: a migration demanding a data decision, a changed default about what is served or refused, a new gate that denies by default, or a config key removed or given a new meaning. A change confined to the internal surface is never breaking, however visible it looks.
