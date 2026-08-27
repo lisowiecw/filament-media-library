@@ -29,6 +29,8 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 
 - [Define Asset Provenance Fields](issues/11-asset-provenance-fields.md): The record gains `source` (`upload`/`import`, origin only, never encoding byte ownership since `object_key` already does), `mime_source` (which rung of the ladder produced the MIME, uploads included), and a nullable `import_source` string on the `host.column` convention; three real columns rather than JSON, re-resolvable through a targeted `media:resolve-mimes` command, and surfaced on the management page only, never as a picker facet.
 
+- [Define Thumbnail and Preview Derivatives](issues/12-thumbnail-and-preview-derivatives.md): The plugin stores two fixed WEBP variants (`thumb` 400px, `preview` 1600px) as child `media_derivatives` rows, never as Media Assets; generated eagerly and queued on upload, lazily on a render miss (which also covers legacy imports, never generated on import), never inline; video poster frames and duration sit behind a probed, swappable `ffmpeg` driver that degrades to a glyph tile rather than a hard dependency; a derivative inherits its parent's visibility, so private thumbnails go through the Delivery route with a variant parameter and immutable long-TTL caching, with public derivatives, presigned derivative URLs, inline `data:` URIs and batch sprite endpoints all rejected; pending and missing cards render a dimmed glyph tile with no polling, and exhausted failures stick as `status: failed` and stop re-dispatching.
+
 ## Not yet specified
 
 - Exact readable-name algorithm, collision behavior, Unicode normalization, and whether the name ever influences the object key.
@@ -37,6 +39,8 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 - Legacy objects on a bucket the application no longer configures, where no disk name can be supplied.
 - Debounce and query budget for the picker grid: ticket 09 accepted one aggregate per facet dimension per query change, but not what happens to that budget on a very large library or a slow connection.
 - Whether Filament 4 compatibility ships in the same Composer line or a separately tested release, plus the exact package namespace and release tags.
+- Perceived grid performance on a slow connection: whether a tiny blurred placeholder is inlined in the grid payload so cards paint before their derivative arrives. Ticket 12 fixed the delivery mechanism and left this as an additive, measurement-driven change rather than an authorization one.
+- Derivative storage growth and reclamation: ticket 12 fixed that an asset's derivatives are removable by key prefix and die with the asset, but not how a dimension change retires the objects generated under the old settings, nor what a very large library's derivative footprint costs.
 
 ## Out of scope
 
