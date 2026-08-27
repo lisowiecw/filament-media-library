@@ -41,3 +41,18 @@ Domain model updated: `CONTEXT.md` now defines View, Delivery route, and Uploade
 ## Comments
 
 - Resolved with the requester on 2026-08-26 via grilling; all ten questions accepted as recommended.
+- Amended by [Define Library Grid Performance Budget](20-grid-performance-budget.md) on 2026-08-27.
+  This ticket rules that the signature is "regenerated fresh on every render rather than cached", while
+  ticket 12 gives derivative responses `Cache-Control: private, immutable` with a long TTL. Those cannot both
+  hold: a fresh signature carries a fresh expiry, so the URL string changes on every render, `immutable`
+  matches nothing, and every picker open refetches every visible card. That is the largest recurring
+  object-storage read cost in the plugin.
+
+  **Derivative URLs quantize their expiry**, rounding down to a bucket boundary (6 hours by default), so the
+  same asset plus variant yields a byte-identical URL for the life of the bucket and the browser cache
+  actually hits. This weakens no authorization: the Delivery route still re-checks `view` on every hit, per
+  this ticket and ADR-0001, and the TTL still bounds how long a leaked URL survives. It changes only how
+  often the cache key churns.
+
+  Originals keep the 5-minute default and the per-render signature. The quantized window applies to
+  derivative variants only, which are the population fetched 48 at a time.

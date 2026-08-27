@@ -50,3 +50,43 @@ Per-card `<img loading="lazy">` requests are what an image grid costs anywhere, 
 ### Card states
 
 Pending and missing render identically: the type's glyph tile, dimmed, with no spinner and no polling. The derivative appears on the next natural render; showing progress on 48 cards at once is worse than a quiet tile. Failed is distinct: once the queue's retries are exhausted the row keeps `status: failed` and the reason, the card falls back permanently to the glyph tile, and it stops re-dispatching. Failures surface on the management page as a health count with a regenerate action, backed by `media:regenerate-derivatives` taking `--failed`, `--missing`, or a variant.
+
+
+## Comments
+
+- Amended by [Define Library Grid Performance Budget](20-grid-performance-budget.md) on 2026-08-27, under a
+  new standing constraint that the plugin must not force heavy usage of the operator's object storage. The
+  sizing in that ticket found derivative *storage* to be noise (about five cents a month on a 12,000 asset
+  library) and the real cost to be reads of full originals, so these amendments target reads, not bytes.
+
+  1. **Video poster frames are dropped, and the `ffmpeg` driver with them.** A poster frame requires pulling
+     the video to the app server, so one 500 MB upload costs 500 MB of read and egress for a single frame.
+     The swappable driver, the cached probe and the management-page health note all go. A video card is the
+     glyph tile plus the play badge, always and everywhere: what this ticket specified as the degraded path
+     when the binary was absent is now the only path. No optional binary remains anywhere in the plugin.
+     The duration chip goes with the driver, which amends ticket 09.
+
+  2. **`preview` (1600px) is generated on demand only.** `thumb` stays eager and queued on upload, because
+     the grid is the common path and a fresh upload is usually attached straight away. `preview` is generated
+     on its first actual request, since most assets never reach the lightbox or the management page's view
+     panel. Noted for the record: this ticket's original eager-both ruling emitted both variants from a
+     single decode of a single read, so on-demand `preview` trades that for a second read of the original for
+     each asset someone does open full size. It was chosen deliberately as the more minimal default.
+
+  3. **An original that is already thumbnail-sized gets no derivatives at all.** A browser-renderable raster
+     (jpeg, png, webp, gif) under a configurable byte ceiling (default 32 KB) and under 800px on its longest
+     edge registers zero derivative rows, and the card points at the original. This saves two writes and the
+     whole generation job per asset, not merely bytes, and real libraries carry a long tail of logos, icons
+     and badges. It generalizes a rule already made: ticket 13 rules that a sanitized SVG is its own
+     thumbnail.
+
+  4. **Lazy backfill dispatch is rate-capped.** This ticket correctly refuses to generate on import, but the
+     lazy path still stampedes: the first person to browse a freshly imported 50,000 asset library triggers a
+     job per card, each a full read of an original, which is roughly 125 GB of reads set off by one scroll.
+     Concurrent generations and per-minute dispatch are both bounded by config, so a backfill trickles.
+     `media:regenerate-derivatives` obeys the same cap.
+
+  5. **The `thumb` job also computes the `blurhash` column** from the decode it already holds, per ticket 20.
+
+  6. **Derivative URLs must be byte-stable within their TTL.** See the amendment on ticket 07: this ticket's
+     `Cache-Control: private, immutable` was being defeated by ticket 07's per-render signature.

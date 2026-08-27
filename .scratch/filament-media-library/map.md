@@ -10,7 +10,7 @@ A written technical specification for a reusable Laravel Filament plugin that pr
 
 Domain: reusable media assets and Filament resource-form integration.
 Skills: grilling, domain-modeling, research where external framework/provider facts are required.
-Standing preferences: preserve existing hashed uploads; separate human-readable names from storage object keys; use Laravel filesystem abstractions; make picker settings override global defaults; do not delete reusable assets when detached.
+Standing preferences: preserve existing hashed uploads; separate human-readable names from storage object keys; use Laravel filesystem abstractions; make picker settings override global defaults; do not delete reusable assets when detached; do not force heavy usage of the operator's object storage, since reads, writes and egress are billed to their account, so the minimal option is the default and anything costlier has to earn its place.
 
 ## Decisions so far
 
@@ -46,13 +46,15 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 
 - [Define Package Namespace and Release Line](issues/19-package-namespace-and-release-line.md): The package is `lisowiecw/filament-media-library` under `Lisowiecw\MediaLibrary\`, with conventional `media-library` config/view/translation prefixes and unprefixed tables carrying no prefix knob. Filament 4 and 5 ride one Composer line whose promise rests entirely on a CI matrix over both majors, with a red v4 job as a release blocker and support ending only by narrowing the constraint and dropping the job in one commit. The plugin class, `MediaPicker`, the `MediaAsset` model, the ability and gate names, the config keys and the two command signatures are stable public API; the Delivery route's URL, view names, queue payloads, derivative keys and the rest of the schema are internal, so `$asset->url()` is the supported way to get a URL. Launch is `0.1.0` until the package survives one real upgrade, and breaking is defined by behaviour rather than signatures: operator-facing migrations, changed serving or refusal defaults, new fail-closed gates and removed or redefined config keys.
 
+- [Define Library Grid Performance Budget](issues/20-grid-performance-budget.md): Search debounces at 400ms from one package-global config key, because the debounce describes the deployment rather than the field. Facet counts always ride the same round trip as the results and are never trailing and never approximate; above a configurable threshold on the field-scoped set (default 50,000 rows) the numbers are dropped entirely, leaving the facets listed and clickable, since a stale count misleads where an absent one merely declines to help. A nullable `blurhash` column (about 30 bytes, computed inside the `thumb` job from a decode already in hand, so no extra read) ships in the grid payload, beating both the 450-byte inline WEBP and the 4-byte dominant colour. Under the new storage-cost constraint the ticket also amends three closed ones: video poster frames and the `ffmpeg` driver are dropped outright, `preview` becomes on-demand while `thumb` stays eager, small originals skip derivatives entirely, lazy backfill is rate-capped (ticket 12); derivative URL expiry is quantized so `immutable` caching stops being defeated by a per-render signature (ticket 07); and the video duration chip goes with the driver (ticket 09).
+
 ## Not yet specified
 
 <!-- see "Fog of war": in-scope fog you can't ticket yet; graduates as the frontier advances -->
 
 Most of this section graduated into tickets 16-22 on 2026-08-27. What remains is measurement rather than decision: it cannot be ticketed because there is nothing to decide until numbers exist.
 
-- What a very large library's derivative footprint actually costs in objects and bytes. Ticket 21 decides how stale derivatives are retired; the sizing that would tell an operator whether derivatives are a cost worth managing needs a real library to measure, not a decision.
+- What a very large library's derivative footprint actually costs in objects and bytes. [Define Library Grid Performance Budget](issues/20-grid-performance-budget.md) has since modelled this and found derivative storage to be economically noise (roughly five cents a month on a 12,000 asset library), which moved the cost decisions it could settle into that ticket and into the amendments it made to tickets 07, 09 and 12. What is left is confirmation rather than decision: whether the model holds against a real library, and whether the read volume it predicts matches a real bill.
 
 ## Out of scope
 

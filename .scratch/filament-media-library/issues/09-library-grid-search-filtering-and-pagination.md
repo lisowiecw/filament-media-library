@@ -58,3 +58,10 @@ Image and video assets render an actual preview in the card, not a type glyph. V
 ## Comments
 
 - Amended by [Define the Readable Name Algorithm](16-readable-name-algorithm.md) on 2026-08-27: see its object-key lookup obligations.
+- Amended by [Define Library Grid Performance Budget](20-grid-performance-budget.md) on 2026-08-27:
+  the search input debounces at 400ms from a package-global config key; facet counts always ride the same
+  round trip as the results, and above a configurable threshold on the field-scoped set (default 50,000 rows)
+  they are dropped entirely rather than allowed to lag or to round, leaving the facets listed and clickable
+  without numbers. The **video duration chip is dropped**, following ticket 12's removal of the `ffmpeg`
+  driver: a video card is the glyph tile plus the play badge. Cards additionally paint a BlurHash from the
+  grid payload while their thumbnail is in flight.
