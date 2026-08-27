@@ -1,6 +1,6 @@
 # Define Library Grid Search, Filtering and Pagination
 
-Status: open
+Status: claimed
 Type: prototype
 Blocked by: 06
 

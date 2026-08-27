@@ -1,0 +1,601 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>PROTOTYPE — Library grid search / filter / pagination (ticket 09)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  THROWAWAY PROTOTYPE. Not production code.
+
+  Question (wayfinder ticket 09): inside the library modal fixed by ticket 06, how does
+  the grid behave at realistic library sizes? Search fields + matching, which filters are
+  exposed, numbered pages vs infinite scroll, page size, and whether a multiple-selection
+  set survives a page change or a filter change.
+
+  Three variants of the library modal body, switchable via ?variant= and the floating bar:
+    A — Toolbar + filter chips + numbered pagination
+    B — Filter sidebar with facet counts + infinite scroll
+    C — Query-language search bar + continuous scroll + selection tray
+
+  Selection persistence is orthogonal to layout, so it is a separate toggle in the bar
+  (persist / reset-on-filter) — flip it inside any variant.
+
+  Library is seeded deterministically at 260 assets. No persistence, no backend.
+-->
+<style>
+  :root {
+    --bg: #f4f4f5; --panel: #fff; --ink: #18181b; --muted: #71717a; --line: #e4e4e7;
+    --primary: #f59e0b; --primary-ink: #78350f; --sel: #fbbf24; --priv: #ede9fe; --priv-ink: #5b21b6;
+    --pub: #dcfce7; --pub-ink: #166534;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--ink); padding: 24px 16px 110px; }
+  .modal { max-width: 1180px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line);
+           border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.08); overflow: hidden; }
+  .modal-head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .modal-head h2 { font-size: 15px; margin: 0; font-weight: 600; }
+  .modal-head .ctx { color: var(--muted); font-size: 12px; }
+  .tabs { display: flex; gap: 4px; margin-left: auto; }
+  .tab { padding: 5px 12px; border-radius: 7px; font-size: 13px; border: 1px solid transparent; cursor: default; color: var(--muted); }
+  .tab.on { background: #fef3c7; color: var(--primary-ink); border-color: #fde68a; font-weight: 600; }
+  .modal-foot { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 12px;
+                background: #fafafa; }
+  .btn { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: #fff; font: inherit; cursor: pointer; }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .grow { flex: 1; }
+
+  /* grid */
+  .grid { display: grid; gap: 12px; padding: 16px 18px;
+          grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
+  .grid.dense { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 9px; }
+  .card { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; cursor: pointer;
+          background: #fff; position: relative; transition: box-shadow .1s; }
+  .card:hover { box-shadow: 0 0 0 1px var(--line), 0 4px 10px rgba(0,0,0,.07); }
+  .card.sel { outline: 2px solid var(--sel); outline-offset: -1px; border-color: var(--sel); }
+  .thumb { aspect-ratio: 4/3; display: grid; place-items: center; font-size: 24px; color: #fff; }
+  .meta { padding: 6px 8px; }
+  .name { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub { font-size: 10.5px; color: var(--muted); display: flex; gap: 5px; align-items: center; margin-top: 2px; }
+  .badge { font-size: 9.5px; padding: 1px 5px; border-radius: 5px; font-weight: 600; letter-spacing: .02em; }
+  .badge.pub { background: var(--pub); color: var(--pub-ink); }
+  .badge.priv { background: var(--priv); color: var(--priv-ink); }
+  .tick { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%;
+          background: #fff; border: 1px solid var(--line); display: grid; place-items: center; font-size: 12px; color: transparent; }
+  .card.sel .tick { background: var(--sel); border-color: var(--sel); color: #fff; }
+  mark { background: #fef08a; padding: 0 1px; border-radius: 2px; }
+  .empty { padding: 48px 18px; text-align: center; color: var(--muted); }
+
+  /* controls */
+  input[type=search], input[type=text] { font: inherit; padding: 7px 11px; border: 1px solid var(--line);
+    border-radius: 8px; width: 100%; background: #fff; }
+  input:focus { outline: 2px solid #fde68a; outline-offset: -1px; border-color: var(--primary); }
+  select { font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .chip { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: #fff;
+          font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+  .chip.on { background: #fef3c7; border-color: #fcd34d; color: var(--primary-ink); font-weight: 600; }
+  .toolbar { padding: 12px 18px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .count { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  /* A pagination */
+  .pager { display: flex; gap: 4px; align-items: center; }
+  .pg { min-width: 30px; height: 30px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--line);
+        background: #fff; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .pg.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
+  .pg:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* B sidebar */
+  .split { display: grid; grid-template-columns: 216px 1fr; min-height: 460px; }
+  .side { border-right: 1px solid var(--line); padding: 14px; overflow-y: auto; max-height: 560px; background: #fcfcfd; }
+  .facet { margin-bottom: 16px; }
+  .facet h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+              margin: 0 0 7px; font-weight: 700; }
+  .fopt { display: flex; align-items: center; gap: 7px; padding: 3px 5px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .fopt:hover { background: #f4f4f5; }
+  .fopt.on { background: #fef3c7; color: var(--primary-ink); font-weight: 600; }
+  .fopt .n { margin-left: auto; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .fopt.on .n { color: var(--primary-ink); }
+  .scroller { overflow-y: auto; max-height: 560px; }
+  .sentinel { padding: 14px; text-align: center; color: var(--muted); font-size: 12.5px; }
+
+  /* C query bar + tray */
+  .qbar { padding: 14px 18px 10px; border-bottom: 1px solid var(--line); }
+  .qwrap { position: relative; }
+  .qwrap input { padding-left: 32px; font-size: 15px; padding-top: 10px; padding-bottom: 10px; }
+  .qicon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .tokens { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; align-items: center; }
+  .tok { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; padding: 3px 8px;
+         background: #f4f4f5; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; color: #52525b; }
+  .tok:hover { background: #ecfeff; border-color: #a5f3fc; }
+  .qerr { color: #b91c1c; font-size: 12px; margin-top: 7px; }
+  .tray { border-top: 1px solid var(--line); background: #fffbeb; padding: 10px 18px; display: flex; gap: 8px;
+          align-items: center; overflow-x: auto; }
+  .tray .t { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #fde68a;
+             border-radius: 8px; padding: 4px 6px 4px 4px; font-size: 12px; white-space: nowrap; }
+  .tray .t .x { cursor: pointer; color: var(--muted); font-weight: 700; padding: 0 3px; }
+  .tray .sw { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; font-size: 11px; color: #fff; }
+
+  /* state readout */
+  .state { max-width: 1180px; margin: 14px auto 0; background: #1f2937; color: #d1d5db; border-radius: 10px;
+           padding: 12px 16px; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+  .state b { color: #fbbf24; font-weight: 600; }
+
+  /* switcher */
+  .switcher { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; align-items: center;
+              gap: 6px; background: #111827; color: #fff; border-radius: 999px; padding: 7px 9px; z-index: 99;
+              box-shadow: 0 8px 26px rgba(0,0,0,.35); font-size: 13px; }
+  .switcher button { background: #374151; color: #fff; border: 0; border-radius: 999px; padding: 6px 12px;
+                     font: inherit; cursor: pointer; }
+  .switcher button:hover { background: #4b5563; }
+  .switcher .lbl { padding: 0 10px; font-weight: 600; white-space: nowrap; }
+  .switcher .sep { width: 1px; height: 20px; background: #4b5563; margin: 0 4px; }
+  .switcher .persist { background: #4b5563; }
+  .switcher .persist.on { background: var(--primary); color: #422006; font-weight: 700; }
+  .flag { position: fixed; top: 0; left: 0; right: 0; background: #b91c1c; color: #fff; text-align: center;
+          font-size: 11px; padding: 3px; letter-spacing: .08em; font-weight: 700; z-index: 100; }
+  body { padding-top: 40px; }
+</style>
+
+<div class="flag">THROWAWAY PROTOTYPE — TICKET 09 — NOT PRODUCTION CODE</div>
+<div id="app"></div>
+<div class="state" id="state"></div>
+<div class="switcher" id="switcher"></div>
+
+<script>
+/* ------------------------------------------------------------------ seed */
+let _s = 1337;
+const rnd = () => (_s = (_s * 1664525 + 1013904223) % 4294967296) / 4294967296;
+const pick = a => a[Math.floor(rnd() * a.length)];
+
+const TYPES = [
+  { key: 'image', mime: 'image/jpeg', glyph: '🖼', hue: 200, exts: ['jpg', 'png', 'webp'] },
+  { key: 'image', mime: 'image/png',  glyph: '🖼', hue: 190, exts: ['png'] },
+  { key: 'video', mime: 'video/mp4',  glyph: '🎬', hue: 280, exts: ['mp4'] },
+  { key: 'pdf',   mime: 'application/pdf', glyph: '📄', hue: 0,  exts: ['pdf'] },
+  { key: 'audio', mime: 'audio/mpeg', glyph: '🎵', hue: 140, exts: ['mp3'] },
+  { key: 'doc',   mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', glyph: '📝', hue: 220, exts: ['docx'] },
+];
+const WORDS = ['hero','banner','autumn','portrait','logo','team','invoice','header','coast','product',
+  'launch','press-kit','headshot','diagram','onboarding','q3-report','summer','sunset','warehouse','packshot',
+  'signature','testimonial','roadmap','campaign','cover','gallery','thumbnail','brochure','fieldwork','archive'];
+const PEOPLE = ['ada', 'ravi', 'mei', 'jonas', 'priya', 'sam'];
+const DISKS = ['media', 'media-private', 'archive'];
+
+const ASSETS = Array.from({ length: 260 }, (_, i) => {
+  const t = pick(TYPES);
+  const ext = pick(t.exts);
+  const name = `${pick(WORDS)}-${pick(WORDS)}${rnd() < .3 ? '-' + (2023 + Math.floor(rnd() * 3)) : ''}.${ext}`;
+  const daysAgo = Math.floor(rnd() * 540);
+  const uses = rnd() < .34 ? 0 : 1 + Math.floor(rnd() * 4);
+  return {
+    id: i + 1,
+    name,
+    original: name.replace(/-/g, '_'),
+    type: t.key, mime: t.mime, glyph: t.glyph, hue: t.hue,
+    visibility: t.key === 'image' && rnd() < .72 ? 'public' : (rnd() < .35 ? 'public' : 'private'),
+    disk: pick(DISKS),
+    uploader: pick(PEOPLE),
+    size: Math.round((0.05 + rnd() * 18) * 100) / 100,
+    at: Date.now() - daysAgo * 864e5,
+    days: daysAgo,
+    uses,
+    alt: rnd() < .5 ? pick(WORDS) + ' ' + pick(WORDS) : '',
+  };
+});
+
+const fmtDate = ms => new Date(ms).toISOString().slice(0, 10);
+const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+/* ------------------------------------------------- shared filter engine */
+// The picker's own scope from ticket 06: this field accepts image/*, video/mp4 and
+// application/pdf, and uploads PRIVATE — so it may offer both public and private assets.
+const FIELD = { accepted: ['image/*', 'video/mp4', 'application/pdf'], uploadsPrivate: true };
+const inFieldScope = a =>
+  FIELD.accepted.some(p => p.endsWith('/*') ? a.mime.startsWith(p.slice(0, -1)) : p === a.mime) &&
+  (a.visibility === 'public' || FIELD.uploadsPrivate);
+const SCOPED = ASSETS.filter(inFieldScope);
+
+// Search matches over: readable name, original filename, alt text, uploader. Substring,
+// case-insensitive, all terms must match (AND across whitespace-separated terms).
+const SEARCH_FIELDS = a => [a.name, a.original, a.alt, a.uploader].join(' ').toLowerCase();
+function searchMatch(a, q) {
+  if (!q.trim()) return true;
+  const hay = SEARCH_FIELDS(a);
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every(t => hay.includes(t));
+}
+function applyFilters(list, f) {
+  return list.filter(a =>
+    (!f.type || a.type === f.type) &&
+    (!f.visibility || a.visibility === f.visibility) &&
+    (!f.uploader || a.uploader === f.uploader) &&
+    (!f.age || a.days <= f.age) &&
+    (!f.usage || (f.usage === 'unused' ? a.uses === 0 : a.uses > 0))
+  );
+}
+const sortBy = (list, s) => [...list].sort(
+  s === 'oldest' ? (x, y) => x.at - y.at :
+  s === 'name'   ? (x, y) => x.name.localeCompare(y.name) :
+  s === 'used'   ? (x, y) => y.uses - x.uses || y.at - x.at :
+                   (x, y) => y.at - x.at);
+
+/* --------------------------------------------------------------- state */
+const params = new URLSearchParams(location.search);
+const S = {
+  variant: (params.get('variant') || 'A').toUpperCase(),
+  persist: params.get('persist') !== 'off',   // does selection survive page/filter change?
+  q: '',
+  filters: { type: '', visibility: '', uploader: '', age: 0, usage: '' },
+  sort: 'newest',
+  page: 1,
+  pageSize: 48,
+  loaded: 48,        // infinite-scroll cursor for B / C
+  selection: [],     // ordered asset ids (field is ->multiple())
+  log: [],
+};
+const VARIANTS = { A: 'Toolbar + chips + numbered pages', B: 'Facet sidebar + infinite scroll', C: 'Query language + selection tray' };
+
+function note(msg) { S.log.unshift(msg); S.log = S.log.slice(0, 6); }
+
+function results() {
+  return sortBy(applyFilters(SCOPED.filter(a => searchMatch(a, S.q)), S.filters), S.sort);
+}
+function toggleSel(id) {
+  const i = S.selection.indexOf(id);
+  if (i >= 0) S.selection.splice(i, 1); else S.selection.push(id);
+  render();
+}
+// The behaviour under test: what happens to the selection when the visible set changes.
+function onQueryChange(what) {
+  S.page = 1; S.loaded = S.pageSize;
+  if (!S.persist) {
+    const dropped = S.selection.length;
+    if (dropped) note(`${what} → RESET dropped ${dropped} selected`);
+    S.selection = [];
+  } else if (S.selection.length) {
+    const visible = new Set(results().map(a => a.id));
+    const hidden = S.selection.filter(id => !visible.has(id)).length;
+    note(`${what} → kept ${S.selection.length} selected` + (hidden ? ` (${hidden} now off-screen)` : ''));
+  }
+  render();
+}
+
+/* -------------------------------------------------------------- pieces */
+function thumb(a, q) {
+  return `<div class="thumb" style="background:hsl(${a.hue} 55% ${a.type === 'image' ? 62 : 45}%)">${a.glyph}</div>`;
+}
+function hl(text, q) {
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  let out = esc(text);
+  for (const t of terms) {
+    const re = new RegExp('(' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig');
+    out = out.replace(re, '<mark>$1</mark>');
+  }
+  return out;
+}
+function card(a, opts = {}) {
+  const sel = S.selection.includes(a.id);
+  return `<div class="card ${sel ? 'sel' : ''}" data-id="${a.id}">
+    ${thumb(a)}
+    <div class="tick">✓</div>
+    <div class="meta">
+      <div class="name" title="${esc(a.name)}">${hl(a.name, S.q)}</div>
+      <div class="sub">
+        <span class="badge ${a.visibility === 'public' ? 'pub' : 'priv'}">${a.visibility === 'public' ? 'PUBLIC' : 'PRIVATE'}</span>
+        ${opts.showUses ? `<span>${a.uses ? a.uses + ' use' + (a.uses > 1 ? 's' : '') : 'unused'}</span>` : `<span>${a.size} MB</span>`}
+      </div>
+    </div>
+  </div>`;
+}
+const shell = (body, footNote) => `
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Media library</h2>
+      <span class="ctx">gallery · uploads land on <b>media-private</b> · <b>private</b> · images, mp4, pdf</span>
+      <div class="tabs"><span class="tab on">Library</span><span class="tab">Upload</span></div>
+    </div>
+    ${body}
+    <div class="modal-foot">
+      <span class="count">${S.selection.length} selected${footNote ? ' · ' + footNote : ''}</span>
+      <span class="grow"></span>
+      <button class="btn">Cancel</button>
+      <button class="btn primary" ${S.selection.length ? '' : 'disabled'}>Attach ${S.selection.length || ''}</button>
+    </div>
+  </div>`;
+
+/* ------------------------------------------------------------ VARIANT A */
+/* Familiar Filament table-ish chrome: one search box, a sort select, a row of filter
+   chips with a popover-free inline dropdown, and numbered pagination with a page-size
+   picker. Page size 48 (a 6-across grid at this width = 8 rows). */
+function VariantA() {
+  const all = results();
+  const pages = Math.max(1, Math.ceil(all.length / S.pageSize));
+  S.page = Math.min(S.page, pages);
+  const start = (S.page - 1) * S.pageSize;
+  const rows = all.slice(start, start + S.pageSize);
+  const selOnPage = rows.filter(a => S.selection.includes(a.id)).length;
+
+  const chip = (k, v, label) => `<button class="chip ${S.filters[k] === v ? 'on' : ''}" data-f="${k}" data-v="${v}">${label}</button>`;
+  const pgBtn = n => `<button class="pg ${n === S.page ? 'on' : ''}" data-pg="${n}">${n}</button>`;
+  const win = [];
+  for (let n = 1; n <= pages; n++) {
+    if (n <= 2 || n > pages - 2 || Math.abs(n - S.page) <= 1) win.push(pgBtn(n));
+    else if (win[win.length - 1] !== '<span class="count">…</span>') win.push('<span class="count">…</span>');
+  }
+
+  return shell(`
+    <div class="toolbar">
+      <div class="row">
+        <div style="flex:1; min-width:240px"><input type="search" id="q" placeholder="Search name, filename, alt text or uploader…" value="${esc(S.q)}"></div>
+        <select id="sort">
+          <option value="newest" ${S.sort === 'newest' ? 'selected' : ''}>Newest first</option>
+          <option value="oldest" ${S.sort === 'oldest' ? 'selected' : ''}>Oldest first</option>
+          <option value="name"   ${S.sort === 'name' ? 'selected' : ''}>Name A–Z</option>
+          <option value="used"   ${S.sort === 'used' ? 'selected' : ''}>Most used</option>
+        </select>
+      </div>
+      <div class="row">
+        ${chip('type', '', 'All types')}${chip('type', 'image', '🖼 Images')}${chip('type', 'video', '🎬 Video')}${chip('type', 'pdf', '📄 PDF')}
+        <span class="sep" style="width:1px;height:20px;background:var(--line)"></span>
+        ${chip('visibility', '', 'Any visibility')}${chip('visibility', 'public', 'Public')}${chip('visibility', 'private', 'Private')}
+        <span class="sep" style="width:1px;height:20px;background:var(--line)"></span>
+        ${chip('usage', '', 'All')}${chip('usage', 'unused', 'Unused only')}
+        <select id="uploader">
+          <option value="">Anyone</option>
+          ${PEOPLE.map(p => `<option value="${p}" ${S.filters.uploader === p ? 'selected' : ''}>${p}</option>`).join('')}
+        </select>
+        <select id="age">
+          <option value="0">Any date</option>
+          <option value="7"   ${S.filters.age == 7 ? 'selected' : ''}>Last 7 days</option>
+          <option value="30"  ${S.filters.age == 30 ? 'selected' : ''}>Last 30 days</option>
+          <option value="365" ${S.filters.age == 365 ? 'selected' : ''}>Last year</option>
+        </select>
+        <span class="grow"></span>
+        <span class="count">${all.length} of ${SCOPED.length} assets</span>
+      </div>
+    </div>
+    ${rows.length ? `<div class="grid">${rows.map(a => card(a)).join('')}</div>`
+                  : `<div class="empty">No assets match.<br><button class="btn" id="clear" style="margin-top:10px">Clear filters</button></div>`}
+    <div class="toolbar" style="border-top:1px solid var(--line); border-bottom:0">
+      <div class="row">
+        <span class="count">Showing ${start + 1}–${Math.min(start + S.pageSize, all.length)} of ${all.length}</span>
+        <select id="psize">
+          ${[24, 48, 96].map(n => `<option value="${n}" ${S.pageSize === n ? 'selected' : ''}>${n} per page</option>`).join('')}
+        </select>
+        <span class="grow"></span>
+        <div class="pager">
+          <button class="pg" data-pg="${S.page - 1}" ${S.page === 1 ? 'disabled' : ''}>‹</button>
+          ${win.join('')}
+          <button class="pg" data-pg="${S.page + 1}" ${S.page === pages ? 'disabled' : ''}>›</button>
+        </div>
+      </div>
+    </div>`,
+    `${selOnPage} on this page`);
+}
+
+/* ------------------------------------------------------------ VARIANT B */
+/* Facets carry counts, so the shape of the library is visible before you filter.
+   No pages at all: the grid scrolls and loads more as you reach the bottom. Denser
+   cards, because the sidebar takes width and browsing is the primary act here. */
+function VariantB() {
+  const all = results();
+  const rows = all.slice(0, S.loaded);
+  // Facet counts are computed against everything EXCEPT the facet's own dimension.
+  const countFor = (dim, val) => {
+    const f = { ...S.filters, [dim]: val };
+    return applyFilters(SCOPED.filter(a => searchMatch(a, S.q)), f).length;
+  };
+  const opt = (dim, val, label) =>
+    `<div class="fopt ${S.filters[dim] === val ? 'on' : ''}" data-f="${dim}" data-v="${val}">
+       <span>${label}</span><span class="n">${countFor(dim, val)}</span></div>`;
+
+  return shell(`
+    <div class="split">
+      <aside class="side">
+        <div class="facet">
+          <h4>Type</h4>
+          ${opt('type', '', 'All')}${opt('type', 'image', '🖼 Images')}${opt('type', 'video', '🎬 Video')}${opt('type', 'pdf', '📄 PDF')}
+        </div>
+        <div class="facet">
+          <h4>Visibility</h4>
+          ${opt('visibility', '', 'Any')}${opt('visibility', 'public', 'Public')}${opt('visibility', 'private', 'Private')}
+        </div>
+        <div class="facet">
+          <h4>Usage</h4>
+          ${opt('usage', '', 'Any')}${opt('usage', 'unused', 'Not attached anywhere')}${opt('usage', 'used', 'In use')}
+        </div>
+        <div class="facet">
+          <h4>Uploaded by</h4>
+          ${opt('uploader', '', 'Anyone')}${PEOPLE.map(p => opt('uploader', p, p)).join('')}
+        </div>
+        <div class="facet">
+          <h4>Uploaded</h4>
+          ${opt('age', 0, 'Any time')}${opt('age', 7, 'Last 7 days')}${opt('age', 30, 'Last 30 days')}${opt('age', 365, 'Last year')}
+        </div>
+      </aside>
+      <div>
+        <div class="toolbar">
+          <div class="row">
+            <div style="flex:1; min-width:200px"><input type="search" id="q" placeholder="Search the library…" value="${esc(S.q)}"></div>
+            <select id="sort">
+              <option value="newest" ${S.sort === 'newest' ? 'selected' : ''}>Newest</option>
+              <option value="oldest" ${S.sort === 'oldest' ? 'selected' : ''}>Oldest</option>
+              <option value="name" ${S.sort === 'name' ? 'selected' : ''}>Name</option>
+              <option value="used" ${S.sort === 'used' ? 'selected' : ''}>Most used</option>
+            </select>
+            <span class="count">${all.length} assets</span>
+          </div>
+        </div>
+        <div class="scroller" id="scroller">
+          ${rows.length ? `<div class="grid dense">${rows.map(a => card(a, { showUses: true })).join('')}</div>` : `<div class="empty">No assets match.</div>`}
+          <div class="sentinel" id="sentinel">
+            ${rows.length < all.length ? `Loading more… (${rows.length} of ${all.length}) <button class="btn" id="more" style="margin-left:8px">Load more</button>`
+                                       : (rows.length ? `— end of library (${all.length}) —` : '')}
+          </div>
+        </div>
+      </div>
+    </div>`,
+    `scrolled ${rows.length}/${all.length}`);
+}
+
+/* ------------------------------------------------------------ VARIANT C */
+/* One input does everything. Filters are typed as `key:value` tokens parsed out of the
+   query; free text is the name search. No chrome around the grid; the selection lives in
+   a persistent tray under it so it is obviously independent of what is on screen. */
+function parseQuery(raw) {
+  const f = { type: '', visibility: '', uploader: '', age: 0, usage: '' };
+  const free = [], errs = [];
+  for (const tok of raw.split(/\s+/).filter(Boolean)) {
+    const m = tok.match(/^(\w+):(.+)$/);
+    if (!m) { free.push(tok); continue; }
+    const [, k, v] = m;
+    if (k === 'type' && ['image', 'video', 'pdf', 'audio', 'doc'].includes(v)) f.type = v;
+    else if (k === 'is' && ['public', 'private'].includes(v)) f.visibility = v;
+    else if (k === 'is' && ['unused', 'used'].includes(v)) f.usage = v;
+    else if (k === 'by') f.uploader = v;
+    else if (k === 'since' && /^\d+d$/.test(v)) f.age = parseInt(v);
+    else errs.push(tok);
+  }
+  return { f, free: free.join(' '), errs };
+}
+function VariantC() {
+  const { f, free, errs } = parseQuery(S.q);
+  const all = sortBy(applyFilters(SCOPED.filter(a => searchMatch(a, free)), f), S.sort);
+  const rows = all.slice(0, S.loaded);
+  const selected = S.selection.map(id => ASSETS.find(a => a.id === id));
+
+  return shell(`
+    <div class="qbar">
+      <div class="qwrap">
+        <span class="qicon">⌕</span>
+        <input type="text" id="q" placeholder="Search, or filter with type: is: by: since:" value="${esc(S.q)}">
+      </div>
+      <div class="tokens">
+        <span class="count">Try:</span>
+        <span class="tok" data-tok="type:image">type:image</span>
+        <span class="tok" data-tok="is:private">is:private</span>
+        <span class="tok" data-tok="is:unused">is:unused</span>
+        <span class="tok" data-tok="by:mei">by:mei</span>
+        <span class="tok" data-tok="since:30d">since:30d</span>
+        <span class="grow"></span>
+        <span class="count">${all.length} of ${SCOPED.length}</span>
+      </div>
+      ${errs.length ? `<div class="qerr">Not a known filter: ${errs.map(esc).join(', ')} — searched as text instead? No: ignored.</div>` : ''}
+    </div>
+    <div class="scroller">
+      ${rows.length ? `<div class="grid">${rows.map(a => card(a, { showUses: true })).join('')}</div>` : `<div class="empty">Nothing matches <code>${esc(S.q)}</code>.</div>`}
+      <div class="sentinel" id="sentinel">
+        ${rows.length < all.length ? `<button class="btn" id="more">Load ${Math.min(S.pageSize, all.length - rows.length)} more (${rows.length}/${all.length})</button>` : (rows.length ? '— end —' : '')}
+      </div>
+    </div>
+    ${selected.length ? `<div class="tray">
+      <span class="count" style="font-weight:600">Attaching ${selected.length}:</span>
+      ${selected.map(a => `<span class="t"><span class="sw" style="background:hsl(${a.hue} 55% 55%)">${a.glyph}</span>${esc(a.name.slice(0, 22))}<span class="x" data-unsel="${a.id}">×</span></span>`).join('')}
+    </div>` : ''}`,
+    selected.length ? 'tray keeps them across every query' : '');
+}
+
+/* --------------------------------------------------------------- render */
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = { A: VariantA, B: VariantB, C: VariantC }[S.variant]();
+  wire();
+  renderState();
+  renderSwitcher();
+}
+
+function wire() {
+  const app = document.getElementById('app');
+
+  app.querySelectorAll('.card').forEach(el =>
+    el.onclick = () => toggleSel(+el.dataset.id));
+
+  const q = app.querySelector('#q');
+  if (q) {
+    q.oninput = e => { S.q = e.target.value; onQueryChange('search'); };
+    // keep the caret where it was after re-render
+    q.focus(); q.setSelectionRange(q.value.length, q.value.length);
+  }
+
+  app.querySelectorAll('[data-f]').forEach(el => el.onclick = () => {
+    const v = el.dataset.v;
+    S.filters[el.dataset.f] = el.dataset.f === 'age' ? +v : v;
+    onQueryChange(`filter ${el.dataset.f}=${v || 'any'}`);
+  });
+  const bind = (id, fn) => { const e = app.querySelector('#' + id); if (e) e.onchange = ev => fn(ev.target.value); };
+  bind('sort', v => { S.sort = v; render(); });
+  bind('uploader', v => { S.filters.uploader = v; onQueryChange('filter uploader'); });
+  bind('age', v => { S.filters.age = +v; onQueryChange('filter age'); });
+  bind('psize', v => { S.pageSize = +v; S.loaded = +v; S.page = 1; render(); });
+
+  app.querySelectorAll('[data-pg]').forEach(el => el.onclick = () => {
+    S.page = +el.dataset.pg;
+    if (!S.persist && S.selection.length) { note(`page → RESET dropped ${S.selection.length} selected`); S.selection = []; }
+    else if (S.selection.length) note(`page ${S.page} → kept ${S.selection.length} selected`);
+    render();
+  });
+
+  const more = app.querySelector('#more');
+  if (more) more.onclick = () => { S.loaded += S.pageSize; render(); };
+
+  const sc = app.querySelector('#scroller');
+  if (sc) sc.onscroll = () => {
+    if (sc.scrollTop + sc.clientHeight > sc.scrollHeight - 80) {
+      const total = S.variant === 'C' ? 1e9 : results().length;
+      if (S.loaded < total) { S.loaded += S.pageSize; render(); sc.scrollTop = sc.scrollHeight; }
+    }
+  };
+
+  app.querySelectorAll('[data-tok]').forEach(el => el.onclick = () => {
+    S.q = (S.q + ' ' + el.dataset.tok).trim(); onQueryChange('token');
+  });
+  app.querySelectorAll('[data-unsel]').forEach(el => el.onclick = e => { e.stopPropagation(); toggleSel(+el.dataset.unsel); });
+  const clear = app.querySelector('#clear');
+  if (clear) clear.onclick = () => { S.filters = { type: '', visibility: '', uploader: '', age: 0, usage: '' }; S.q = ''; onQueryChange('clear'); };
+}
+
+function renderState() {
+  const all = S.variant === 'C' ? (() => { const { f, free } = parseQuery(S.q); return applyFilters(SCOPED.filter(a => searchMatch(a, free)), f); })() : results();
+  const active = Object.entries(S.filters).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`);
+  document.getElementById('state').innerHTML =
+`<b>variant</b>       ${S.variant} — ${VARIANTS[S.variant]}
+<b>selection</b>     ${S.persist ? 'PERSISTS across page + filter change' : 'RESETS on page + filter change'}
+<b>library</b>       ${ASSETS.length} assets total → <b>${SCOPED.length}</b> offered to this field (image/*, video/mp4, application/pdf; field uploads private)
+<b>query</b>         ${S.q ? esc(S.q) : '(none)'}
+<b>filters</b>       ${S.variant === 'C' ? '(parsed from query)' : (active.length ? esc(active.join(', ')) : '(none)')}
+<b>sort</b>          ${S.sort}
+<b>matching</b>      ${all.length} assets
+<b>paging</b>        ${S.variant === 'A' ? `page ${S.page} of ${Math.max(1, Math.ceil(all.length / S.pageSize))}, ${S.pageSize}/page`
+                                          : `loaded ${Math.min(S.loaded, all.length)} of ${all.length} (infinite)`}
+<b>value</b>         [${S.selection.join(', ')}]  ← the field's ordered int[]
+${S.log.length ? '\n<b>events</b>        ' + S.log.map(esc).join('\n              ') : ''}`;
+}
+
+function renderSwitcher() {
+  const keys = Object.keys(VARIANTS);
+  const i = keys.indexOf(S.variant);
+  const go = k => { S.variant = k; S.page = 1; S.loaded = S.pageSize; sync(); render(); };
+  const el = document.getElementById('switcher');
+  el.innerHTML = `<button id="prev">‹</button><span class="lbl">${S.variant} — ${VARIANTS[S.variant]}</span><button id="next">›</button>
+    <span class="sep"></span>
+    <button class="persist ${S.persist ? 'on' : ''}" id="persist">selection ${S.persist ? 'PERSISTS' : 'RESETS'}</button>`;
+  el.querySelector('#prev').onclick = () => go(keys[(i - 1 + keys.length) % keys.length]);
+  el.querySelector('#next').onclick = () => go(keys[(i + 1) % keys.length]);
+  el.querySelector('#persist').onclick = () => { S.persist = !S.persist; sync(); note(`persistence → ${S.persist ? 'PERSISTS' : 'RESETS'}`); render(); };
+}
+
+function sync() {
+  const p = new URLSearchParams();
+  p.set('variant', S.variant);
+  if (!S.persist) p.set('persist', 'off');
+  history.replaceState(null, '', '?' + p);
+}
+
+document.addEventListener('keydown', e => {
+  if (/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
+  const keys = Object.keys(VARIANTS), i = keys.indexOf(S.variant);
+  if (e.key === 'ArrowLeft') { S.variant = keys[(i - 1 + keys.length) % keys.length]; S.page = 1; S.loaded = S.pageSize; sync(); render(); }
+  if (e.key === 'ArrowRight') { S.variant = keys[(i + 1) % keys.length]; S.page = 1; S.loaded = S.pageSize; sync(); render(); }
+});
+
+render();
+</script>
