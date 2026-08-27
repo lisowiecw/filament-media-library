@@ -180,7 +180,7 @@ function photoSVG(seed, kind) {
   }
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" preserveAspectRatio="xMidYMid slice">
-      ${g}<rect width="120" height="90" fill="url(#g${seed})"/>${body}</svg>`);
+      ${g}<rect width="120" height="90" fill="url(#g${seed})"/>${body}</sv` + `g>`);
 }
 
 const TYPES = [
@@ -645,3 +645,5 @@ document.addEventListener('keydown', e => {
 
 render();
 </script>
+</body>
+</html>
