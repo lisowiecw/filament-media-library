@@ -26,3 +26,8 @@
 - **Unattached asset**: A Media Asset with zero Attachments. This is evidence that nothing uses it, not proof: a URL may live in a sent email, an export or a third-party system the plugin cannot see. Surfaced for review by a report-only sweep after a configurable grace period; never deleted automatically.
   _Avoid_: Orphan (it asserts nothing references the asset, which the plugin cannot know)
 - **External reference**: A record that something outside any Host model uses a Media Asset: a campaign, an export, a sent email. It is an Attachment with no host, so it appears in the usage list and blocks deletion like any other use, but belongs to no Field context and is invisible to a Host model's media fields.
+- **Source**: The origin of a Media Asset, either an upload or an import. Source records origin alone; it never encodes whether the plugin wrote the asset's bytes or adopted existing ones, because the object key already distinguishes those.
+  _Avoid_: Type, kind (these read as the file's mime type), imported flag
+- **Mime source**: Which rung of the resolution ladder produced a Media Asset's mime type: a stored `Content-Type` header, a content sniff, the filename extension, or unknown. Recorded on every asset, uploads included, because a browser-supplied `Content-Type` is a claim rather than a fact. It states how far the mime type can be trusted, and is what a targeted re-resolution pass selects on.
+  _Avoid_: Mime confidence (it reads as a score rather than a named origin)
+- **Import source**: Where an imported Media Asset was discovered, named as the host model and column that held its legacy path. Absent on uploaded assets. It is the handle a migration-window rollback selects on; it does not describe the asset's storage.
