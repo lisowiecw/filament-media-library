@@ -35,18 +35,15 @@ Standing preferences: preserve existing hashed uploads; separate human-readable 
 
 - [Choose the SVG Sanitizer Dependency](issues/14-svg-sanitizer-dependency.md): `enshrined/svg-sanitize` `^0.22` as a hard `require` rather than the optional dependency ticket 13 assumed, since Composer can install a Composer package and a silently SVG-less plugin is a functional regression; ticket 13's runtime probe survives as a fail-closed guard. Refusal keys on a three-way check (`false`, thrown, or a non-`svg` root), because a well-formed non-SVG returns a string rather than a failure. Script elements and event-handler attributes are stripped as assumed; external references are not, which amends ticket 13 and opens ticket 15. The package is GPL-2.0-or-later, noted in the README.
 
+- [Close the SVG External Reference Gap](issues/15-svg-external-reference-gap.md): The gap closes in layers chosen for how little each depends on the one beneath it: `removeRemoteReferences(true)` always, its two upstream holes documented as residual; a `default-src 'none'; style-src 'unsafe-inline'; sandbox` CSP on *every* Delivery response, the only layer that does not assume the sanitizer is right, which forces inline SVG to stream rather than redirect; and narrowed tag/attribute allowlists dropping `image`, `style` and `a` **only on public placement**, where the Delivery route cannot reach. A public SVG that trips the narrow pass is refused by diffing the two passes and naming the element, never silently stripped and never offered a downgrade to private. Nothing is re-sanitized at rest, so already-stored public SVGs are the one population no layer covers retroactively.
+
 ## Not yet specified
 
-- Exact readable-name algorithm, collision behavior, Unicode normalization, and whether the name ever influences the object key.
-- Multi-disk or tenant-aware asset behavior and whether assets can move between buckets. Ticket 06 fixed that tenant scoping must be a global query scope rather than a per-field setting, and left `->scopeLibrary()` as the sanctioned per-picker escape hatch; how tenancy resolves that scope is still open.
-- Multi-value legacy columns: how the importer discovers and orders paths held in a JSON array column, rather than the single-value column ticket 08 assumed.
-- Legacy objects on a bucket the application no longer configures, where no disk name can be supplied.
-- Debounce and query budget for the picker grid: ticket 09 accepted one aggregate per facet dimension per query change, but not what happens to that budget on a very large library or a slow connection.
-- Whether Filament 4 compatibility ships in the same Composer line or a separately tested release, plus the exact package namespace and release tags.
-- Perceived grid performance on a slow connection: whether a tiny blurred placeholder is inlined in the grid payload so cards paint before their derivative arrives. Ticket 12 fixed the delivery mechanism and left this as an additive, measurement-driven change rather than an authorization one.
-- Derivative storage growth and reclamation: ticket 12 fixed that an asset's derivatives are removable by key prefix and die with the asset, but not how a dimension change retires the objects generated under the old settings, nor what a very large library's derivative footprint costs.
-- Deployments fronting a public bucket with a CDN on the application's own domain, where ticket 13's assumption that public content is served from a foreign origin does not hold.
-- Whether the migration runbook automates `media:resolve-mimes --sniff` after an import or documents it as a step a human runs, given ticket 13 made a freshly imported library render as downloads until it has run.
+<!-- see "Fog of war": in-scope fog you can't ticket yet; graduates as the frontier advances -->
+
+Most of this section graduated into tickets 16-22 on 2026-08-27. What remains is measurement rather than decision: it cannot be ticketed because there is nothing to decide until numbers exist.
+
+- What a very large library's derivative footprint actually costs in objects and bytes. Ticket 21 decides how stale derivatives are retired; the sizing that would tell an operator whether derivatives are a cost worth managing needs a real library to measure, not a decision.
 
 ## Out of scope
 
