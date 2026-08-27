@@ -164,16 +164,16 @@ function photoSVG(seed, kind) {
       <stop offset="1" stop-color="hsl(${h2} 58% ${lightBot}%)"/></linearGradient></defs>`;
   let body;
   switch (seed % 3) {
-    case 0:   // landscape with sun
+    case 0:   /* landscape with sun */
       body = `<circle cx="${30 + seed % 60}" cy="${28 + seed % 14}" r="${11 + seed % 7}" fill="hsl(${(h1 + 180) % 360} 90% 78%)" opacity=".9"/>
         <path d="M0 78 L${26 + seed % 20} ${42 + seed % 12} L${58 + seed % 14} 74 L${74 + seed % 10} ${52 + seed % 10} L120 78 Z" fill="hsl(${h2} 45% 24%)" opacity=".85"/>
         <rect y="78" width="120" height="12" fill="hsl(${h2} 40% 18%)"/>`;
       break;
-    case 1:   // portrait subject
+    case 1:   /* portrait subject */
       body = `<ellipse cx="60" cy="${40 + seed % 6}" rx="${16 + seed % 5}" ry="${19 + seed % 5}" fill="hsl(${(h1 + 20) % 360} 45% 82%)" opacity=".92"/>
         <path d="M${28 + seed % 6} 90 Q60 ${58 + seed % 8} ${92 - seed % 6} 90 Z" fill="hsl(${h2} 55% 42%)"/>`;
       break;
-    default:  // flat-lay blocks
+    default:  /* flat-lay blocks */
       body = `<rect x="${8 + seed % 10}" y="${12 + seed % 8}" width="${34 + seed % 16}" height="${30 + seed % 18}" rx="4" fill="hsl(${(h1 + 90) % 360} 62% 72%)" opacity=".95"/>
         <rect x="${56 + seed % 12}" y="${34 + seed % 14}" width="${30 + seed % 18}" height="${34 + seed % 14}" rx="4" fill="hsl(${(h2 + 30) % 360} 66% 58%)" opacity=".95"/>
         <circle cx="${34 + seed % 40}" cy="${66 - seed % 16}" r="${8 + seed % 6}" fill="hsl(${(h1 + 200) % 360} 70% 80%)" opacity=".9"/>`;
@@ -219,23 +219,23 @@ const ASSETS = Array.from({ length: 260 }, (_, i) => {
     secs: 8 + Math.floor(rnd() * 400),
   };
 });
-// Images and video get a rendered preview; everything else keeps a tinted type glyph.
+/* Images and video get a rendered preview; everything else keeps a tinted type glyph. */
 ASSETS.forEach(a => a.preview = (a.type === 'image' || a.type === 'video') ? photoSVG(a.id, a.type) : null);
 
 const fmtDate = ms => new Date(ms).toISOString().slice(0, 10);
 const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 /* ------------------------------------------------- shared filter engine */
-// The picker's own scope from ticket 06: this field accepts image/*, video/mp4 and
-// application/pdf, and uploads PRIVATE — so it may offer both public and private assets.
+/* The picker's own scope from ticket 06: this field accepts image/*, video/mp4 and */
+/* application/pdf, and uploads PRIVATE — so it may offer both public and private assets. */
 const FIELD = { accepted: ['image/*', 'video/mp4', 'application/pdf'], uploadsPrivate: true };
 const inFieldScope = a =>
   FIELD.accepted.some(p => p.endsWith('/*') ? a.mime.startsWith(p.slice(0, -1)) : p === a.mime) &&
   (a.visibility === 'public' || FIELD.uploadsPrivate);
 const SCOPED = ASSETS.filter(inFieldScope);
 
-// Search matches over: readable name, original filename, alt text, uploader. Substring,
-// case-insensitive, all terms must match (AND across whitespace-separated terms).
+/* Search matches over: readable name, original filename, alt text, uploader. Substring, */
+/* case-insensitive, all terms must match (AND across whitespace-separated terms). */
 const SEARCH_FIELDS = a => [a.name, a.original, a.alt, a.uploader].join(' ').toLowerCase();
 function searchMatch(a, q) {
   if (!q.trim()) return true;
@@ -261,14 +261,14 @@ const sortBy = (list, s) => [...list].sort(
 const params = new URLSearchParams(location.search);
 const S = {
   variant: (params.get('variant') || 'A').toUpperCase(),
-  persist: params.get('persist') !== 'off',   // does selection survive page/filter change?
+  persist: params.get('persist') !== 'off',   /* does selection survive page/filter change? */
   q: '',
   filters: { type: '', visibility: '', uploader: '', age: 0, usage: '' },
   sort: 'newest',
   page: 1,
   pageSize: 48,
-  loaded: 48,        // infinite-scroll cursor for B / C
-  selection: [],     // ordered asset ids (field is ->multiple())
+  loaded: 48,        /* infinite-scroll cursor for B / C */
+  selection: [],     /* ordered asset ids (field is ->multiple()) */
   log: [],
 };
 const VARIANTS = { A: 'Toolbar + chips + numbered pages', B: 'Facet sidebar + infinite scroll', C: 'Query language + selection tray' };
@@ -283,7 +283,7 @@ function toggleSel(id) {
   if (i >= 0) S.selection.splice(i, 1); else S.selection.push(id);
   render();
 }
-// The behaviour under test: what happens to the selection when the visible set changes.
+/* The behaviour under test: what happens to the selection when the visible set changes. */
 function onQueryChange(what) {
   S.page = 1; S.loaded = S.pageSize;
   if (!S.persist) {
@@ -425,7 +425,7 @@ function VariantA() {
 function VariantB() {
   const all = results();
   const rows = all.slice(0, S.loaded);
-  // Facet counts are computed against everything EXCEPT the facet's own dimension.
+  /* Facet counts are computed against everything EXCEPT the facet's own dimension. */
   const countFor = (dim, val) => {
     const f = { ...S.filters, [dim]: val };
     return applyFilters(SCOPED.filter(a => searchMatch(a, S.q)), f).length;
@@ -558,7 +558,7 @@ function wire() {
   const q = app.querySelector('#q');
   if (q) {
     q.oninput = e => { S.q = e.target.value; onQueryChange('search'); };
-    // keep the caret where it was after re-render
+    /* keep the caret where it was after re-render */
     q.focus(); q.setSelectionRange(q.value.length, q.value.length);
   }
 
