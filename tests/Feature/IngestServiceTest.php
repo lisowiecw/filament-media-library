@@ -74,11 +74,13 @@ it('takes the key extension from the sniffed bytes while the stored extension fo
         ->and($asset->mime_type)->toBe('text/plain')
         ->and($asset->object_key)->toEndWith('.txt');
 
-    $mislabelled = ingest(UploadedFile::fake()->image('photo.txt', 20, 20));
+    // The client name and the bytes can still disagree inside one family, and
+    // there the key follows the bytes while the row follows the name.
+    $disagreeing = ingest(UploadedFile::fake()->createWithContent('rows.csv', "a,b\n1,2\n"));
 
-    expect($mislabelled->extension)->toBe('txt')
-        ->and($mislabelled->mime_type)->toBe('image/jpeg')
-        ->and($mislabelled->object_key)->toEndWith('.jpg');
+    expect($disagreeing->extension)->toBe('csv')
+        ->and($disagreeing->mime_type)->toBe('text/plain')
+        ->and($disagreeing->object_key)->toEndWith('.txt');
 });
 
 it('writes stored headers on every upload, private included', function (string $visibility): void {

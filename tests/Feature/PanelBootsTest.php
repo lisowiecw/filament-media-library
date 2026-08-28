@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use Filament\Facades\Filament;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\MediaLibraryPlugin;
+use Lisowiecw\MediaLibrary\MediaLibraryServiceProvider;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\Article;
 
 it('boots a panel with the plugin registered', function (): void {
@@ -31,4 +33,17 @@ it('has a faked disk and a fixture host model', function (): void {
     $article = Article::query()->create(['title' => 'Hello']);
 
     expect($article->exists)->toBeTrue();
+});
+
+it('warns at boot when the configured upload size cannot be reached', function (): void {
+    Log::spy();
+
+    config()->set('media-library.max_upload_size', 1024 * 1024);
+    config()->set('livewire.temporary_file_upload.rules', ['file', 'max:12288']);
+
+    (new MediaLibraryServiceProvider(app()))->packageBooted();
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn (string $warning): bool => str_contains($warning, 'max_upload_size'))
+        ->atLeast()->once();
 });

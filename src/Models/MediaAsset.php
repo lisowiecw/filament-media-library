@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
+use Lisowiecw\MediaLibrary\Ingest\ActiveContent;
+use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 
 /**
  * A reusable file record with human-readable file metadata and storage
@@ -71,6 +75,32 @@ class MediaAsset extends Model
         static::creating(function (self $asset): void {
             $asset->ulid ??= (string) Str::ulid();
         });
+    }
+
+    /**
+     * Whether delivery has to force a download for this asset. Read from the
+     * stored type rather than from a column, so a rule tightened today covers
+     * everything already in the library.
+     */
+    public function isActiveContent(): bool
+    {
+        return ActiveContent::matches($this->mime_type);
+    }
+
+    /**
+     * Drop the assets whose type the application has declared unwanted. Every
+     * picker offer query goes through this: a blocked type is refused at
+     * upload, so anything matching here predates the rule, and the grid must
+     * not invite attaching it. Nothing is hidden from library management.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeExcludingBlockedTypes(Builder $query, ?IngestRules $rules = null): void
+    {
+        $rules ??= IngestRules::resolve();
+
+        $query->whereNotIn(DB::raw('lower(extension)'), $rules->blockedExtensions())
+            ->whereNotIn(DB::raw('lower(mime_type)'), $rules->blockedMimeTypes());
     }
 
     /**

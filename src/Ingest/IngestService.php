@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
+use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use RuntimeException;
 use Symfony\Component\Mime\MimeTypes;
@@ -28,11 +29,15 @@ class IngestService
      */
     public const string CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
-    public function ingest(UploadedFile $file, Placement $placement): MediaAsset
+    public function ingest(UploadedFile $file, Placement $placement, ?IngestRules $rules = null): MediaAsset
     {
+        $rules ??= IngestRules::resolve();
+
         $name = ReadableName::from($file->getClientOriginalName());
         $path = $this->pathOf($file);
         $mimeType = $this->sniff($path);
+
+        $this->refuseUnlessAllowed($file, $name, $mimeType, $placement, $rules);
 
         $asset = new MediaAsset([
             'ulid' => $ulid = (string) Str::ulid(),
@@ -57,10 +62,54 @@ class IngestService
     }
 
     /**
+     * The floor, in order: size, denylist, accepted types, family mismatch,
+     * then the public-placement refusal of active content. Every check runs
+     * before a key exists or a byte is written, so a refusal stores nothing.
+     */
+    private function refuseUnlessAllowed(
+        UploadedFile $file,
+        ReadableName $name,
+        ?string $mimeType,
+        Placement $placement,
+        IngestRules $rules,
+    ): void {
+        $readable = $name->originalClientFilename;
+        $size = (int) $file->getSize();
+
+        if ($rules->exceedsMaxUploadSize($size)) {
+            throw IngestRefused::tooLarge($readable, $size, $rules->maxUploadSize);
+        }
+
+        if ($rules->blocks($name->extension, $mimeType)) {
+            throw IngestRefused::blockedType($readable, $name->extension, $mimeType);
+        }
+
+        if (! $rules->accepts($name->extension, $mimeType)) {
+            throw IngestRefused::unacceptedType($readable, $name->extension, $mimeType);
+        }
+
+        // A different top-level family is deception rather than disagreement,
+        // and is refused even where both types are individually accepted.
+        if ($mimeType !== null && TypeFamily::mismatched($name->extension, $mimeType)) {
+            throw IngestRefused::familyMismatch($readable, TypeFamily::typesFor($name->extension)[0], $mimeType);
+        }
+
+        // Public content never passes through the Delivery route, which is
+        // where the download-only rule for active content lives. There is no
+        // silent downgrade to private: the upload is refused.
+        if ($placement->visibility === 'public' && ActiveContent::matches($mimeType)) {
+            throw IngestRefused::activeContentOnPublicPlacement($readable, $mimeType);
+        }
+    }
+
+    /**
      * The response metadata written onto the storage object at upload. Written
      * whatever the Placement, and inert on a private asset, since the Delivery
      * route sets its own. They bind here because changing one later would mean
      * rewriting the whole object.
+     *
+     * Active content carries a saving Disposition, so the rule that it is
+     * never rendered in place holds outside the Delivery route too.
      *
      * @return array<string, string>
      */
@@ -68,6 +117,7 @@ class IngestService
     {
         return array_filter([
             'ContentType' => $mimeType,
+            'ContentDisposition' => ActiveContent::matches($mimeType) ? 'attachment' : null,
             'CacheControl' => self::CACHE_CONTROL,
         ], fn (?string $value): bool => $value !== null);
     }
