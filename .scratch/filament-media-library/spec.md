@@ -300,7 +300,7 @@ From each actor's point of view:
 ### Package shape
 
 - Composer package `lisowiecw/filament-media-library`; PHP namespace `Lisowiecw\MediaLibrary\`; config published as `config/media-library.php`; view and translation namespace `media-library::`.
-- Declared requirements only: `php ^8.3`, `laravel/framework ^13.0`, `filament/filament ^4.0|^5.0`, plus `enshrined/svg-sanitize ^0.22`. Storage is reached solely through the `Storage` facade and `Illuminate\Contracts\Filesystem`, so no Flysystem or AWS SDK constraint is declared. The package is GPL-relevant through the sanitizer, noted in the README.
+- Declared requirements only: `php ^8.3`, `laravel/framework ^13.0`, `filament/filament ^4.0|^5.0`, plus `enshrined/svg-sanitize ^0.22` and `spatie/laravel-package-tools ^1.93`, the latter because the Filament plugin docs build the service provider on its `PackageServiceProvider`. Storage is reached solely through the `Storage` facade and `Illuminate\Contracts\Filesystem`, so no Flysystem or AWS SDK constraint is declared. The package is GPL-relevant through the sanitizer, noted in the README.
 - Registration is a Filament plugin implementing `Filament\Contracts\Plugin`, registered with `->plugin(MediaLibraryPlugin::make())`. Fluent configuration on the plugin instance: `->withLibraryManagement()`, `->tenantUsing()`.
 - Launch version `0.1.0`. `UPGRADING.md` carries the four behavioural breaking-change rules from ticket 19.
 
