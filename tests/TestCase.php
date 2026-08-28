@@ -51,7 +51,6 @@ abstract class TestCase extends Orchestra
     protected function getPackageProviders($app): array
     {
         return [
-            LivewireServiceProvider::class,
             BladeIconsServiceProvider::class,
             BladeHeroiconsServiceProvider::class,
             SupportServiceProvider::class,
@@ -64,6 +63,10 @@ abstract class TestCase extends Orchestra
             TablesServiceProvider::class,
             WidgetsServiceProvider::class,
             FilamentServiceProvider::class,
+            // Registered after Filament: Filament's support provider binds a
+            // DataStore override, and Livewire's provider has to be the one
+            // that puts the shared instance in the container afterwards.
+            LivewireServiceProvider::class,
             MediaLibraryServiceProvider::class,
             TestPanelProvider::class,
         ];
@@ -78,6 +81,8 @@ abstract class TestCase extends Orchestra
             'driver' => 'local',
             'root' => storage_path('app/'.$this->disk),
         ]);
+
+        $app['view']->addNamespace('media-library-tests', __DIR__.'/Fixtures/views');
     }
 
     /**
