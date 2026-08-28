@@ -46,6 +46,16 @@ final readonly class Placement
     }
 
     /**
+     * Public placement is the one the plugin is not in the request path for,
+     * so the rules that lean on the Delivery route read it from here rather
+     * than comparing the string themselves.
+     */
+    public function isPublic(): bool
+    {
+        return $this->visibility === 'public';
+    }
+
+    /**
      * Prefix a server-generated key with the directory, if there is one.
      */
     public function key(string $name): string

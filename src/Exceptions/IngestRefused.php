@@ -65,6 +65,23 @@ class IngestRefused extends RuntimeException
         ));
     }
 
+    public static function unsanitizableSvg(string $name): self
+    {
+        return new self(sprintf(
+            'The file "%s" could not be sanitized as an SVG, so it was not stored.',
+            $name,
+        ));
+    }
+
+    public static function strictSvgDropped(string $name, string $element): self
+    {
+        return new self(sprintf(
+            'The file "%s" contains a <%s> element, which is not allowed on a public placement.',
+            $name,
+            $element,
+        ));
+    }
+
     private static function describe(?string $type): string
     {
         return $type ?? 'of an unknown type';

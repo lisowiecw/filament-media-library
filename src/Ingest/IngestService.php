@@ -23,6 +23,10 @@ use Symfony\Component\Mime\MimeTypes;
  */
 class IngestService
 {
+    public function __construct(
+        private readonly SvgSanitization $svg = new SvgSanitization,
+    ) {}
+
     /**
      * A public original is cached at the edge and in the browser for a year.
      * Keys are opaque and never rewritten, so the bytes behind one never change.
@@ -39,6 +43,16 @@ class IngestService
 
         $this->refuseUnlessAllowed($file, $name, $mimeType, $placement, $rules);
 
+        // An SVG is stored only as its sanitized bytes, so the sanitize runs
+        // before a key exists and its refusal leaves nothing behind.
+        $sanitized = SvgSanitization::applies($name->extension, $mimeType)
+            ? $this->svg->sanitize(
+                $this->read($path),
+                $name->originalClientFilename,
+                strict: $placement->isPublic(),
+            )
+            : null;
+
         $asset = new MediaAsset([
             'ulid' => $ulid = (string) Str::ulid(),
             'display_name' => $name->displayName,
@@ -53,7 +67,7 @@ class IngestService
             'uploaded_by' => $this->uploader(),
         ]);
 
-        $asset->size = $this->write($path, $asset, $placement);
+        $asset->size = $this->write($path, $asset, $placement, $sanitized);
         $asset->nameCollided = $this->collides($name->displayName);
 
         $asset->save();
@@ -97,7 +111,7 @@ class IngestService
         // Public content never passes through the Delivery route, which is
         // where the download-only rule for active content lives. There is no
         // silent downgrade to private: the upload is refused.
-        if ($placement->visibility === 'public' && ActiveContent::matches($mimeType)) {
+        if ($placement->isPublic() && ActiveContent::matches($mimeType)) {
             throw IngestRefused::activeContentOnPublicPlacement($readable, $mimeType);
         }
     }
@@ -136,9 +150,15 @@ class IngestService
     /**
      * Write the bytes and report their size as stored, rather than as claimed.
      */
-    private function write(string $path, MediaAsset $asset, Placement $placement): int
+    private function write(string $path, MediaAsset $asset, Placement $placement, ?string $contents = null): int
     {
         $disk = Storage::disk($placement->disk);
+
+        if ($contents !== null) {
+            $disk->put($asset->object_key, $contents, $this->writeOptions($placement, $asset->mime_type));
+
+            return (int) $disk->size($asset->object_key);
+        }
 
         $stream = fopen($path, 'rb');
 
@@ -153,6 +173,21 @@ class IngestService
         }
 
         return (int) $disk->size($asset->object_key);
+    }
+
+    /**
+     * An unreadable temp file is an IO failure rather than bad markup, and is
+     * never reported as one.
+     */
+    private function read(string $path): string
+    {
+        $contents = file_get_contents($path);
+
+        if ($contents === false) {
+            throw new RuntimeException('The uploaded file could not be read.');
+        }
+
+        return $contents;
     }
 
     private function pathOf(UploadedFile $file): string
