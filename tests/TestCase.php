@@ -17,6 +17,7 @@ use Filament\Support\SupportServiceProvider;
 use Filament\Tables\TablesServiceProvider;
 use Filament\Widgets\WidgetsServiceProvider;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\MediaLibraryServiceProvider;
@@ -26,6 +27,8 @@ use Orchestra\Testbench\TestCase as Orchestra;
 
 abstract class TestCase extends Orchestra
 {
+    use RefreshDatabase;
+
     /**
      * The disk every test writes to. Faked in setUp so nothing in the suite
      * ever reaches a real filesystem, and so the package is exercised through
