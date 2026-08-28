@@ -7,6 +7,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
+use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\User;
@@ -16,7 +17,7 @@ it('stores the bytes and returns a persisted asset', function (): void {
 
     expect($asset->exists)->toBeTrue()
         ->and($asset->disk)->toBe('media')
-        ->and($asset->visibility)->toBe('private');
+        ->and($asset->visibility)->toBe(Visibility::Private);
 
     Storage::disk('media')->assertExists($asset->object_key);
     expect($asset->size)->toBe(Storage::disk('media')->size($asset->object_key));

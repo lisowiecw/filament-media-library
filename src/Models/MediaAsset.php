@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
+use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Ingest\ActiveContent;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 
@@ -30,7 +31,7 @@ use Lisowiecw\MediaLibrary\Ingest\IngestRules;
  * @property int|null $size
  * @property string $disk
  * @property string $object_key
- * @property string $visibility
+ * @property Visibility $visibility
  * @property MediaSource $source
  * @property string|null $import_source
  * @property string|null $uploaded_by
@@ -88,16 +89,6 @@ class MediaAsset extends Model
     }
 
     /**
-     * Whether the asset's content is addressable without a session. A public
-     * asset never reaches the Delivery route, so this is what the rules that
-     * lean on the route read rather than comparing the string themselves.
-     */
-    public function isPublic(): bool
-    {
-        return $this->visibility === 'public';
-    }
-
-    /**
      * Drop the assets whose type the application has declared unwanted. Every
      * picker offer query goes through this: a blocked type is refused at
      * upload, so anything matching here predates the rule, and the grid must
@@ -136,6 +127,7 @@ class MediaAsset extends Model
     {
         return [
             'mime_source' => MimeSource::class,
+            'visibility' => Visibility::class,
             'source' => MediaSource::class,
             'size' => 'integer',
         ];

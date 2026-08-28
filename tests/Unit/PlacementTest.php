@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
 
 it('defaults to the application disk, the media prefix and private visibility', function (): void {
@@ -11,7 +12,7 @@ it('defaults to the application disk, the media prefix and private visibility', 
 
     expect($placement->disk)->toBe(config('filesystems.default'))
         ->and($placement->directory)->toBe('media')
-        ->and($placement->visibility)->toBe('private');
+        ->and($placement->visibility)->toBe(Visibility::Private);
 });
 
 it('prefers the package disk over the application default', function (): void {
@@ -26,12 +27,12 @@ it('prefers field configuration over package configuration', function (): void {
     $placement = Placement::resolve(
         disk: 'field',
         directory: 'posts/covers',
-        visibility: 'public',
+        visibility: Visibility::Public,
     );
 
     expect($placement->disk)->toBe('field')
         ->and($placement->directory)->toBe('posts/covers')
-        ->and($placement->visibility)->toBe('public');
+        ->and($placement->visibility)->toBe(Visibility::Public);
 });
 
 it('trims stray slashes off the directory prefix', function (): void {

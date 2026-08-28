@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\IngestService;
@@ -100,7 +101,7 @@ it('stores active content on a private placement', function (): void {
 it('refuses active content on a public placement rather than downgrading it', function (): void {
     ingest(
         UploadedFile::fake()->createWithContent('page.html', '<html><body>hi</body></html>'),
-        Placement::resolve(visibility: 'public'),
+        Placement::resolve(visibility: Visibility::Public),
     );
 })->throws(IngestRefused::class, 'which the browser would execute');
 

@@ -45,12 +45,12 @@ class DeliveryController
         // Rendering in place means the content policy has to reach the
         // browser, and a redirect leaves it behind: what renders streams,
         // whatever the disk could have offered.
-        if ($disposition === Disposition::INLINE || ! $disk->providesTemporaryUrls()) {
+        if ($disposition === Disposition::Inline || ! $disk->providesTemporaryUrls()) {
             $response = $disk->response(
                 $asset->object_key,
                 $filename,
                 ['Content-Type' => $asset->mime_type ?? 'application/octet-stream'],
-                $disposition,
+                $disposition->value,
             );
 
             return $this->guarded($response);
@@ -65,7 +65,7 @@ class DeliveryController
             now()->addSeconds(DeliveryRoute::ttl()),
             [
                 'ResponseContentType' => $asset->mime_type ?? 'application/octet-stream',
-                'ResponseContentDisposition' => $disposition.'; filename="'.$filename.'"',
+                'ResponseContentDisposition' => $disposition->value.'; filename="'.$filename.'"',
             ],
         )));
     }

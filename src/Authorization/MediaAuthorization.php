@@ -12,10 +12,11 @@ use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Policies\MediaAssetPolicy;
 
 /**
- * The one place the package asks whether something is allowed.
+ * The one place the package asks whether something is allowed, and the entry
+ * point a host application should ask too rather than reaching for the Gate
+ * facade.
  *
- * Everything the plugin does goes through here rather than through the Gate
- * facade directly, for two reasons. The public-asset shortcut is stated once,
+ * It exists for two reasons. The public-asset shortcut is stated once,
  * so no caller can forget that content already addressable without a session
  * needs no check. And View answers are cached for the life of the request, so
  * a grid painting forty-eight cards costs one evaluation per asset rather than
@@ -43,30 +44,29 @@ class MediaAuthorization
     private ?Request $answeredFor = null;
 
     /**
-     * Register the fail-closed defaults, unless the application has already
-     * spoken. A host that registers its own policy or gates first keeps them;
-     * one that registers later overwrites these, which is the ordinary
-     * Laravel outcome of an application provider booting after a package one.
+     * Register the fail-closed defaults. Unconditionally: an application
+     * provider boots after a package one, so a host registering its own policy
+     * or gates simply replaces these, and guarding on what is already there
+     * would only make the outcome depend on boot order.
      */
     public static function registerDefaults(): void
     {
-        if (Gate::getPolicyFor(MediaAsset::class) === null) {
-            Gate::policy(MediaAsset::class, MediaAssetPolicy::class);
-        }
+        Gate::policy(MediaAsset::class, MediaAssetPolicy::class);
 
         foreach ([self::UPLOAD_MEDIA, self::ATTACH_MEDIA] as $gate) {
-            if (! Gate::has($gate)) {
-                Gate::define($gate, fn (): bool => false);
-            }
+            Gate::define($gate, fn (): bool => false);
         }
     }
 
     /**
-     * Whether this request may be handed the asset's actual bytes.
+     * Whether this request may be handed the asset's actual bytes. The public
+     * shortcut lives here rather than in the policy, since the policy is the
+     * one piece a host application replaces wholesale: asking the Gate about a
+     * public asset directly will answer false.
      */
     public function allowsView(MediaAsset $asset): bool
     {
-        if ($asset->isPublic()) {
+        if ($asset->visibility->isPublic()) {
             return true;
         }
 

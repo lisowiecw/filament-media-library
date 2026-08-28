@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\Article;
@@ -196,7 +197,7 @@ it('uploads through the modal with the field placement and attaches on save', fu
     $asset = MediaAsset::query()->firstOrFail();
 
     expect($asset->display_name)->toBe('holiday photo')
-        ->and($asset->visibility)->toBe('public')
+        ->and($asset->visibility)->toBe(Visibility::Public)
         ->and($asset->object_key)->toStartWith('posts/covers/')
         ->and($host->media('cover_image')->pluck('id')->all())->toBe([$asset->id]);
 

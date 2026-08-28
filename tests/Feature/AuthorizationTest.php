@@ -41,3 +41,25 @@ it('evaluates a private asset once per request', function (): void {
         ->and($authorization->allowsView($asset->fresh()))->toBeTrue()
         ->and(HostPolicy::$evaluations)->toBe(1);
 });
+
+it('hands the gates the user, the host and the field name', function (string $gate, string $method): void {
+    $user = user();
+    $host = article();
+    $asked = [];
+
+    Gate::define($gate, function (mixed ...$arguments) use (&$asked): bool {
+        $asked = $arguments;
+
+        return true;
+    });
+
+    $this->actingAs($user);
+
+    expect(app(MediaAuthorization::class)->{$method}($host, 'cover'))->toBeTrue()
+        ->and($asked[0])->toBe($user)
+        ->and($asked[1])->toBe($host)
+        ->and($asked[2])->toBe('cover');
+})->with([
+    [MediaAuthorization::UPLOAD_MEDIA, 'allowsUpload'],
+    [MediaAuthorization::ATTACH_MEDIA, 'allowsAttach'],
+]);

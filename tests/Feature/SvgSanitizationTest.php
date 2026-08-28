@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
 use Lisowiecw\MediaLibrary\Ingest\SvgSanitization;
@@ -83,32 +84,32 @@ it('accepts an svg with a style block on a private placement', function (): void
 it('refuses a public svg that carries a style block, naming the element', function (): void {
     ingest(
         svgUpload('<svg xmlns="http://www.w3.org/2000/svg"><style>rect{fill:red}</style><rect width="1" height="1"/></svg>'),
-        placement: new Placement(disk: 'media', directory: 'media', visibility: 'public'),
+        placement: new Placement(disk: 'media', directory: 'media', visibility: Visibility::Public),
     );
 })->throws(IngestRefused::class, 'style');
 
 it('refuses a public svg that embeds an image, naming the element', function (): void {
     ingest(
         svgUpload('<svg xmlns="http://www.w3.org/2000/svg"><image width="1" height="1"/></svg>'),
-        placement: new Placement(disk: 'media', directory: 'media', visibility: 'public'),
+        placement: new Placement(disk: 'media', directory: 'media', visibility: Visibility::Public),
     );
 })->throws(IngestRefused::class, 'image');
 
 it('refuses a public svg that carries a link, naming the element', function (): void {
     ingest(
         svgUpload('<svg xmlns="http://www.w3.org/2000/svg"><a><rect width="1" height="1"/></a></svg>'),
-        placement: new Placement(disk: 'media', directory: 'media', visibility: 'public'),
+        placement: new Placement(disk: 'media', directory: 'media', visibility: Visibility::Public),
     );
 })->throws(IngestRefused::class, 'a');
 
 it('accepts a plain public svg and stores the strictly sanitized bytes', function (): void {
     $asset = ingest(
         svgUpload('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect width="1" height="1"/></svg>'),
-        placement: new Placement(disk: 'media', directory: 'media', visibility: 'public'),
+        placement: new Placement(disk: 'media', directory: 'media', visibility: Visibility::Public),
     );
 
     expect(storedBytes($asset))->not->toContain('<script')
-        ->and($asset->visibility)->toBe('public');
+        ->and($asset->visibility)->toBe(Visibility::Public);
 });
 
 it('is its own thumbnail, so it writes no second object', function (): void {
@@ -125,7 +126,7 @@ it('keeps an internal reference on a public svg', function (): void {
             '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">'
             .'<defs><rect id="box" width="1" height="1"/></defs><use xlink:href="#box"/></svg>',
         ),
-        placement: new Placement(disk: 'media', directory: 'media', visibility: 'public'),
+        placement: new Placement(disk: 'media', directory: 'media', visibility: Visibility::Public),
     );
 
     expect(storedBytes($asset))->toContain('#box');

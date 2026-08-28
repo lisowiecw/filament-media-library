@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
+use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 
 /**
@@ -47,7 +48,7 @@ it('reads naming, type, storage and provenance back off a created asset', functi
         ->and($asset->size)->toBe(2048)
         ->and($asset->disk)->toBe('media')
         ->and($asset->object_key)->toBe('media/holiday-photo.jpg')
-        ->and($asset->visibility)->toBe('private')
+        ->and($asset->visibility)->toBe(Visibility::Private)
         ->and($asset->source)->toBe(MediaSource::Import)
         ->and($asset->import_source)->toBe('articles.hero_path')
         ->and($asset->uploaded_by)->toBe('7')

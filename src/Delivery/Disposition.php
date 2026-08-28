@@ -17,26 +17,25 @@ use Lisowiecw\MediaLibrary\Models\MediaAsset;
  * extension-derived type asserts that a filename ended in `.jpg`, which is no
  * basis for running its bytes in the panel's origin. See ADR-0004.
  */
-final readonly class Disposition
+enum Disposition: string
 {
-    public const string INLINE = 'inline';
-
-    public const string ATTACHMENT = 'attachment';
+    case Inline = 'inline';
+    case Attachment = 'attachment';
 
     /**
      * Asking for a download always wins, since saving a file is never less
-     * safe than rendering it. Asking for the opposite is not a lever the
-     * request holds: there is nothing to say beyond `download`, so an
-     * unasked-for request simply falls back to what the asset has earned.
+     * safe than rendering it. The opposite is not a lever the request holds at
+     * all: rendering in place is earned from the asset, so `?download=0` says
+     * nothing anywhere, for active content or for anything else.
      */
-    public static function for(MediaAsset $asset, bool $download): string
+    public static function for(MediaAsset $asset, bool $download): self
     {
         if ($download || $asset->isActiveContent()) {
-            return self::ATTACHMENT;
+            return self::Attachment;
         }
 
         return in_array($asset->mime_source, [MimeSource::Header, MimeSource::Sniffed], strict: true)
-            ? self::INLINE
-            : self::ATTACHMENT;
+            ? self::Inline
+            : self::Attachment;
     }
 }

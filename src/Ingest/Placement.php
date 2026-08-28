@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Ingest;
 
+use Lisowiecw\MediaLibrary\Enums\Visibility;
+
 /**
  * The disk, directory prefix and visibility a Media Picker applies to new
  * uploads. Placement is fixed on the asset at upload and never re-applied by
@@ -14,7 +16,7 @@ final readonly class Placement
     public function __construct(
         public string $disk,
         public string $directory,
-        public string $visibility,
+        public Visibility $visibility,
     ) {}
 
     /**
@@ -24,7 +26,7 @@ final readonly class Placement
     public static function resolve(
         ?string $disk = null,
         ?string $directory = null,
-        ?string $visibility = null,
+        Visibility|string|null $visibility = null,
     ): self {
         /** @var string|null $configuredDisk */
         $configuredDisk = config('media-library.disk');
@@ -38,21 +40,21 @@ final readonly class Placement
         /** @var string $configuredVisibility */
         $configuredVisibility = config('media-library.visibility', 'private');
 
+        $visibility ??= $configuredVisibility;
+
         return new self(
             disk: $disk ?? $configuredDisk ?? $defaultDisk,
             directory: trim($directory ?? $configuredDirectory, '/'),
-            visibility: $visibility ?? $configuredVisibility,
+            visibility: $visibility instanceof Visibility ? $visibility : Visibility::from($visibility),
         );
     }
 
     /**
-     * Public placement is the one the plugin is not in the request path for,
-     * so the rules that lean on the Delivery route read it from here rather
-     * than comparing the string themselves.
+     * Public placement is the one the plugin is not in the request path for.
      */
     public function isPublic(): bool
     {
-        return $this->visibility === 'public';
+        return $this->visibility->isPublic();
     }
 
     /**

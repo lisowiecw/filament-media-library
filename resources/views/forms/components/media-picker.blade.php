@@ -17,7 +17,7 @@
                     <li class="fi-ml-picker-item" data-asset-id="{{ $asset->id }}">
                         <span class="fi-ml-picker-item-name">{{ $asset->display_name }}</span>
                         <span class="fi-ml-picker-item-visibility">
-                            {{ __('media-library::messages.visibility.' . $asset->visibility) }}
+                            {{ __('media-library::messages.visibility.' . $asset->visibility->value) }}
                         </span>
                     </li>
                 @endforeach

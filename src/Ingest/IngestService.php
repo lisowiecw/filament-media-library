@@ -144,7 +144,7 @@ class IngestService
      */
     private function writeOptions(Placement $placement, ?string $mimeType): array
     {
-        return ['visibility' => $placement->visibility] + $this->storedHeaders($mimeType);
+        return ['visibility' => $placement->visibility->value] + $this->storedHeaders($mimeType);
     }
 
     /**

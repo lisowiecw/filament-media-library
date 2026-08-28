@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\URL;
 use Lisowiecw\MediaLibrary\Http\Controllers\DeliveryController;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
+use RuntimeException;
 
 /**
  * The single endpoint the plugin registers to serve a private Media Asset's
@@ -37,22 +38,28 @@ final readonly class DeliveryRoute
     public static function register(): void
     {
         // The asset is resolved in the controller rather than bound by the
-        // route, so the signature is validated before a lookup happens: a
-        // tampered URL is refused rather than answered with whether the id it
-        // names exists.
+        // route, so the signature is validated before a lookup happens. The
+        // signature is what protects the id: an unsigned or tampered URL is
+        // refused without the row ever being looked for.
         Route::get('media/{asset}', DeliveryController::class)
             ->middleware('signed')
             ->name(self::ROUTE_NAME);
     }
 
     /**
-     * The route name for the current panel, or the default one outside a
-     * panel request.
+     * The route name for the current panel. There is no name outside a panel:
+     * the route only exists inside one, so guessing Filament's prefix here
+     * would hand back the name of a route that was never registered.
      */
     public static function name(): string
     {
-        return Filament::getCurrentOrDefaultPanel()?->generateRouteName(self::ROUTE_NAME)
-            ?? 'filament.'.self::ROUTE_NAME;
+        $panel = Filament::getCurrentOrDefaultPanel();
+
+        if ($panel === null) {
+            throw new RuntimeException('The Delivery route is registered per panel and has no name outside one.');
+        }
+
+        return $panel->generateRouteName(self::ROUTE_NAME);
     }
 
     /**

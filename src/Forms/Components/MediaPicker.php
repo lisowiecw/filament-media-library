@@ -178,7 +178,7 @@ class MediaPicker extends Field
         return __('media-library::messages.picker.placement', [
             'disk' => $placement->disk,
             'directory' => $placement->directory === '' ? '/' : $placement->directory,
-            'visibility' => __('media-library::messages.visibility.'.$placement->visibility),
+            'visibility' => __('media-library::messages.visibility.'.$placement->visibility->value),
         ]);
     }
 

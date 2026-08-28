@@ -92,7 +92,10 @@ The policy abilities are `viewAny`, `view`, `update`, `delete`, `forceDelete` an
 has an ability of its own. `view` governs an asset's actual content rather than its
 listing, so it is checked where bytes are delivered and never per row in a grid.
 Reading a public asset asks nothing, since its content is already publicly
-addressable.
+addressable. That exception is the plugin's rather than the policy's, because
+the policy is the piece you replace: ask
+`Lisowiecw\MediaLibrary\Authorization\MediaAuthorization` rather than the `Gate`
+facade, and a public asset answers true without a policy ever being consulted.
 
 ### Delivery
 
