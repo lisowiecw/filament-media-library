@@ -39,6 +39,13 @@ class MediaAsset extends Model
 
     protected $table = 'media_assets';
 
+    /**
+     * Transient, never persisted: whether ingest saw an existing asset whose
+     * readable name folds to this one's. Informational only, so the caller can
+     * offer the person a choice; it never blocks and never overwrites.
+     */
+    public bool $nameCollided = false;
+
     /** @var list<string> */
     protected $fillable = [
         'ulid',
