@@ -76,7 +76,7 @@ it('takes the key extension from the sniffed bytes while the stored extension fo
 
     // The client name and the bytes can still disagree inside one family, and
     // there the key follows the bytes while the row follows the name.
-    $disagreeing = ingest(UploadedFile::fake()->createWithContent('rows.csv', "a,b\n1,2\n"));
+    $disagreeing = ingest(UploadedFile::fake()->createWithContent('rows.csv', 'plain words'));
 
     expect($disagreeing->extension)->toBe('csv')
         ->and($disagreeing->mime_type)->toBe('text/plain')

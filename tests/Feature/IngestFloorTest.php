@@ -64,7 +64,7 @@ it('stores nothing at all when it refuses', function (): void {
 
 it('re-runs the accepted-type gate against the sniffed truth', function (): void {
     $asset = ingest(
-        UploadedFile::fake()->createWithContent('rows.csv', "a,b\n1,2\n"),
+        UploadedFile::fake()->createWithContent('rows.csv', 'plain words'),
         rules: IngestRules::resolve(acceptedTypes: ['text/csv']),
     );
 
