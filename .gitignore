@@ -1,2 +1,15 @@
+/vendor
+/build
+/coverage
+/workbench/storage
+/workbench/database/database.sqlite
+composer.lock
+.phpunit.cache
+.phpunit.result.cache
+.pest
+.phpstan.cache
+.DS_Store
+.idea
+.vscode
 .playwright-mcp/
 .claude/worktrees/

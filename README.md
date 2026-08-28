@@ -1,0 +1,95 @@
+<div align="center">
+    <h1>Filament Media Library</h1>
+</div>
+
+<p align="center">
+    <a href="https://packagist.org/packages/lisowiecw/filament-media-library"><img src="https://img.shields.io/packagist/v/lisowiecw/filament-media-library.svg?style=flat-square" alt="Packagist"></a>
+    <a href="https://packagist.org/packages/lisowiecw/filament-media-library"><img src="https://img.shields.io/packagist/php-v/lisowiecw/filament-media-library.svg?style=flat-square" alt="PHP from Packagist"></a>
+    <a href="https://packagist.org/packages/lisowiecw/filament-media-library"><img src="https://badge.laravel.cloud/badge/lisowiecw/filament-media-library?style=flat" alt="Laravel versions"></a>
+    <a href="https://github.com/lisowiecw/filament-media-library/actions"><img alt="GitHub Workflow Status (main)" src="https://img.shields.io/github/actions/workflow/status/lisowiecw/filament-media-library/tests.yml?branch=main&label=Tests&style=flat-square"></a>
+    <a href="https://packagist.org/packages/lisowiecw/filament-media-library"><img src="https://img.shields.io/packagist/dt/lisowiecw/filament-media-library.svg?style=flat-square" alt="Total Downloads"></a>
+</p>
+
+A reusable media library and configurable file picker for Filament.
+
+## Compatibility
+
+| Package | PHP | Laravel | Filament |
+| ------- | --- | ------- | -------- |
+| 0.x | 8.3, 8.4, 8.5 | 13.x | 5.x (guaranteed), 4.x (best effort) |
+
+Filament 4 support is best effort, limited to the plugin and field APIs both majors share. It rides the same Composer line as Filament 5 and is guarded by a CI job on every push, so a red Filament 4 job blocks a release. See [ADR 0008](docs/adr/0008-filament-4-support-rides-one-line-guarded-by-ci.md).
+
+## Installation
+
+You can install the package via Composer:
+
+```bash
+composer require lisowiecw/filament-media-library
+```
+
+Then register the plugin on any Filament panel:
+
+```php
+use Lisowiecw\MediaLibrary\MediaLibraryPlugin;
+
+public function panel(Panel $panel): Panel
+{
+    return $panel
+        ->plugin(MediaLibraryPlugin::make());
+}
+```
+
+### Publishing the Configuration File
+
+```bash
+php artisan vendor:publish --tag="media-library-config"
+```
+
+### Publishing and Running the Migrations
+
+The package's migrations run automatically. Publish them only if you want to edit them:
+
+```bash
+php artisan vendor:publish --tag="media-library-migrations"
+php artisan migrate
+```
+
+### Publishing the Views
+
+```bash
+php artisan vendor:publish --tag="media-library-views"
+```
+
+### Publishing the Translations
+
+```bash
+php artisan vendor:publish --tag="media-library-translations"
+```
+
+## Usage
+
+<!-- Add a basic usage example here. -->
+
+## Changelog
+
+Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.
+
+## Contributing
+
+Thank you for considering contributing to Filament Media Library! Please review our [contributing guide](.github/CONTRIBUTING.md) to get started.
+
+## Security Vulnerabilities
+
+Please review [our security policy](.github/SECURITY.md) on how to report security vulnerabilities.
+
+## Credits
+
+- [Wojciech Lisowiec](https://github.com/lisowiecw)
+- [All Contributors](../../contributors)
+
+## License
+
+Filament Media Library is open-sourced software licensed under the [MIT license](LICENSE.md).
+
+SVG sanitizing is handled by [enshrined/svg-sanitize](https://github.com/darylldoyle/svg-sanitizer), which is GPL-2.0 licensed. It is a runtime dependency pulled in by Composer, not vendored into this package, so this package stays MIT. Anyone who cannot take a GPL dependency should be aware of it before installing.
