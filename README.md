@@ -71,6 +71,48 @@ php artisan vendor:publish --tag="media-library-translations"
 
 <!-- Add a basic usage example here. -->
 
+### Authorization
+
+The package registers a `MediaAssetPolicy` that denies everything, and two gates,
+`uploadMedia` and `attachMedia`, that deny as well. Forgetting to write a policy
+therefore denies rather than allows. Replace them from your own application:
+
+```php
+use Illuminate\Support\Facades\Gate;
+use Lisowiecw\MediaLibrary\Models\MediaAsset;
+
+Gate::policy(MediaAsset::class, App\Policies\MediaAssetPolicy::class);
+
+Gate::define('uploadMedia', fn (User $user, Model|string|null $host, ?string $field) => $user->isEditor());
+Gate::define('attachMedia', fn (User $user, Model|string|null $host, ?string $field) => $user->isEditor());
+```
+
+The policy abilities are `viewAny`, `view`, `update`, `delete`, `forceDelete` and
+`detach`. Renaming an asset asks `update` and downloading one asks `view`; neither
+has an ability of its own. `view` governs an asset's actual content rather than its
+listing, so it is checked where bytes are delivered and never per row in a grid.
+Reading a public asset asks nothing, since its content is already publicly
+addressable.
+
+### Delivery
+
+A private asset's content reaches a browser through one signed route the plugin
+registers per panel, inside that panel's middleware. Every request to it re-checks
+`view`, so a leaked URL stops working the moment the policy says so, and no raw
+presigned URL is ever handed to a browser. `media-library.signed_url_ttl`
+(`MEDIA_LIBRARY_SIGNED_URL_TTL`) sets how long a signature lasts, five minutes by
+default.
+
+The route serves an asset for rendering in place only when it is not active content
+and its mime type came from a stored header or a content sniff; everything else is
+served for saving, and `?download=1` forces that anyway. Every response carries
+`Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox`,
+and an asset that renders in place is streamed rather than redirected so the header
+survives.
+
+**The route's URL, name and parameters are internal.** They may change in any
+release. Do not build them by hand or hardcode them in a template.
+
 ## Changelog
 
 Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.

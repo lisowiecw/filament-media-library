@@ -88,6 +88,16 @@ class MediaAsset extends Model
     }
 
     /**
+     * Whether the asset's content is addressable without a session. A public
+     * asset never reaches the Delivery route, so this is what the rules that
+     * lean on the route read rather than comparing the string themselves.
+     */
+    public function isPublic(): bool
+    {
+        return $this->visibility === 'public';
+    }
+
+    /**
      * Drop the assets whose type the application has declared unwanted. Every
      * picker offer query goes through this: a blocked type is refused at
      * upload, so anything matching here predates the rule, and the grid must

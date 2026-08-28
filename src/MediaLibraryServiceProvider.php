@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Lisowiecw\MediaLibrary;
 
 use Illuminate\Support\Facades\Log;
+use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\UploadCeiling;
 use Spatie\LaravelPackageTools\Package;
@@ -25,6 +26,13 @@ class MediaLibraryServiceProvider extends PackageServiceProvider
             ->runsMigrations();
     }
 
+    public function packageRegistered(): void
+    {
+        // Scoped rather than singleton: the View cache it holds is only ever
+        // correct for one request.
+        $this->app->scoped(MediaAuthorization::class);
+    }
+
     /**
      * A configured limit above the PHP or Livewire ceiling cannot be reached:
      * the upload fails in the browser with nothing written anywhere. Warn at
@@ -32,6 +40,8 @@ class MediaLibraryServiceProvider extends PackageServiceProvider
      */
     public function packageBooted(): void
     {
+        MediaAuthorization::registerDefaults();
+
         /** @var int $maxUploadSize */
         $maxUploadSize = config('media-library.max_upload_size', IngestRules::DEFAULT_MAX_UPLOAD_SIZE);
 

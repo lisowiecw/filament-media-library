@@ -86,7 +86,8 @@ abstract class TestCase extends Orchestra
     }
 
     /**
-     * The host model later tickets attach media to.
+     * The host model tickets attach media to, and the authenticated user the
+     * policy and the gates are asked about.
      */
     protected function createFixtureTables(): void
     {
@@ -97,6 +98,12 @@ abstract class TestCase extends Orchestra
         Schema::create('articles', function (Blueprint $table): void {
             $table->id();
             $table->string('title');
+            $table->timestamps();
+        });
+
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
             $table->timestamps();
         });
     }
