@@ -50,8 +50,8 @@
 
 ### Coexistence facts already fixed by earlier tickets
 
-- Ticket 03 fixed the invariant: "*For every Media Asset, storage operations use `(disk, object_key)`; UI labels and download filenames use readable metadata. No storage lookup derives an object key from a readable name.*" It also already anticipated this ticket: "*an imported asset can register its existing hashed object key without pretending that the hash is its readable name.*" **Source:** `.scratch/filament-media-library/research-03-storage-bucket-and-visibility-contract.md` (in-repo, resolved).
-- Ticket 04 fixed that object keys are "*server-generated, collision-resistant, opaque, independent of client-controlled names*", that `display_name` edits "*never move or rename the stored object*", and that duplicates "*never overwrite an existing asset or storage object*". **Source:** `.scratch/filament-media-library/issues/04-readable-name-and-upload-identity.md` (in-repo, resolved).
+- Ticket 03 fixed the invariant: "*For every Media Asset, storage operations use `(disk, object_key)`; UI labels and download filenames use readable metadata. No storage lookup derives an object key from a readable name.*" It also already anticipated this ticket: "*an imported asset can register its existing hashed object key without pretending that the hash is its readable name.*" **Source:** `.scratch/filament-media-library/research-03-storage-bucket-and-visibility-contract.md` (resolved).
+- Ticket 04 fixed that object keys are "*server-generated, collision-resistant, opaque, independent of client-controlled names*", that `display_name` edits "*never move or rename the stored object*", and that duplicates "*never overwrite an existing asset or storage object*". **Source:** issue [#28](https://github.com/lisowiecw/filament-media-library/issues/28) (resolved).
 
 ## Recommended contract
 
@@ -247,4 +247,4 @@ Everything else — thumbnails, search, filters, attachment, authorization, deli
 - [AWS S3 `ListObjectsV2` API reference](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html)
 - [Cloudflare R2 S3 API compatibility](https://developers.cloudflare.com/r2/api/s3/api/)
 - [Cloudflare R2 pricing](https://developers.cloudflare.com/r2/pricing/)
-- In-repo resolved decisions: `.scratch/filament-media-library/issues/02-media-asset-and-relationship-model.md`, `.scratch/filament-media-library/issues/04-readable-name-and-upload-identity.md`, `.scratch/filament-media-library/research-03-storage-bucket-and-visibility-contract.md`
+- Resolved decisions: issue [#26](https://github.com/lisowiecw/filament-media-library/issues/26), issue [#28](https://github.com/lisowiecw/filament-media-library/issues/28), `.scratch/filament-media-library/research-03-storage-bucket-and-visibility-contract.md`

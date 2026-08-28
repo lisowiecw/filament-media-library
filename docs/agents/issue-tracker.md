@@ -1,30 +1,57 @@
-# Issue tracker: Local Markdown
+# Issue tracker: GitHub Issues
 
-Issues and specs for this repo live as markdown files in `.scratch/`.
+Issues and specs for this repo live as GitHub issues on `lisowiecw/filament-media-library`, reached with the `gh` CLI. Long-form primary sources (specs, research notes) stay as markdown in `.scratch/<feature-slug>/` and are linked from the issues that use them.
 
 ## Conventions
 
-- One feature per directory: `.scratch/<feature-slug>/`
-- The spec is `.scratch/<feature-slug>/spec.md`
-- Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file
-- Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
-- Comments and conversation history append to the bottom of the file under a `## Comments` heading
+- One issue per ticket. Implementation tickets carry the `build` label; wayfinder decision tickets carry `wayfinder`.
+- The spec stays on disk at `.scratch/<feature-slug>/spec.md`, as do research notes. Issues reference them by path.
+- Triage state is a label, never a line in the body (see `triage-labels.md` for the role strings).
+- Blocking is a native GitHub issue dependency, not prose. The body may restate it for readability, but the dependency is the source of truth.
+- Comments and conversation history are issue comments.
 
 ## When a skill says "publish to the issue tracker"
 
-Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
+```bash
+gh issue create -t "<title>" -F <body-file>.md -l ready-for-agent,build
+```
+
+Write the body to a file first rather than passing `-b`, so markdown survives intact. Add dependencies afterwards, see Blocking below.
 
 ## When a skill says "fetch the relevant ticket"
 
-Read the file at the referenced path. The user will normally pass the path or the issue number directly.
+```bash
+gh issue view <number> --comments
+```
+
+The user will normally pass the issue number or URL directly.
+
+## When a skill says "close out" or "mark resolved"
+
+```bash
+gh issue close <number> -r completed
+```
+
+Post the outcome as a comment before closing, so the decision survives on the issue rather than only in a commit message.
+
+## Blocking
+
+Add a dependency (issue `<n>` is blocked by issue `<b>`):
+
+```bash
+gh api repos/{owner}/{repo}/issues/<n>/dependencies/blocked_by \
+  -F issue_id=$(gh api repos/{owner}/{repo}/issues/<b> --jq .id)
+```
+
+Note `-F` (typed) rather than `-f`: the endpoint wants an integer, and it wants the issue's numeric `id`, not its number. List what an issue is blocked by with `gh api repos/{owner}/{repo}/issues/<n>/dependencies/blocked_by`. An issue is unblocked when every issue in that list is closed.
 
 ## Wayfinding operations
 
-Used by `/wayfinder`. The map is a file with one child file per ticket.
+Used by `/wayfinder`. The map is one issue; each decision ticket is its own issue linked from it.
 
-- **Map**: `.scratch/<effort>/map.md` (the Notes / Decisions-so-far / Fog body).
-- **Child ticket**: `.scratch/<effort>/issues/NN-<slug>.md`, numbered from `01`, with the question in the body. A `Type:` line records the ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `claimed`/`resolved`.
-- **Blocking**: a `Blocked by: NN, NN` line near the top. A ticket is unblocked when every file it lists is `resolved`.
-- **Frontier**: scan `.scratch/<effort>/issues/` for files that are open, unblocked, and unclaimed; first by number wins.
-- **Claim**: set `Status: claimed` and save before any work.
-- **Resolve**: append the answer under an `## Answer` heading, set `Status: resolved`, then append a context pointer (gist + link) to the map's Decisions-so-far in `map.md`.
+- **Map**: an issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body.
+- **Child ticket**: an issue labelled `wayfinder` plus a `type:` label (`type:research`, `type:prototype`, `type:grilling`, `type:task`), with the question in the body.
+- **Blocking**: native dependencies, as above.
+- **Frontier**: `gh issue list -l wayfinder --state open`, then drop any issue whose `blocked_by` list still holds an open issue, and any carrying the `claimed` label. Lowest issue number wins.
+- **Claim**: `gh issue edit <n> --add-label claimed` before any work.
+- **Resolve**: comment the answer under an `## Answer` heading, `gh issue edit <n> --remove-label claimed`, `gh issue close <n> -r completed`, then edit the map issue to append the gist plus `#<n>` to Decisions so far.

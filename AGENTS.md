@@ -6,7 +6,7 @@ When reporting information to me, be extremely concise and sacrifice grammar for
 
 ### Issue tracker
 
-Issues and specs live as markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+Issues live as GitHub issues on `lisowiecw/filament-media-library`, reached with `gh`. Specs and research notes stay as markdown under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

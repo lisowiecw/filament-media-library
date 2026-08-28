@@ -2,7 +2,7 @@
 
 Status: ready-for-agent
 
-Collapsed on 2026-08-27 from the wayfinder map at [map.md](map.md) and its 25 resolved decision tickets. Where this spec and a ticket disagree, the ticket is the primary source; where a ticket was amended by a later one, this spec states the amended position only. Vocabulary throughout is the project glossary in `CONTEXT.md`; the ten ADRs in `docs/adr/` are binding.
+Collapsed on 2026-08-27 from [the wayfinder map](https://github.com/lisowiecw/filament-media-library/issues/50) and its 25 resolved decision tickets. Where this spec and a ticket disagree, the ticket is the primary source; where a ticket was amended by a later one, this spec states the amended position only. Vocabulary throughout is the project glossary in `CONTEXT.md`; the ten ADRs in `docs/adr/` are binding.
 
 ## Problem Statement
 

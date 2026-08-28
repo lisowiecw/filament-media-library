@@ -4,7 +4,7 @@ Date: 2026-08-27
 
 ## Status
 
-Accepted. Settles the release strategy that [ticket 01](../../.scratch/filament-media-library/issues/01-platform-and-package-contract.md) deferred when it declared Filament 4 support "best effort".
+Accepted. Settles the release strategy that [ticket 01](https://github.com/lisowiecw/filament-media-library/issues/25) deferred when it declared Filament 4 support "best effort".
 
 ## Context
 
