@@ -11,25 +11,6 @@ use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 
 /**
- * @param  array<string, mixed>  $overrides
- */
-function makeAsset(array $overrides = []): MediaAsset
-{
-    return MediaAsset::create(array_merge([
-        'display_name' => 'Holiday photo',
-        'original_client_filename' => 'holiday photo.jpg',
-        'extension' => 'jpg',
-        'mime_type' => 'image/jpeg',
-        'mime_source' => MimeSource::Sniffed,
-        'size' => 2048,
-        'disk' => 'media',
-        'object_key' => 'media/holiday-photo.jpg',
-        'visibility' => 'private',
-        'source' => MediaSource::Upload,
-    ], $overrides));
-}
-
-/**
  * Writes past the model so the database's own constraints are what answers.
  *
  * @param  array<string, mixed>  $overrides
