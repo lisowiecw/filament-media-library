@@ -61,12 +61,45 @@ it('resolves a private asset to a signed Delivery URL', function (): void {
         ->and($url)->toContain('signature=');
 });
 
-it('refuses to deliver a public asset, whose content is already addressable', function (): void {
+it('refuses to render a public asset, whose content is already addressable', function (): void {
     $asset = publicAsset();
 
     Storage::disk($asset->disk)->put($asset->object_key, 'the bytes');
 
     $this->get(DeliveryRoute::signedUrl($asset))->assertNotFound();
+});
+
+it('serves a public asset asked for as a download, which no foreign origin can be told to save', function (): void {
+    $asset = publicAsset();
+
+    Storage::disk($asset->disk)->put($asset->object_key, 'the bytes');
+
+    $response = $this->get(DeliveryRoute::signedUrl($asset, download: true));
+
+    $response->assertOk();
+    expect($response->headers->get('content-disposition'))->toStartWith('attachment');
+});
+
+it('streams a public download rather than redirecting, since the disposition is the point', function (): void {
+    Storage::disk('media')->buildTemporaryUrlsUsing(
+        fn (string $path, DateTimeInterface $expiry, array $options): string => 'https://bucket.test/'.$path,
+    );
+
+    $asset = publicAsset();
+
+    Storage::disk($asset->disk)->put($asset->object_key, 'the bytes');
+
+    $response = $this->get($asset->downloadUrl());
+
+    $response->assertOk();
+    expect($response->streamedContent())->toBe('the bytes');
+});
+
+it('hands out the Delivery route for a download whatever the visibility', function (): void {
+    withDiskUrl();
+
+    expect(publicAsset()->downloadUrl())->toContain('/admin/media/')
+        ->and(makeAsset()->downloadUrl())->toContain('/admin/media/');
 });
 
 it('never changes an asset placement by attaching it', function (): void {

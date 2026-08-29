@@ -101,6 +101,18 @@ class MediaAsset extends Model
     }
 
     /**
+     * Where this asset's content is addressed when the point is to save it
+     * rather than show it. Always the Delivery route, public asset included:
+     * a link's `download` attribute is ignored cross-origin, and the plugin
+     * assumes public placement is a foreign origin, so the route is the only
+     * place a saving disposition can be attached. See ADR-0001.
+     */
+    public function downloadUrl(): string
+    {
+        return DeliveryRoute::signedUrl($this, download: true);
+    }
+
+    /**
      * Whether delivery has to force a download for this asset. Read from the
      * stored type rather than from a column, so a rule tightened today covers
      * everything already in the library.

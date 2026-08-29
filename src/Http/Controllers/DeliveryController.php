@@ -36,25 +36,31 @@ class DeliveryController
     {
         $asset = MediaAsset::where('ulid', $asset)->firstOrFail();
 
+        $download = $request->boolean('download');
+
         // A public asset is already addressable at the disk's own URL, which
-        // is what `MediaAsset::url()` hands out for one. The route has no
-        // answer for it: serving it here would spend a signed, authorized
-        // request on bytes anyone can fetch, and throw the caching away. It is
-        // answered before View, and as a missing route rather than a refusal,
-        // because a public asset needs no View at all: there is nothing here
-        // to permit or deny.
-        abort_if($asset->visibility->isPublic(), 404);
+        // is what `MediaAsset::url()` hands out for one. Rendering it here
+        // would spend a signed, authorized request on bytes anyone can fetch
+        // and throw the caching away, so the route has no answer for it: not
+        // a refusal, since a public asset needs no View at all, but nothing
+        // to serve. Saving is the exception, because a link cannot tell the
+        // browser to save a foreign origin's response and public placement is
+        // a foreign origin by deployment.
+        abort_if($asset->visibility->isPublic() && ! $download, 404);
 
         abort_unless($this->authorization->allowsView($asset), 403);
 
-        $disposition = Disposition::for($asset, $request->boolean('download'));
+        $disposition = Disposition::for($asset, $download);
         $disk = Storage::disk($asset->disk);
         $filename = $asset->original_client_filename ?? $asset->display_name;
 
         // Rendering in place means the content policy has to reach the
         // browser, and a redirect leaves it behind: what renders streams,
-        // whatever the disk could have offered.
-        if ($disposition === Disposition::Inline || ! $disk->providesTemporaryUrls()) {
+        // whatever the disk could have offered. A public asset streams too,
+        // since the only reason it is here is the disposition, and handing
+        // that to a disk's response overrides is the one thing a redirect
+        // cannot promise.
+        if ($disposition === Disposition::Inline || $asset->visibility->isPublic() || ! $disk->providesTemporaryUrls()) {
             $response = $disk->response(
                 $asset->object_key,
                 $filename,
