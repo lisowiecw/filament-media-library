@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
+use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\IngestService;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
@@ -182,4 +183,26 @@ function clickCard(Testable $component, int $id): Testable
 
     return $component->set('mountedActions.0.data.library.selection', $selection)
         ->call('renderEverything');
+}
+
+/**
+ * Call one of the picker's exposed methods the way the browser calls it,
+ * through Filament's schema-component dispatcher rather than around it.
+ *
+ * @param  array<string, mixed>  $arguments
+ */
+function pickerCall(Testable $component, string $method, array $arguments = []): Testable
+{
+    return $component->call('callSchemaComponentMethod', 'form.cover_image', $method, $arguments);
+}
+
+/**
+ * Stage files where the browser stages a drop, then commit it.
+ */
+function dropOnPicker(Testable $component, UploadedFile ...$files): Testable
+{
+    /** @var MediaPicker $picker */
+    $picker = $component->instance()->form->getComponent('cover_image');
+
+    return pickerCall($component->set($picker->getDropStatePath(), $files), 'dropped');
 }

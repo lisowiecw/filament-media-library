@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Library;
 
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
@@ -16,6 +17,11 @@ use Lisowiecw\MediaLibrary\Models\MediaAsset;
  * Disk and directory never narrow it. They say where this field's own uploads
  * land, and an asset uploaded elsewhere is no less reusable for it.
  *
+ * A field may hand the scope a narrowing of its own. It is applied inside a
+ * nested group, so whatever the callback does it can only ever add a condition
+ * to what the package already decided: an `orWhere` reaching for a row the
+ * package excluded stays inside its own parentheses and widens nothing.
+ *
  * Offering is not authorization. The scope is ergonomics, so that a field only
  * shows what it could accept; View decides what may be delivered, and is asked
  * per card rather than per row of this query. See CONTEXT.md on Offer.
@@ -25,6 +31,7 @@ final readonly class OfferScope
     public function __construct(
         public IngestRules $rules,
         public Visibility $uploadVisibility,
+        public ?Closure $narrowing = null,
     ) {}
 
     /**
@@ -43,8 +50,27 @@ final readonly class OfferScope
         }
 
         $this->constrainToAcceptedTypes($query);
+        $this->applyNarrowing($query);
 
         return $query->orderByDesc('id');
+    }
+
+    /**
+     * The field's own `->scopeLibrary()`, boxed into a nested group so it can
+     * only narrow. The callback's return value is ignored on purpose: a
+     * callback that returns a different builder would be a way out of the box.
+     *
+     * @param  Builder<MediaAsset>  $query
+     */
+    private function applyNarrowing(Builder $query): void
+    {
+        if ($this->narrowing === null) {
+            return;
+        }
+
+        $query->where(function (Builder $query): void {
+            ($this->narrowing)($query);
+        });
     }
 
     /**

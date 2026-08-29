@@ -11,7 +11,9 @@ use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
+use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Livewire\Component;
 
 /**
@@ -65,30 +67,8 @@ class ArticleForm extends Component implements HasActions, HasSchemas
         $picker = MediaPicker::make('cover_image')
             ->label('Cover image');
 
-        if (array_key_exists('acceptedFileTypes', $this->picker)) {
-            /** @var array<string> $types */
-            $types = $this->picker['acceptedFileTypes'];
-            $picker->acceptedFileTypes($types);
-        }
-
-        foreach (['disk', 'directory', 'visibility'] as $setting) {
-            if (array_key_exists($setting, $this->picker)) {
-                /** @var string $value */
-                $value = $this->picker[$setting];
-                $picker->{$setting}($value);
-            }
-        }
-
-        foreach (['maxSize', 'minItems', 'maxItems'] as $setting) {
-            if (array_key_exists($setting, $this->picker)) {
-                /** @var int $value */
-                $value = $this->picker[$setting];
-                $picker->{$setting}($value);
-            }
-        }
-
-        if ($this->picker['required'] ?? false) {
-            $picker->required();
+        foreach ($this->picker as $setting => $value) {
+            $picker->{$setting}(...($value === true ? [] : [$this->pickerArgument($setting, $value)]));
         }
 
         return $schema
@@ -99,6 +79,20 @@ class ArticleForm extends Component implements HasActions, HasSchemas
                 TextInput::make('title')->required(),
                 $picker,
             ]);
+    }
+
+    /**
+     * A closure cannot ride a Livewire property, so a test names the callback
+     * it wants and the fixture supplies it.
+     */
+    protected function pickerArgument(string $setting, mixed $value): mixed
+    {
+        return match ([$setting, $value]) {
+            ['scopeLibrary', 'archive'] => fn (Builder $query) => $query->where('disk', 'archive'),
+            ['scopeLibrary', 'widen'] => fn (Builder $query) => $query->orWhere('visibility', 'private'),
+            ['thumbnailUsing', 'stamped'] => fn (MediaAsset $asset): string => 'https://thumbs.test/'.$asset->id,
+            default => $value,
+        };
     }
 
     public function save(): void

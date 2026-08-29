@@ -16,6 +16,12 @@ return [
         'empty' => 'Nothing attached yet.',
         'placement' => 'Uploads land on the :disk disk under :directory, and are :visibility.',
         'unavailable' => 'The selection for :field is no longer available.',
+        'full' => 'This field holds :count at most, so the rest were left out.',
+        'single_drop' => 'This field holds one file, so the first of the :count dropped was used.',
+        'drop_hint' => 'Drop a file here to upload and attach it.',
+        'move_up' => 'Move :name earlier',
+        'move_down' => 'Move :name later',
+        'detach' => 'Detach :name',
         'tabs' => [
             'library' => 'Library',
             'upload' => 'Upload',

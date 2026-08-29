@@ -4,10 +4,34 @@
     $assets = $getAssets();
     $total = $getTotal();
     $selected = $getSelectedAssets();
+    $dropKey = $getDropTargetKey();
+    $dropStatePath = $getDropStatePath();
 @endphp
 
 <x-dynamic-component :component="$getFieldWrapperView()" :field="$field">
-    <div class="fi-ml-library">
+    {{-- The tab body takes a drop too, and on the same terms as the inline
+         trigger: the file uploads and attaches at once rather than joining the
+         click-selection that waits for the confirm. --}}
+    <div
+        class="fi-ml-library"
+        @if ($dropKey !== null)
+            data-droppable="true"
+            x-data="{ hot: false }"
+            x-bind:class="{ 'fi-ml-library-hot': hot }"
+            x-on:dragover.prevent="hot = true"
+            x-on:dragleave.prevent="hot = false"
+            x-on:drop.prevent="
+                hot = false
+                const files = [...$event.dataTransfer.files]
+                if (! files.length) return
+                $wire.uploadMultiple(
+                    @js($dropStatePath),
+                    files,
+                    () => $wire.callSchemaComponentMethod(@js($dropKey), 'dropped'),
+                )
+            "
+        @endif
+    >
         {{-- The sidebar is rendered before the grid so a screen reader meets
              the narrowing before the results it produced. --}}
         <nav class="fi-ml-library-facets" aria-label="{{ __('media-library::messages.picker.grid.facets') }}">
@@ -86,7 +110,7 @@
                             wire:click="$set('{{ $statePath }}.selection', {{ \Illuminate\Support\Js::from($toggle($asset)) }})"
                         >
                             @if ($canPreview($asset))
-                                <img class="fi-ml-card-thumb" src="{{ $asset->url() }}" alt="{{ $asset->alt }}" loading="lazy">
+                                <img class="fi-ml-card-thumb" src="{{ $thumbnailUrl($asset) }}" alt="{{ $asset->alt }}" loading="lazy">
                             @else
                                 {{-- Nothing to preview: a quiet tinted tile rather than a spinner. --}}
                                 <span class="fi-ml-card-glyph fi-ml-card-glyph-{{ $glyphFamily($asset) }}" aria-hidden="true">

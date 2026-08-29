@@ -45,6 +45,12 @@ class LibraryGrid extends Field
 
     protected Closure|int|null $selectionLimit = null;
 
+    protected ?Closure $thumbnailUsing = null;
+
+    protected Closure|string|null $dropTargetKey = null;
+
+    protected Closure|string|null $dropStatePath = null;
+
     /**
      * The sidebar for the state it was built from, so one render's counts,
      * facet list and results all come from a single set of queries, and a
@@ -99,6 +105,66 @@ class LibraryGrid extends Field
         $this->selectionLimit = $limit;
 
         return $this;
+    }
+
+    /**
+     * How the field this grid belongs to resolves a card's preview image.
+     */
+    public function thumbnailUsing(?Closure $callback): static
+    {
+        $this->thumbnailUsing = $callback;
+
+        return $this;
+    }
+
+    /**
+     * The picker component a drop on this tab body belongs to, and where the
+     * browser stages that drop. Null while the owning field is not droppable,
+     * which is what leaves the tab body an offer to browse and nothing else.
+     */
+    public function dropTargetKey(Closure|string|null $key): static
+    {
+        $this->dropTargetKey = $key;
+
+        return $this;
+    }
+
+    public function dropStatePath(Closure|string|null $path): static
+    {
+        $this->dropStatePath = $path;
+
+        return $this;
+    }
+
+    public function getDropTargetKey(): ?string
+    {
+        /** @var string|null $key */
+        $key = $this->evaluate($this->dropTargetKey);
+
+        return $key;
+    }
+
+    public function getDropStatePath(): ?string
+    {
+        /** @var string|null $path */
+        $path = $this->evaluate($this->dropStatePath);
+
+        return $path;
+    }
+
+    /**
+     * The preview URL for a card that may paint one. It is asked for only
+     * after canPreview() has said yes, so a field's own callback is never
+     * handed an asset the viewer may not be delivered. The owning field always
+     * supplies the rule, so there is no second answer to the same question
+     * here.
+     */
+    public function thumbnailUrl(MediaAsset $asset): ?string
+    {
+        /** @var string|null $url */
+        $url = $this->evaluate($this->thumbnailUsing, ['asset' => $asset], [MediaAsset::class => $asset]);
+
+        return $url;
     }
 
     public function getSelectionLimit(): ?int

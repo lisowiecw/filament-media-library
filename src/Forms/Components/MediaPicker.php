@@ -9,8 +9,11 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Concerns\CanLimitItemsLength;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\FileUpload;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Support\Components\Attributes\ExposedLivewireMethod;
+use Filament\Support\Enums\Width;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -56,6 +59,20 @@ class MediaPicker extends Field
     protected string|Closure|null $visibility = null;
 
     protected int|Closure|null $maxSize = null;
+
+    protected bool|Closure|null $isMultiple = null;
+
+    protected bool|Closure $isReorderable = false;
+
+    protected bool|Closure $isDroppable = true;
+
+    protected ?Closure $scopeLibrary = null;
+
+    protected ?Closure $thumbnailUsing = null;
+
+    protected Width|string|Closure|null $modalWidth = null;
+
+    protected string|Closure|null $defaultTab = null;
 
     protected function setUp(): void
     {
@@ -127,6 +144,143 @@ class MediaPicker extends Field
         $this->maxSize = $size;
 
         return $this;
+    }
+
+    /**
+     * Whether this field holds more than one asset at a time. Saying so
+     * explicitly is the field author's way in; a picker that was never told is
+     * a single selection, which is what a cover image is.
+     */
+    public function multiple(bool|Closure $condition = true): static
+    {
+        $this->isMultiple = $condition;
+
+        return $this;
+    }
+
+    /**
+     * Let the attached items be put in a different order, by dragging and by
+     * the arrow controls beside each one. Order is the Picker value's order,
+     * so reordering is nothing but a rewrite of the list.
+     */
+    public function reorderable(bool|Closure $condition = true): static
+    {
+        $this->isReorderable = $condition;
+
+        return $this;
+    }
+
+    /**
+     * Whether this field accepts a dropped or chosen file at all. Turning it
+     * off makes the field reuse-only: no drop surface anywhere, and no Upload
+     * tab in the modal.
+     */
+    public function droppable(bool|Closure $condition = true): static
+    {
+        $this->isDroppable = $condition;
+
+        return $this;
+    }
+
+    /**
+     * A narrowing of what this field offers, for a topology the package's own
+     * rules cannot name. It can only narrow: see OfferScope.
+     */
+    public function scopeLibrary(?Closure $callback): static
+    {
+        $this->scopeLibrary = $callback;
+
+        return $this;
+    }
+
+    /**
+     * How this field resolves an asset's preview image. The default is the
+     * asset's own URL, which is what a grid card paints when View allows it.
+     */
+    public function thumbnailUsing(?Closure $callback): static
+    {
+        $this->thumbnailUsing = $callback;
+
+        return $this;
+    }
+
+    public function modalWidth(Width|string|Closure|null $width): static
+    {
+        $this->modalWidth = $width;
+
+        return $this;
+    }
+
+    /**
+     * Which tab the modal opens on, `library` or `upload`. A field that is not
+     * droppable has no Upload tab, so it opens on the Library tab whatever it
+     * was told.
+     */
+    public function defaultTab(string|Closure|null $tab): static
+    {
+        $this->defaultTab = $tab;
+
+        return $this;
+    }
+
+    public function isReorderable(): bool
+    {
+        return $this->isMultiple() && (bool) $this->evaluate($this->isReorderable);
+    }
+
+    public function isDroppable(): bool
+    {
+        return (bool) $this->evaluate($this->isDroppable);
+    }
+
+    public function getModalWidth(): Width|string|null
+    {
+        /** @var Width|string|null $width */
+        $width = $this->evaluate($this->modalWidth);
+
+        return $width;
+    }
+
+    /**
+     * The 1-based tab index Filament wants, from the tab name a field author
+     * gave. It is read off the tabs that were actually built, so a field that
+     * asked for a tab it does not have opens on the first one rather than on
+     * whatever happens to sit at that position.
+     */
+    public function getDefaultTabIndex(): int
+    {
+        /** @var string|null $tab */
+        $tab = $this->evaluate($this->defaultTab);
+
+        $position = array_search($tab, array_keys($this->getLibraryTabs()), strict: true);
+
+        return $position === false ? 1 : $position + 1;
+    }
+
+    /**
+     * The preview URL for one asset under this field's own rule, which the
+     * Library grid asks for through the closure this field hands it. A field
+     * that was never told falls back to the asset's URL.
+     */
+    public function getThumbnailUrl(MediaAsset $asset): ?string
+    {
+        if ($this->thumbnailUsing === null) {
+            return $asset->url();
+        }
+
+        /** @var string|null $url */
+        $url = $this->evaluate($this->thumbnailUsing, ['asset' => $asset], [MediaAsset::class => $asset]);
+
+        return $url;
+    }
+
+    /**
+     * How many assets this field may hold. A single selection is one whatever
+     * `maxItems` says, so the two never disagree.
+     */
+    public function getSelectionLimit(): ?int
+    {
+        return $this->isMultiple() ? $this->getMaxItems() : 1;
     }
 
     /**
@@ -244,12 +398,18 @@ class MediaPicker extends Field
     }
 
     /**
-     * Whether this field holds more than one asset at a time. A field says so
-     * by raising its own cardinality; a picker that was never told is a single
-     * selection, which is what a cover image is.
+     * Whether this field holds more than one asset at a time. An explicit
+     * `->multiple()` settles it; otherwise the field's own cardinality does,
+     * so `->maxItems(12)` alone is still a gallery.
      */
     public function isMultiple(): bool
     {
+        $explicit = $this->evaluate($this->isMultiple);
+
+        if ($explicit !== null) {
+            return (bool) $explicit;
+        }
+
         return ($this->getMaxItems() ?? 1) > 1 || ($this->getMinItems() ?? 0) > 1;
     }
 
@@ -257,6 +417,10 @@ class MediaPicker extends Field
      * Take a selection into the Picker value, in the order it was picked.
      * Single selection replaces what is there; the previous asset is left
      * alone, since a replacement is not a destruction.
+     *
+     * An id already in the list is not added a second time: one asset sits at
+     * one position in a field context, so a re-pick is a no-op rather than a
+     * duplicate row the reconcile would have to collapse later.
      *
      * @param  list<int>  $ids
      */
@@ -268,11 +432,165 @@ class MediaPicker extends Field
             return;
         }
 
-        $this->state($this->normalisePickerValue(
-            $this->isMultiple() ? [...$this->getPickerValue(), ...$ids] : array_slice($ids, -1),
+        if (! $this->isMultiple()) {
+            $this->putPickerValue(array_slice($ids, -1));
+
+            return;
+        }
+
+        $selection = $this->normalisePickerValue([...$this->getPickerValue(), ...$ids]);
+        $limit = $this->getMaxItems();
+
+        // What is attached already wins over what is arriving: dropping five
+        // files into a field with room for two must not silently evict the two
+        // that were there.
+        if ($limit !== null && count($selection) > $limit) {
+            $selection = array_slice($selection, 0, $limit);
+
+            $this->warn(__('media-library::messages.picker.full', ['count' => $limit]));
+        }
+
+        $this->putPickerValue($selection);
+    }
+
+    /**
+     * Detach one item from the Picker value. Nothing is written and nothing is
+     * deleted: the row goes on the next save's diff, and the asset is
+     * untouched either way.
+     */
+    #[ExposedLivewireMethod]
+    public function removeItem(int $id): void
+    {
+        $this->putPickerValue(array_values(array_filter(
+            $this->getPickerValue(),
+            fn (int $selected): bool => $selected !== $id,
+        )));
+    }
+
+    /**
+     * Put the items in a new order, as a drag ends. The order given is only
+     * honoured when it is a rearrangement of what is already there, so a stale
+     * or tampered list can neither attach nor detach anything.
+     *
+     * @param  list<int|string>  $ids
+     */
+    #[ExposedLivewireMethod]
+    public function reorderItems(array $ids): void
+    {
+        if (! $this->isReorderable()) {
+            return;
+        }
+
+        $reordered = $this->normalisePickerValue($ids);
+        $current = $this->getPickerValue();
+
+        if (count($reordered) !== count($current) || array_diff($reordered, $current) !== []) {
+            return;
+        }
+
+        $this->putPickerValue($reordered);
+    }
+
+    /**
+     * The same rearrangement, one step at a time, for the arrow controls that
+     * make reordering work from the keyboard. A step off either end is a
+     * no-op rather than a wrap.
+     */
+    #[ExposedLivewireMethod]
+    public function moveItem(int $id, int $step): void
+    {
+        $ids = $this->getPickerValue();
+        $from = array_search($id, $ids, strict: true);
+
+        if ($from === false) {
+            return;
+        }
+
+        $to = $from + $step;
+
+        if ($to < 0 || $to >= count($ids)) {
+            return;
+        }
+
+        [$ids[$from], $ids[$to]] = [$ids[$to], $ids[$from]];
+
+        $this->reorderItems(array_values($ids));
+    }
+
+    /**
+     * Where a dropped file is staged while the browser uploads it: beside the
+     * field's own state rather than inside it, because the Picker value is a
+     * list of ids and nothing else, in both directions.
+     */
+    public function getDropStatePath(): string
+    {
+        return $this->getStatePath().'_dropped';
+    }
+
+    /**
+     * Ingest whatever the browser has just staged at the drop path. This is
+     * the drop's whole commit: a drop attaches at once, unlike a click in the
+     * Library tab, which waits for the modal's confirm.
+     */
+    #[ExposedLivewireMethod]
+    public function dropped(): void
+    {
+        $livewire = $this->getLivewire();
+        $path = $this->getDropStatePath();
+
+        /** @var list<TemporaryUploadedFile> $files */
+        $files = array_values(array_filter(
+            Arr::wrap(data_get($livewire, $path)),
+            fn (mixed $file): bool => $file instanceof TemporaryUploadedFile,
         ));
 
-        $this->callAfterStateUpdated();
+        data_set($livewire, $path, []);
+
+        if ($files === [] || ! $this->isDroppable()) {
+            return;
+        }
+
+        // A fumbled drop on a cover image is not an error page: the first file
+        // is what was meant, and the rest are named as ignored.
+        if (! $this->isMultiple() && count($files) > 1) {
+            $this->warn(__('media-library::messages.picker.single_drop', ['count' => count($files)]));
+
+            $files = [$files[0]];
+        }
+
+        // The cap is on the gesture, not just on the list it leaves behind:
+        // what the field has no room for is never ingested in the first place.
+        $files = $this->withinRoom($files);
+
+        foreach ($files as $file) {
+            $this->upload($file);
+        }
+    }
+
+    /**
+     * As many of the dropped files as the field still has room for, saying so
+     * once when it has room for fewer.
+     *
+     * @param  list<TemporaryUploadedFile>  $files
+     * @return list<TemporaryUploadedFile>
+     */
+    private function withinRoom(array $files): array
+    {
+        $limit = $this->getSelectionLimit();
+
+        if ($limit === null) {
+            return $files;
+        }
+
+        $room = max(0, $limit - count($this->getPickerValue()));
+
+        if (count($files) <= $room) {
+            return $files;
+        }
+
+        $this->warn(__('media-library::messages.picker.full', ['count' => $limit]));
+
+        return array_slice($files, 0, $room);
     }
 
     /**
@@ -289,13 +607,33 @@ class MediaPicker extends Field
     }
 
     /**
+     * @param  list<int>  $ids
+     */
+    private function putPickerValue(array $ids): void
+    {
+        $this->state($this->normalisePickerValue($ids));
+
+        $this->callAfterStateUpdated();
+    }
+
+    /**
+     * Something the person should know about a gesture that half worked. It is
+     * a notification rather than a validation error, because nothing they did
+     * was invalid and there is nothing for them to correct.
+     */
+    private function warn(string $message): void
+    {
+        Notification::make()->warning()->title($message)->send();
+    }
+
+    /**
      * What the Library tab offers this field: an accepted-type match, plus
      * public or this field uploading private, minus the blocked types. The
      * field's placement disk and directory say nothing about it.
      */
     public function getOfferScope(): OfferScope
     {
-        return new OfferScope($this->getIngestRules(), $this->getPlacement()->visibility);
+        return new OfferScope($this->getIngestRules(), $this->getPlacement()->visibility, $this->scopeLibrary);
     }
 
     /**
@@ -305,33 +643,16 @@ class MediaPicker extends Field
      */
     public function getLibraryAction(): Action
     {
-        $rules = $this->getIngestRules();
-
         return Action::make('library')
             ->label(__('media-library::messages.picker.actions.library.label'))
             ->modalHeading($this->getLabel())
             ->modalDescription(fn (): string => $this->getPlacementSummary())
+            ->modalWidth($this->getModalWidth())
             ->modalSubmitActionLabel(__('media-library::messages.picker.actions.library.submit'))
             ->schema([
-                Tabs::make()->tabs([
-                    Tab::make(__('media-library::messages.picker.tabs.library'))
-                        ->schema([
-                            LibraryGrid::make('library')
-                                ->offerScope(fn (): OfferScope => $this->getOfferScope())
-                                ->selectionLimit(fn (): ?int => $this->isMultiple() ? $this->getMaxItems() : 1),
-                        ]),
-                    Tab::make(__('media-library::messages.picker.tabs.upload'))
-                        ->schema([
-                            FileUpload::make('file')
-                                ->hiddenLabel()
-                                ->storeFiles(false)
-                                ->when(
-                                    filled($accepted = $rules->acceptedTypes),
-                                    fn (FileUpload $upload): FileUpload => $upload->acceptedFileTypes($accepted ?? []),
-                                )
-                                ->maxSize($rules->maxUploadSize),
-                        ]),
-                ]),
+                Tabs::make()
+                    ->activeTab(fn (): int => $this->getDefaultTabIndex())
+                    ->tabs(array_values($this->getLibraryTabs())),
             ])
             ->action(function (array $data): void {
                 /** @var array<string, mixed> $library */
@@ -342,12 +663,55 @@ class MediaPicker extends Field
 
                 $this->select($selection);
 
-                $file = Arr::first(Arr::wrap($data['file'] ?? []));
-
-                if ($file instanceof TemporaryUploadedFile) {
-                    $this->upload($file);
+                foreach (Arr::wrap($data['file'] ?? []) as $file) {
+                    if ($file instanceof TemporaryUploadedFile) {
+                        $this->upload($file);
+                    }
                 }
             });
+    }
+
+    /**
+     * The modal's tabs. A field that is not droppable has no Upload tab at
+     * all, rather than one that refuses: the surface itself is the statement
+     * that this field is reuse-only.
+     *
+     * @return array<string, Tab> keyed by the name `defaultTab()` uses
+     */
+    protected function getLibraryTabs(): array
+    {
+        $tabs = [
+            'library' => Tab::make(__('media-library::messages.picker.tabs.library'))
+                ->schema([
+                    LibraryGrid::make('library')
+                        ->offerScope(fn (): OfferScope => $this->getOfferScope())
+                        ->thumbnailUsing(fn (MediaAsset $asset): ?string => $this->getThumbnailUrl($asset))
+                        ->selectionLimit(fn (): ?int => $this->getSelectionLimit())
+                        ->dropTargetKey(fn (): ?string => $this->isDroppable() ? $this->getKey() : null)
+                        ->dropStatePath(fn (): string => $this->getDropStatePath()),
+                ]),
+        ];
+
+        if (! $this->isDroppable()) {
+            return $tabs;
+        }
+
+        $rules = $this->getIngestRules();
+
+        $tabs['upload'] = Tab::make(__('media-library::messages.picker.tabs.upload'))
+            ->schema([
+                FileUpload::make('file')
+                    ->hiddenLabel()
+                    ->storeFiles(false)
+                    ->multiple($this->isMultiple())
+                    ->when(
+                        filled($accepted = $rules->acceptedTypes),
+                        fn (FileUpload $upload): FileUpload => $upload->acceptedFileTypes($accepted ?? []),
+                    )
+                    ->maxSize($rules->maxUploadSize),
+            ]);
+
+        return $tabs;
     }
 
     /**
