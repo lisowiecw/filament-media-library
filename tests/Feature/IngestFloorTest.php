@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
@@ -142,9 +143,14 @@ it('never rejects, hides or deletes an asset when the rules tighten', function (
     Storage::disk('media')->assertExists($asset->object_key);
 });
 
-it('writes a saving disposition onto stored active content', function (): void {
-    $headers = app(IngestService::class);
+it('writes onto the object the disposition the delivery rule earns', function (): void {
+    $service = app(IngestService::class);
 
-    expect($headers->storedHeaders('text/html'))->toHaveKey('ContentDisposition', 'attachment')
-        ->and($headers->storedHeaders('image/png'))->not->toHaveKey('ContentDisposition');
+    $active = new MediaAsset(['mime_type' => 'text/html', 'mime_source' => MimeSource::Sniffed]);
+    $guessed = new MediaAsset(['mime_type' => 'image/png', 'mime_source' => MimeSource::Unknown]);
+    $renders = new MediaAsset(['mime_type' => 'image/png', 'mime_source' => MimeSource::Sniffed]);
+
+    expect($service->storedHeaders($active))->toHaveKey('ContentDisposition', 'attachment')
+        ->and($service->storedHeaders($guessed))->toHaveKey('ContentDisposition', 'attachment')
+        ->and($service->storedHeaders($renders))->not->toHaveKey('ContentDisposition');
 });

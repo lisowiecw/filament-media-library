@@ -23,6 +23,16 @@ enum Disposition: string
     case Attachment = 'attachment';
 
     /**
+     * Whether this disposition saves the file rather than rendering it. Asked
+     * wherever the answer is written down instead of served, so the rule that
+     * only a saving disposition is worth stating lives on the type.
+     */
+    public function isSaving(): bool
+    {
+        return $this === self::Attachment;
+    }
+
+    /**
      * Asking for a download always wins, since saving a file is never less
      * safe than rendering it. The opposite is not a lever the request holds at
      * all: rendering in place is earned from the asset, so `?download=0` says

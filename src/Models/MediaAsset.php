@@ -9,7 +9,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
@@ -76,6 +78,26 @@ class MediaAsset extends Model
         static::creating(function (self $asset): void {
             $asset->ulid ??= (string) Str::ulid();
         });
+    }
+
+    /**
+     * Where this asset's content is addressed, and the single supported way to
+     * ask: nothing outside the package should build either shape by hand.
+     *
+     * A public asset resolves to the disk's own URL, so the bytes come from
+     * the CDN or bucket the application configured and stay cacheable. The
+     * host that answers is whatever the disk's `url` key names; the plugin
+     * adds no setting of its own and never checks the hostname, because it
+     * assumes public placement is a foreign origin.
+     *
+     * A private asset resolves to a freshly signed Delivery route, which
+     * re-checks View on every hit.
+     */
+    public function url(): string
+    {
+        return $this->visibility->isPublic()
+            ? Storage::disk($this->disk)->url($this->object_key)
+            : DeliveryRoute::signedUrl($this);
     }
 
     /**

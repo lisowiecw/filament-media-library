@@ -36,6 +36,15 @@ class DeliveryController
     {
         $asset = MediaAsset::where('ulid', $asset)->firstOrFail();
 
+        // A public asset is already addressable at the disk's own URL, which
+        // is what `MediaAsset::url()` hands out for one. The route has no
+        // answer for it: serving it here would spend a signed, authorized
+        // request on bytes anyone can fetch, and throw the caching away. It is
+        // answered before View, and as a missing route rather than a refusal,
+        // because a public asset needs no View at all: there is nothing here
+        // to permit or deny.
+        abort_if($asset->visibility->isPublic(), 404);
+
         abort_unless($this->authorization->allowsView($asset), 403);
 
         $disposition = Disposition::for($asset, $request->boolean('download'));

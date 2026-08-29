@@ -8,6 +8,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Lisowiecw\MediaLibrary\Delivery\Disposition;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
@@ -122,16 +123,21 @@ class IngestService
      * route sets its own. They bind here because changing one later would mean
      * rewriting the whole object.
      *
-     * Active content carries a saving Disposition, so the rule that it is
-     * never rendered in place holds outside the Delivery route too.
+     * The disposition is the one the Delivery route would earn, so an asset
+     * that is never rendered in place is not rendered in place on a public
+     * origin either. Only a saving disposition is written: `inline` is the
+     * browser's default already, and stating it would only be a promise the
+     * plugin cannot keep once the object leaves its hands.
      *
      * @return array<string, string>
      */
-    public function storedHeaders(?string $mimeType): array
+    public function storedHeaders(MediaAsset $asset): array
     {
+        $disposition = Disposition::for($asset, download: false);
+
         return array_filter([
-            'ContentType' => $mimeType,
-            'ContentDisposition' => ActiveContent::matches($mimeType) ? 'attachment' : null,
+            'ContentType' => $asset->mime_type,
+            'ContentDisposition' => $disposition->isSaving() ? $disposition->value : null,
             'CacheControl' => self::CACHE_CONTROL,
         ], fn (?string $value): bool => $value !== null);
     }
@@ -142,9 +148,9 @@ class IngestService
      *
      * @return array<string, string>
      */
-    private function writeOptions(Placement $placement, ?string $mimeType): array
+    private function writeOptions(Placement $placement, MediaAsset $asset): array
     {
-        return ['visibility' => $placement->visibility->value] + $this->storedHeaders($mimeType);
+        return ['visibility' => $placement->visibility->value] + $this->storedHeaders($asset);
     }
 
     /**
@@ -155,7 +161,7 @@ class IngestService
         $disk = Storage::disk($placement->disk);
 
         if ($contents !== null) {
-            $disk->put($asset->object_key, $contents, $this->writeOptions($placement, $asset->mime_type));
+            $disk->put($asset->object_key, $contents, $this->writeOptions($placement, $asset));
 
             return (int) $disk->size($asset->object_key);
         }
@@ -167,7 +173,7 @@ class IngestService
         }
 
         try {
-            $disk->put($asset->object_key, $stream, $this->writeOptions($placement, $asset->mime_type));
+            $disk->put($asset->object_key, $stream, $this->writeOptions($placement, $asset));
         } finally {
             fclose($stream);
         }
