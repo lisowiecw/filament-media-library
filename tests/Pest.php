@@ -11,11 +11,23 @@ use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\IngestService;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
+use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\Article;
+use Lisowiecw\MediaLibrary\Tests\Fixtures\ArticleForm;
+use Lisowiecw\MediaLibrary\Tests\Fixtures\HostPolicy;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\User;
 use Lisowiecw\MediaLibrary\Tests\TestCase;
+use Livewire\Features\SupportTesting\Testable;
+use Livewire\Livewire;
 
 uses(TestCase::class)->in(__DIR__);
+
+// The stand-in host policy answers through statics, so one test's answer would
+// otherwise be the next test's starting point.
+uses()->beforeEach(function (): void {
+    HostPolicy::$allows = true;
+    HostPolicy::$evaluations = 0;
+})->in(__DIR__);
 function ingest(UploadedFile $file, ?Placement $placement = null, ?IngestRules $rules = null): MediaAsset
 {
     return app(IngestService::class)->ingest($file, $placement ?? Placement::resolve(), $rules);
@@ -78,4 +90,28 @@ function user(): User
 function article(string $title = 'A post'): Article
 {
     return Article::create(['title' => $title]);
+}
+
+/**
+ * @param  array<string, mixed>  $picker
+ */
+function pickerForm(?Article $record = null, array $picker = []): Testable
+{
+    return Livewire::test(ArticleForm::class, [
+        'articleId' => $record?->getKey(),
+        'picker' => $picker,
+    ]);
+}
+
+function attach(Article $host, MediaAsset ...$assets): void
+{
+    foreach ($assets as $order => $asset) {
+        MediaAttachment::query()->create([
+            'media_asset_id' => $asset->id,
+            'host_type' => $host->getMorphClass(),
+            'host_id' => $host->getKey(),
+            'field_name' => 'cover_image',
+            'order' => $order,
+        ]);
+    }
 }

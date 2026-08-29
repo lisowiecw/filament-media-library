@@ -24,6 +24,6 @@
             </ul>
         @endif
 
-        {{ $getAction('upload') }}
+        {{ $getAction('library') }}
     </div>
 </x-dynamic-component>

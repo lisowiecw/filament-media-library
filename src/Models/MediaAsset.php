@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Lisowiecw\MediaLibrary\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -134,8 +135,15 @@ class MediaAsset extends Model
     {
         $rules ??= IngestRules::resolve();
 
-        $query->whereNotIn(DB::raw('lower(extension)'), $rules->blockedExtensions())
-            ->whereNotIn(DB::raw('lower(mime_type)'), $rules->blockedMimeTypes());
+        // A missing column is not a match: `lower(null) not in (...)` is null
+        // rather than true, which would quietly unoffer every asset whose type
+        // was never resolved.
+        $query->where(fn (Builder $query) => $query
+            ->whereNull('extension')
+            ->orWhereNotIn(DB::raw('lower(extension)'), $rules->blockedExtensions()))
+            ->where(fn (Builder $query) => $query
+                ->whereNull('mime_type')
+                ->orWhereNotIn(DB::raw('lower(mime_type)'), $rules->blockedMimeTypes()));
     }
 
     /**
@@ -152,6 +160,22 @@ class MediaAsset extends Model
     public function derivatives(): HasMany
     {
         return $this->hasMany(MediaDerivative::class);
+    }
+
+    /**
+     * The named assets, in the order they were named rather than the order the
+     * database hands them back. A picked list is ordered by the picking.
+     *
+     * @param  list<int>  $ids
+     * @return Collection<int, self>
+     */
+    public static function inNamedOrder(array $ids): Collection
+    {
+        return self::query()
+            ->whereIn('id', $ids)
+            ->get()
+            ->sortBy(fn (self $asset): int => (int) array_search($asset->id, $ids, strict: true))
+            ->values();
     }
 
     /**

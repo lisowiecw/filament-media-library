@@ -19,6 +19,7 @@ use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\IngestService;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
+use Lisowiecw\MediaLibrary\Library\OfferScope;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
@@ -81,7 +82,7 @@ class MediaPicker extends Field
         $this->rule(static fn (MediaPicker $component): Closure => $component->getAvailabilityRule());
 
         $this->registerActions([
-            fn (MediaPicker $component): Action => $component->getUploadAction(),
+            fn (MediaPicker $component): Action => $component->getLibraryAction(),
         ]);
     }
 
@@ -239,47 +240,91 @@ class MediaPicker extends Field
      */
     public function getSelectedAssets(): Collection
     {
-        $ids = $this->getPickerValue();
+        return MediaAsset::inNamedOrder($this->getPickerValue());
+    }
 
-        return MediaAsset::query()
-            ->whereIn('id', $ids)
-            ->get()
-            ->sortBy(fn (MediaAsset $asset): int => (int) array_search($asset->id, $ids, strict: true))
-            ->values();
+    /**
+     * Whether this field holds more than one asset at a time. A field says so
+     * by raising its own cardinality; a picker that was never told is a single
+     * selection, which is what a cover image is.
+     */
+    public function isMultiple(): bool
+    {
+        return ($this->getMaxItems() ?? 1) > 1 || ($this->getMinItems() ?? 0) > 1;
+    }
+
+    /**
+     * Take a selection into the Picker value, in the order it was picked.
+     * Single selection replaces what is there; the previous asset is left
+     * alone, since a replacement is not a destruction.
+     *
+     * @param  list<int>  $ids
+     */
+    public function select(array $ids): void
+    {
+        $ids = $this->normalisePickerValue($ids);
+
+        if ($ids === []) {
+            return;
+        }
+
+        $this->state($this->normalisePickerValue(
+            $this->isMultiple() ? [...$this->getPickerValue(), ...$ids] : array_slice($ids, -1),
+        ));
+
+        $this->callAfterStateUpdated();
     }
 
     /**
      * Ingest one uploaded file with this field's resolved Placement and select
-     * it. Single selection replaces what is there; the previous asset is left
-     * alone, since a replacement is not a destruction.
+     * it.
      */
     public function upload(TemporaryUploadedFile $file): MediaAsset
     {
         $asset = app(IngestService::class)->ingest($file, $this->getPlacement(), $this->getIngestRules());
 
-        $this->state([$asset->id]);
-        $this->callAfterStateUpdated();
+        $this->select([$asset->id]);
 
         return $asset;
     }
 
-    public function getUploadAction(): Action
+    /**
+     * What the Library tab offers this field: an accepted-type match, plus
+     * public or this field uploading private, minus the blocked types. The
+     * field's placement disk and directory say nothing about it.
+     */
+    public function getOfferScope(): OfferScope
+    {
+        return new OfferScope($this->getIngestRules(), $this->getPlacement()->visibility);
+    }
+
+    /**
+     * The one library modal: browse what the library already holds, or upload
+     * something new, and confirm to attach the selection in the order it was
+     * picked.
+     */
+    public function getLibraryAction(): Action
     {
         $rules = $this->getIngestRules();
 
-        return Action::make('upload')
-            ->label(__('media-library::messages.picker.actions.upload.label'))
+        return Action::make('library')
+            ->label(__('media-library::messages.picker.actions.library.label'))
             ->modalHeading($this->getLabel())
             ->modalDescription(fn (): string => $this->getPlacementSummary())
-            ->modalSubmitActionLabel(__('media-library::messages.picker.actions.upload.submit'))
+            ->modalSubmitActionLabel(__('media-library::messages.picker.actions.library.submit'))
             ->schema([
                 Tabs::make()->tabs([
+                    Tab::make(__('media-library::messages.picker.tabs.library'))
+                        ->schema([
+                            LibraryGrid::make('library')
+                                ->offerScope(fn (): OfferScope => $this->getOfferScope())
+                                ->selectionLimit(fn (): ?int => $this->isMultiple() ? $this->getMaxItems() : 1),
+                        ]),
                     Tab::make(__('media-library::messages.picker.tabs.upload'))
                         ->schema([
                             FileUpload::make('file')
                                 ->hiddenLabel()
                                 ->storeFiles(false)
-                                ->required()
                                 ->when(
                                     filled($accepted = $rules->acceptedTypes),
                                     fn (FileUpload $upload): FileUpload => $upload->acceptedFileTypes($accepted ?? []),
@@ -289,13 +334,19 @@ class MediaPicker extends Field
                 ]),
             ])
             ->action(function (array $data): void {
+                /** @var array<string, mixed> $library */
+                $library = $data['library'] ?? [];
+
+                /** @var list<int> $selection */
+                $selection = is_array($library['selection'] ?? null) ? $library['selection'] : [];
+
+                $this->select($selection);
+
                 $file = Arr::first(Arr::wrap($data['file'] ?? []));
 
-                if (! $file instanceof TemporaryUploadedFile) {
-                    return;
+                if ($file instanceof TemporaryUploadedFile) {
+                    $this->upload($file);
                 }
-
-                $this->upload($file);
             });
     }
 

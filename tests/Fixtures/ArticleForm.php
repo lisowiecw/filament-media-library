@@ -118,6 +118,16 @@ class ArticleForm extends Component implements HasActions, HasSchemas
         $record->update($data);
     }
 
+    /**
+     * Filament renders a mounted action's modal as a Livewire partial, which a
+     * component test never sees. Asking for a full render puts the modal back
+     * into the component's HTML so tests can read it.
+     */
+    public function renderEverything(): void
+    {
+        $this->forceRender();
+    }
+
     public function render(): View
     {
         return view('media-library-tests::article-form');

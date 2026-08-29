@@ -9,33 +9,6 @@ use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\Article;
-use Lisowiecw\MediaLibrary\Tests\Fixtures\ArticleForm;
-use Livewire\Features\SupportTesting\Testable;
-use Livewire\Livewire;
-
-/**
- * @param  array<string, mixed>  $picker
- */
-function pickerForm(?Article $record = null, array $picker = []): Testable
-{
-    return Livewire::test(ArticleForm::class, [
-        'articleId' => $record?->getKey(),
-        'picker' => $picker,
-    ]);
-}
-
-function attach(Article $host, MediaAsset ...$assets): void
-{
-    foreach ($assets as $order => $asset) {
-        MediaAttachment::query()->create([
-            'media_asset_id' => $asset->id,
-            'host_type' => $host->getMorphClass(),
-            'host_id' => $host->getKey(),
-            'field_name' => 'cover_image',
-            'order' => $order,
-        ]);
-    }
-}
 
 it('starts a create form with an empty ordered list', function (): void {
     pickerForm()->assertSchemaStateSet(['cover_image' => []]);
@@ -188,7 +161,7 @@ it('uploads through the modal with the field placement and attaches on save', fu
 
     pickerForm($host, ['directory' => 'posts/covers', 'visibility' => 'public'])
         ->callAction(
-            TestAction::make('upload')->schemaComponent('cover_image'),
+            TestAction::make('library')->schemaComponent('cover_image'),
             ['file' => [UploadedFile::fake()->image('holiday photo.png')]],
         )
         ->assertHasNoActionErrors()
@@ -211,7 +184,7 @@ it('replaces the selection of a single-selection field on upload, leaving the ol
 
     pickerForm($host)
         ->callAction(
-            TestAction::make('upload')->schemaComponent('cover_image'),
+            TestAction::make('library')->schemaComponent('cover_image'),
             ['file' => [UploadedFile::fake()->image('new.png')]],
         )
         ->call('save');
