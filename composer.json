@@ -21,6 +21,7 @@
     "require": {
         "php": "^8.3",
         "ext-fileinfo": "*",
+        "ext-gd": "*",
         "ext-intl": "*",
         "ext-mbstring": "*",
         "enshrined/svg-sanitize": "^0.22",

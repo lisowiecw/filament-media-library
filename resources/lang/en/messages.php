@@ -37,6 +37,7 @@ return [
             'facets' => 'Narrow the library',
             'sort' => 'Sort by',
             'selection_empty' => 'Nothing selected yet.',
+            'play' => 'Video',
         ],
 
         'facets' => [

@@ -76,6 +76,12 @@ abstract class TestCase extends Orchestra
     {
         $app['config']->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
         $app['config']->set('database.default', 'testing');
+
+        // Neither the cache nor the queue has a table in the test database, and
+        // neither is what any of these tests is about.
+        $app['config']->set('cache.default', 'array');
+        $app['config']->set('queue.default', 'discarded');
+        $app['config']->set('queue.connections.discarded', ['driver' => 'null']);
         $app['config']->set('filesystems.default', $this->disk);
         $app['config']->set('filesystems.disks.'.$this->disk, [
             'driver' => 'local',

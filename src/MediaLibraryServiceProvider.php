@@ -6,6 +6,7 @@ namespace Lisowiecw\MediaLibrary;
 
 use Illuminate\Support\Facades\Log;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
+use Lisowiecw\MediaLibrary\Derivatives\LazyDispatch;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\UploadCeiling;
 use Spatie\LaravelPackageTools\Package;
@@ -31,6 +32,11 @@ class MediaLibraryServiceProvider extends PackageServiceProvider
         // Scoped rather than singleton: the View cache it holds is only ever
         // correct for one request.
         $this->app->scoped(MediaAuthorization::class);
+
+        // Scoped for the same reason: the backfill allowance it spends is a
+        // per-render budget, and a singleton would hand one page's leftovers
+        // to the next.
+        $this->app->scoped(LazyDispatch::class);
     }
 
     /**

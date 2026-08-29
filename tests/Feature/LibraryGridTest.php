@@ -3,8 +3,11 @@
 declare(strict_types=1);
 
 use Filament\Actions\Testing\TestAction;
+use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
+use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Forms\Components\LibraryGrid;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
+use Lisowiecw\MediaLibrary\Models\MediaDerivative;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\HostPolicy;
 
 it('opens a modal with a Library tab and an Upload tab', function (): void {
@@ -158,6 +161,42 @@ it('renders a tinted glyph tile for an asset with nothing to preview', function 
     libraryModal()
         ->assertSee('fi-ml-card-glyph-application', escape: false)
         ->assertSee('PDF');
+});
+
+it('paints the pending tile, with the BlurHash beside it, while a thumb is in flight', function (): void {
+    makeAsset([
+        'display_name' => 'A big photo',
+        'visibility' => 'public',
+        'size' => 900_000,
+        'blurhash' => 'L6PZfSi_.AyE_3t7t7R**0o#DgR4',
+        'object_key' => 'media/big.jpg',
+    ]);
+
+    libraryModal()
+        ->assertSee('fi-ml-card-glyph-image', escape: false)
+        ->assertSee('L6PZfSi_.AyE_3t7t7R**0o#DgR4', escape: false)
+        ->assertDontSee('fi-ml-card-thumb', escape: false);
+});
+
+it('paints the thumb once one is ready', function (): void {
+    $asset = makeAsset(['display_name' => 'A big photo', 'visibility' => 'public', 'size' => 900_000, 'object_key' => 'media/big.jpg']);
+
+    $asset->derivatives()->create([
+        'variant' => DerivativeVariant::Thumb,
+        'disk' => $asset->disk,
+        'object_key' => MediaDerivative::keyFor($asset, DerivativeVariant::Thumb),
+        'status' => DerivativeStatus::Ready,
+    ]);
+
+    libraryModal()->assertSee('thumb.webp', escape: false);
+});
+
+it('badges a video card rather than looking for a poster frame', function (): void {
+    makeAsset(['display_name' => 'A clip', 'mime_type' => 'video/mp4', 'extension' => 'mp4', 'object_key' => 'media/clip.mp4']);
+
+    libraryModal()
+        ->assertSee('fi-ml-card-play', escape: false)
+        ->assertSee('fi-ml-card-glyph-video', escape: false);
 });
 
 it('attaches the selection in the order it was picked when the modal is confirmed', function (): void {

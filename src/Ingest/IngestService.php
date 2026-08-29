@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Delivery\Disposition;
+use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
+use Lisowiecw\MediaLibrary\Derivatives\SmallOriginal;
+use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
@@ -73,7 +76,34 @@ class IngestService
 
         $asset->save();
 
+        $this->dispatchThumb($asset, $path);
+
         return $asset;
+    }
+
+    /**
+     * Queue the thumb, so a fresh upload has a card ready without the person
+     * who made it waiting on image processing. Always queued and never inline:
+     * generation has no place in a web request.
+     *
+     * An original a browser renders already, small in both bytes and pixels,
+     * is skipped entirely and painted as itself. The pixels are read here
+     * because this is the last moment the file is on local disk; measuring it
+     * later would mean a read of the stored object to learn nothing.
+     */
+    private function dispatchThumb(MediaAsset $asset, string $path): void
+    {
+        if (! Derivatives::generatable($asset)) {
+            return;
+        }
+
+        $dimensions = @getimagesize($path);
+
+        if ($dimensions !== false && SmallOriginal::needsNoDerivatives($asset, max($dimensions[0], $dimensions[1]))) {
+            return;
+        }
+
+        Derivatives::dispatchEagerly($asset, DerivativeVariant::Thumb);
     }
 
     /**

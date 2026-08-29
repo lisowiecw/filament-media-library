@@ -109,13 +109,26 @@
                             wire:key="fi-ml-card-{{ $asset->id }}"
                             wire:click="$set('{{ $statePath }}.selection', {{ \Illuminate\Support\Js::from($toggle($asset)) }})"
                         >
-                            @if ($canPreview($asset))
-                                <img class="fi-ml-card-thumb" src="{{ $thumbnailUrl($asset) }}" alt="{{ $asset->alt }}" loading="lazy">
+                            @php($thumbnail = $cardThumbnail($asset))
+
+                            @if ($thumbnail !== null)
+                                <img class="fi-ml-card-thumb" src="{{ $thumbnail }}" alt="{{ $asset->alt }}" loading="lazy">
                             @else
-                                {{-- Nothing to preview: a quiet tinted tile rather than a spinner. --}}
-                                <span class="fi-ml-card-glyph fi-ml-card-glyph-{{ $glyphFamily($asset) }}" aria-hidden="true">
+                                {{-- Nothing to paint yet, or nothing to paint ever: one
+                                     quiet tinted tile rather than a spinner. The BlurHash
+                                     rides along for a consumer to decode over it while a
+                                     thumbnail is in flight. --}}
+                                <span
+                                    class="fi-ml-card-glyph fi-ml-card-glyph-{{ $glyphFamily($asset) }}"
+                                    @if ($blurhash($asset) !== null) data-blurhash="{{ $blurhash($asset) }}" @endif
+                                    aria-hidden="true"
+                                >
                                     {{ $glyph($asset) }}
                                 </span>
+                            @endif
+
+                            @if ($hasPlayBadge($asset))
+                                <span class="fi-ml-card-play">{{ __('media-library::messages.picker.grid.play') }}</span>
                             @endif
 
                             <span class="fi-ml-card-name">{!! $highlight($asset->display_name) !!}</span>

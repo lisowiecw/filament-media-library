@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
+use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\IngestService;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
@@ -260,12 +261,14 @@ class MediaPicker extends Field
     /**
      * The preview URL for one asset under this field's own rule, which the
      * Library grid asks for through the closure this field hands it. A field
-     * that was never told falls back to the asset's URL.
+     * that was never told resolves through the derivative pipeline, which
+     * answers with a rendering, with the original where the original is small
+     * enough to be its own, and with null while there is nothing to paint yet.
      */
     public function getThumbnailUrl(MediaAsset $asset): ?string
     {
         if ($this->thumbnailUsing === null) {
-            return $asset->url();
+            return Derivatives::thumbnailUrl($asset);
         }
 
         /** @var string|null $url */

@@ -418,7 +418,9 @@ class LibraryGrid extends Field
 
         $this->getSort()->apply($query);
 
-        return $query->limit($this->getLoaded())->get();
+        // Eager-loaded because every card asks its asset for a thumbnail, and
+        // a grid of 48 lazy loads is 48 queries.
+        return $query->with('derivatives')->limit($this->getLoaded())->get();
     }
 
     public function getTotal(): int
@@ -460,6 +462,39 @@ class LibraryGrid extends Field
         return $allowed
             && is_string($asset->mime_type)
             && TypeFamily::of($asset->mime_type) === 'image';
+    }
+
+    /**
+     * What this card paints, resolved once because resolving is what queues a
+     * missing thumb. Null covers everything with nothing to paint: a card that
+     * may not preview at all, and one whose thumb is still in flight or whose
+     * generation gave up. Pending and failed paint the same quiet tile,
+     * because a person waiting on a thumbnail and a person who will never get
+     * one both want the grid to sit still rather than spin.
+     */
+    public function cardThumbnail(MediaAsset $asset): ?string
+    {
+        return $this->canPreview($asset) ? $this->thumbnailUrl($asset) : null;
+    }
+
+    /**
+     * A video always gets a glyph tile and a play badge, never a poster frame:
+     * a frame would mean an optional binary, which the package does not ask an
+     * operator to install for a card.
+     */
+    public function hasPlayBadge(MediaAsset $asset): bool
+    {
+        return $this->glyphFamily($asset) === 'video';
+    }
+
+    /**
+     * The BlurHash the card paints under an in-flight thumbnail, handed to the
+     * view as part of the grid payload and decoded by the consumer. Null where
+     * there is none, and the dimmed tile stands alone.
+     */
+    public function blurhash(MediaAsset $asset): ?string
+    {
+        return $this->canPreview($asset) ? $asset->blurhash : null;
     }
 
     /**
