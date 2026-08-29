@@ -32,6 +32,8 @@
 - **Derivative**: A plugin-generated, downscaled rendering of a Media Asset, stored as its own object and recorded as a child of the asset. A derivative is never a Media Asset: it cannot be attached, named or offered, and it inherits its parent's placement and visibility rather than carrying its own. Its key is immutable, so it dies with the asset rather than being edited.
   _Avoid_: Thumbnail (that names one variant, not the concept), version, rendition
 - **Variant**: The named size a Derivative was generated at. The set is fixed by the package; only the dimensions are configurable.
+- **Placeholder painting**: What a card shows in place of a thumbnail that does not exist yet, painted from the asset's BlurHash: an average colour with a few CSS gradients over it, decoded in PHP because the package ships no assets to decode it in the browser. It is a rendering of the hash rather than of the file, so it needs no read and no derivative, and it is deliberately coarse: the hash is emitted beside it for a host application that wants a true decode. Where there is no hash, or the stored value is not one, the card falls back to the dimmed tile.
+  _Avoid_: Blur, LQIP, preview (a preview is the thumbnail itself, which this stands in for)
 - **Stale derivative**: A Derivative generated under settings the application has since changed. It is detected by comparison, not inspection: the row records a digest of the settings that produced it. Stale is not broken, so a stale derivative is still served; it is refreshed only when an operator asks. Unknown provenance is not staleness.
   _Avoid_: Expired, invalid, orphaned (nothing is stranded, since a regeneration overwrites in place)
 

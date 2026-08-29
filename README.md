@@ -120,6 +120,32 @@ survives.
 **The route's URL, name and parameters are internal.** They may change in any
 release. Do not build them by hand or hardcode them in a template.
 
+### Card placeholders
+
+A grid card whose thumbnail is not generated yet paints the asset's own BlurHash
+rather than a flat tile. The package ships no JavaScript and no stylesheet, so the
+hash is decoded in PHP and painted as a handful of CSS gradients in a `style`
+attribute. Nothing to install, and nothing to build.
+
+That painting is coarse on purpose. The card also carries the hash verbatim as
+`data-blurhash` on the same element, so an application that already has a decoder
+can render a proper one over the top:
+
+```js
+document.querySelectorAll('[data-blurhash]').forEach((tile) => {
+    // decode tile.dataset.blurhash however your app already does
+})
+```
+
+`data-blurhash` is present only where the asset has a hash and the tile is
+standing in for a thumbnail; a card showing a real thumbnail never carries one.
+It is emitted even where the package declined to paint from it, so a decoder of
+your own still gets the value.
+
+The package's own painting lives entirely in that element's `style` attribute,
+so a decoder that renders over the top either paints above it or clears it with
+`tile.style.background = ''`.
+
 ## Changelog
 
 Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.

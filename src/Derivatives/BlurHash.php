@@ -68,6 +68,137 @@ final readonly class BlurHash
     }
 
     /**
+     * The hash read back as a small grid of sRGB colours, sampled at the
+     * centre of each cell, or null when the string is not a hash this can
+     * trust: a stored value is data, and a card is not the place to discover
+     * that a column holds something else.
+     *
+     * @return list<array{int, int, int}>|null
+     */
+    public static function decode(string $hash, int $across, int $down): ?array
+    {
+        $components = self::components($hash);
+
+        if ($components === null) {
+            return null;
+        }
+
+        [$componentsX, $componentsY, $factors] = $components;
+
+        $grid = [];
+
+        for ($y = 0; $y < $down; $y++) {
+            for ($x = 0; $x < $across; $x++) {
+                $positionX = ($x + 0.5) / $across;
+                $positionY = ($y + 0.5) / $down;
+
+                $colour = [0.0, 0.0, 0.0];
+
+                for ($componentY = 0; $componentY < $componentsY; $componentY++) {
+                    for ($componentX = 0; $componentX < $componentsX; $componentX++) {
+                        $basis = cos(M_PI * $componentX * $positionX) * cos(M_PI * $componentY * $positionY);
+                        $factor = $factors[$componentY * $componentsX + $componentX];
+
+                        $colour[0] += $factor[0] * $basis;
+                        $colour[1] += $factor[1] * $basis;
+                        $colour[2] += $factor[2] * $basis;
+                    }
+                }
+
+                $grid[] = [self::srgb($colour[0]), self::srgb($colour[1]), self::srgb($colour[2])];
+            }
+        }
+
+        return $grid;
+    }
+
+    /**
+     * The hash split into its component count and its linear-light factors.
+     *
+     * @return array{int, int, list<array{float, float, float}>}|null
+     */
+    private static function components(string $hash): ?array
+    {
+        if (mb_strlen($hash) < 6) {
+            return null;
+        }
+
+        $sizeFlag = self::base83Decode(mb_substr($hash, 0, 1));
+        $quantisedMax = self::base83Decode(mb_substr($hash, 1, 1));
+
+        if ($sizeFlag === null || $quantisedMax === null) {
+            return null;
+        }
+
+        $componentsX = $sizeFlag % 9 + 1;
+        $componentsY = intdiv($sizeFlag, 9) + 1;
+
+        if (mb_strlen($hash) !== 6 + 2 * ($componentsX * $componentsY - 1)) {
+            return null;
+        }
+
+        $direct = self::base83Decode(mb_substr($hash, 2, 4));
+
+        if ($direct === null) {
+            return null;
+        }
+
+        $maximum = ($quantisedMax + 1) / 166;
+        $factors = [[
+            self::linear($direct >> 16 & 255),
+            self::linear($direct >> 8 & 255),
+            self::linear($direct & 255),
+        ]];
+
+        for ($index = 1; $index < $componentsX * $componentsY; $index++) {
+            $alternating = self::base83Decode(mb_substr($hash, 4 + $index * 2, 2));
+
+            if ($alternating === null) {
+                return null;
+            }
+
+            $factors[] = self::decodeAlternating($alternating, $maximum);
+        }
+
+        return [$componentsX, $componentsY, $factors];
+    }
+
+    /**
+     * @return array{float, float, float}
+     */
+    private static function decodeAlternating(int $value, float $maximum): array
+    {
+        $dequantise = static fn (int $quantised): float => self::signedPow(($quantised - 9) / 9, 2.0) * $maximum;
+
+        return [
+            $dequantise(intdiv($value, 19 * 19)),
+            $dequantise(intdiv($value, 19) % 19),
+            $dequantise($value % 19),
+        ];
+    }
+
+    private static function base83Decode(string $encoded): ?int
+    {
+        if ($encoded === '') {
+            return null;
+        }
+
+        $value = 0;
+
+        foreach (mb_str_split($encoded) as $character) {
+            $digit = mb_strpos(self::ALPHABET, $character);
+
+            if ($digit === false) {
+                return null;
+            }
+
+            $value = $value * 83 + $digit;
+        }
+
+        return $value;
+    }
+
+    /**
      * The sampled grid, as linear-light channels in row-major order.
      *
      * @return array{int, int, list<array{float, float, float}>}
@@ -156,9 +287,12 @@ final readonly class BlurHash
     {
         $value = max(0.0, min(1.0, $value));
 
+        // Truncated rather than rounded, because the `+ 0.5` is the rounding:
+        // rounding on top of it biases every channel a step bright, which only
+        // stays invisible while the same code both writes and reads the hash.
         return $value <= 0.0031308
-            ? (int) round($value * 12.92 * 255 + 0.5)
-            : (int) round((1.055 * $value ** (1 / 2.4) - 0.055) * 255 + 0.5);
+            ? (int) ($value * 12.92 * 255 + 0.5)
+            : (int) ((1.055 * $value ** (1 / 2.4) - 0.055) * 255 + 0.5);
     }
 
     private static function base83(int $value, int $length): string

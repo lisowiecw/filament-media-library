@@ -175,7 +175,36 @@ it('paints the pending tile, with the BlurHash beside it, while a thumb is in fl
     libraryModal()
         ->assertSee('fi-ml-card-glyph-image', escape: false)
         ->assertSee('L6PZfSi_.AyE_3t7t7R**0o#DgR4', escape: false)
+        ->assertSee('radial-gradient', escape: false)
         ->assertDontSee('fi-ml-card-thumb', escape: false);
+});
+
+it('leaves the pending tile dimmed and unpainted where the asset carries no hash', function (): void {
+    makeAsset([
+        'display_name' => 'A big photo',
+        'visibility' => 'public',
+        'size' => 900_000,
+        'object_key' => 'media/big.jpg',
+    ]);
+
+    libraryModal()
+        ->assertSee('fi-ml-card-glyph-image', escape: false)
+        ->assertDontSee('radial-gradient', escape: false)
+        ->assertDontSee('data-blurhash', escape: false);
+});
+
+it('leaves the pending tile dimmed rather than painting from a stored value that is not a hash', function (): void {
+    makeAsset([
+        'display_name' => 'A big photo',
+        'visibility' => 'public',
+        'size' => 900_000,
+        'blurhash' => 'not a hash',
+        'object_key' => 'media/big.jpg',
+    ]);
+
+    libraryModal()
+        ->assertDontSee('radial-gradient', escape: false)
+        ->assertSee('data-blurhash', escape: false);
 });
 
 it('paints the thumb once one is ready', function (): void {

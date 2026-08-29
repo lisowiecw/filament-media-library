@@ -115,11 +115,15 @@
                                 <img class="fi-ml-card-thumb" src="{{ $thumbnail }}" alt="{{ $asset->alt }}" loading="lazy">
                             @else
                                 {{-- Nothing to paint yet, or nothing to paint ever: one
-                                     quiet tinted tile rather than a spinner. The BlurHash
-                                     rides along for a consumer to decode over it while a
-                                     thumbnail is in flight. --}}
+                                     quiet tinted tile rather than a spinner. Where there
+                                     is a BlurHash the tile wears it as gradients, and the
+                                     hash itself rides along for a consumer who wants to
+                                     decode it properly over the top. --}}
+                                @php($paint = $blurhashPaint($asset))
+
                                 <span
                                     class="fi-ml-card-glyph fi-ml-card-glyph-{{ $glyphFamily($asset) }}"
+                                    @if ($paint !== null) style="{{ $paint }}" @endif
                                     @if ($blurhash($asset) !== null) data-blurhash="{{ $blurhash($asset) }}" @endif
                                     aria-hidden="true"
                                 >

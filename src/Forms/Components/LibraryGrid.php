@@ -9,6 +9,7 @@ use Filament\Forms\Components\Field;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\HtmlString;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
+use Lisowiecw\MediaLibrary\Derivatives\BlurHashPaint;
 use Lisowiecw\MediaLibrary\Ingest\TypeFamily;
 use Lisowiecw\MediaLibrary\Library\Facets\Facet;
 use Lisowiecw\MediaLibrary\Library\FacetSidebar;
@@ -495,6 +496,19 @@ class LibraryGrid extends Field
     public function blurhash(MediaAsset $asset): ?string
     {
         return $this->canPreview($asset) ? $asset->blurhash : null;
+    }
+
+    /**
+     * The pending tile's own painting of the BlurHash, as an inline style, or
+     * null where there is no hash or the stored value is not one. Coarse by
+     * design; `data-blurhash` carries the hash itself for a consumer who wants
+     * a real decode over the top.
+     */
+    public function blurhashPaint(MediaAsset $asset): ?string
+    {
+        $hash = $this->blurhash($asset);
+
+        return $hash === null ? null : BlurHashPaint::css($hash);
     }
 
     /**
