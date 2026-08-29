@@ -18,6 +18,10 @@ A reusable media library and configurable file picker for Filament.
 | ------- | --- | ------- | -------- |
 | 0.x | 8.3, 8.4, 8.5 | 13.x | 5.x (guaranteed), 4.x (best effort) |
 
+### PHP extensions
+
+`fileinfo`, `intl`, `mbstring` and `gd`. GD is what generates thumbnails: without it the queued derivative job fails and every card falls back to a glyph tile. No optional binary is required anywhere.
+
 Filament 4 support is best effort, limited to the plugin and field APIs both majors share. It rides the same Composer line as Filament 5 and is guarded by a CI job on every push, so a red Filament 4 job blocks a release. See [ADR 0008](docs/adr/0008-filament-4-support-rides-one-line-guarded-by-ci.md).
 
 ## Installation
