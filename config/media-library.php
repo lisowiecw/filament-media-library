@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Lisowiecw\MediaLibrary\Library\FacetSidebar;
+
 return [
 
     /*
@@ -106,7 +108,7 @@ return [
 
     'search_debounce' => (int) env('MEDIA_LIBRARY_SEARCH_DEBOUNCE', 400),
 
-    'facet_count_threshold' => (int) env('MEDIA_LIBRARY_FACET_COUNT_THRESHOLD', 50_000),
+    'facet_count_threshold' => (int) env('MEDIA_LIBRARY_FACET_COUNT_THRESHOLD', FacetSidebar::DEFAULT_THRESHOLD),
 
     /*
     |--------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 @php
     $statePath = $getStatePath();
+    $facets = $getFacets();
     $assets = $getAssets();
     $total = $getTotal();
     $selected = $getSelectedAssets();
@@ -7,6 +8,54 @@
 
 <x-dynamic-component :component="$getFieldWrapperView()" :field="$field">
     <div class="fi-ml-library">
+        {{-- The sidebar is rendered before the grid so a screen reader meets
+             the narrowing before the results it produced. --}}
+        <nav class="fi-ml-library-facets" aria-label="{{ __('media-library::messages.picker.grid.facets') }}">
+            @foreach ($facets as $facet)
+                <fieldset class="fi-ml-facet" data-facet="{{ $facet->key() }}">
+                    <legend>{{ $facetLabel($facet) }}</legend>
+
+                    <ul>
+                        @foreach ($getSidebar()->options($facet) as $option)
+                            @php($count = $facetCount($facet, $option))
+                            <li>
+                                <button
+                                    type="button"
+                                    class="fi-ml-facet-option @if ($isFacetSelected($facet, $option)) fi-ml-facet-option-selected @endif"
+                                    data-facet-option="{{ $facet->key() }}:{{ $option }}"
+                                    @if ($count !== null) data-facet-count="{{ $count }}" @endif
+                                    aria-pressed="{{ $isFacetSelected($facet, $option) ? 'true' : 'false' }}"
+                                    wire:key="fi-ml-facet-{{ $facet->key() }}-{{ $loop->index }}"
+                                    wire:click="$set('{{ $statePath }}.filters', {{ \Illuminate\Support\Js::from($toggleFacet($facet, $option)) }})"
+                                >
+                                    <span class="fi-ml-facet-option-label">{{ $facetOptionLabel($facet, $option) }}</span>
+
+                                    {{-- A library too large to count leaves the option
+                                         listed and clickable with no number beside it. --}}
+                                    @if ($count !== null)
+                                        <span class="fi-ml-facet-option-count">{{ $count }}</span>
+                                    @endif
+                                </button>
+                            </li>
+                        @endforeach
+                    </ul>
+                </fieldset>
+            @endforeach
+        </nav>
+
+        <label class="fi-ml-library-sort">
+            {{ __('media-library::messages.picker.grid.sort') }}
+
+            <select
+                class="fi-input"
+                wire:model.live="{{ $statePath }}.sort"
+            >
+                @foreach ($getSortOptions() as $sort)
+                    <option value="{{ $sort->value }}" @selected($getSort() === $sort)>{{ $sortLabel($sort) }}</option>
+                @endforeach
+            </select>
+        </label>
+
         <input
             type="search"
             class="fi-input fi-ml-library-search"

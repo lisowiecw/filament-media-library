@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Filament\Actions\Testing\TestAction;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -114,4 +115,71 @@ function attach(Article $host, MediaAsset ...$assets): void
             'order' => $order,
         ]);
     }
+}
+
+/**
+ * A library at a size a person would actually browse, seeded in one insert so
+ * the test spends its time on the grid rather than on the fixtures.
+ *
+ * @return list<int>
+ */
+function seedLibrary(int $count, string $prefix = 'Asset'): array
+{
+    $rows = [];
+
+    foreach (range(1, $count) as $index) {
+        $rows[] = [
+            'ulid' => (string) Str::ulid(),
+            'display_name' => $prefix.' '.$index,
+            'original_client_filename' => Str::slug($prefix).'-'.$index.'.jpg',
+            'extension' => 'jpg',
+            'mime_type' => 'image/jpeg',
+            'mime_source' => MimeSource::Sniffed->value,
+            'size' => 2048,
+            'disk' => 'media',
+            'object_key' => 'media/'.Str::slug($prefix).'-'.$index.'.jpg',
+            'visibility' => 'private',
+            'source' => MediaSource::Upload->value,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+    }
+
+    MediaAsset::query()->insert($rows);
+
+    return MediaAsset::query()->orderBy('id')->pluck('id')->all();
+}
+
+/**
+ * @param  array<string, mixed>  $picker
+ */
+function libraryModal(array $picker = []): Testable
+{
+    return pickerForm(article(), $picker)
+        ->mountAction(TestAction::make('library')->schemaComponent('cover_image'))
+        ->call('renderEverything');
+}
+
+function gridState(Testable $component, string $key): mixed
+{
+    return $component->get('mountedActions.0.data.library.'.$key);
+}
+
+function search(Testable $component, string $query): Testable
+{
+    return $component->set('mountedActions.0.data.library.search', $query)
+        ->call('renderEverything');
+}
+
+function clickCard(Testable $component, int $id): Testable
+{
+    /** @var array<int> $selection */
+    $selection = gridState($component, 'selection') ?? [];
+
+    $selection = in_array($id, $selection, false)
+        ? array_values(array_filter($selection, fn (int $selected): bool => $selected !== $id))
+        : [...$selection, $id];
+
+    return $component->set('mountedActions.0.data.library.selection', $selection)
+        ->call('renderEverything');
 }
