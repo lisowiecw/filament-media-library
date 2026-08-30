@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
 use Lisowiecw\MediaLibrary\Delivery\Disposition;
+use Lisowiecw\MediaLibrary\Delivery\DownloadFilename;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
@@ -61,7 +62,7 @@ class DeliveryController
 
         $disposition = Disposition::for($asset, $download);
         $disk = Storage::disk($asset->disk);
-        $filename = $asset->original_client_filename ?? $asset->display_name;
+        $header = DownloadFilename::header($disposition, $asset);
 
         // Rendering in place means the content policy has to reach the
         // browser, and a redirect leaves it behind: what renders streams,
@@ -72,9 +73,11 @@ class DeliveryController
         if ($disposition === Disposition::Inline || $asset->visibility->isPublic() || ! $disk->providesTemporaryUrls()) {
             $response = $disk->response(
                 $asset->object_key,
-                $filename,
-                ['Content-Type' => $asset->mime_type ?? 'application/octet-stream'],
-                $disposition->value,
+                null,
+                [
+                    'Content-Type' => $asset->mime_type ?? 'application/octet-stream',
+                    'Content-Disposition' => $header,
+                ],
             );
 
             return $this->guarded($response);
@@ -89,7 +92,7 @@ class DeliveryController
             now()->addSeconds(DeliveryRoute::ttl()),
             [
                 'ResponseContentType' => $asset->mime_type ?? 'application/octet-stream',
-                'ResponseContentDisposition' => $disposition->value.'; filename="'.$filename.'"',
+                'ResponseContentDisposition' => $header,
             ],
         )));
     }

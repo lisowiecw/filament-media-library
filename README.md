@@ -143,6 +143,30 @@ survives.
 **The route's URL, name and parameters are internal.** They may change in any
 release. Do not build them by hand or hardcode them in a template.
 
+#### The saved filename
+
+A file saved to a viewer's disk is called whatever the uploader's own file was
+called, and the asset's Display name only where there is no original filename.
+One resolver overrides that for the whole application:
+
+```php
+use Lisowiecw\MediaLibrary\Models\MediaAsset;
+
+MediaLibraryPlugin::make()
+    ->downloadFilenameUsing(fn (MediaAsset $asset): string => $asset->display_name);
+```
+
+The resolver is handed the asset and nothing else, so it cannot vary the name by
+host model: an asset can be attached in many places, and the header baked onto
+the stored object is written at upload, before any attachment exists. The
+editable Display name is the per-asset lever to reach for instead.
+
+Its answer is scrubbed by the same rules as an uploaded filename, so a resolver
+cannot break or inject a header, and the asset's own extension is appended where
+the answer is a stem without one. The same resolver names both the route's
+`Content-Disposition` and the one written onto the object at upload, so a disk
+that ignores response overrides still serves the same name.
+
 ### Card placeholders
 
 A grid card whose thumbnail is not generated yet paints the asset's own BlurHash

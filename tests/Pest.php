@@ -6,6 +6,7 @@ use Filament\Actions\Testing\TestAction;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Lisowiecw\MediaLibrary\Delivery\DownloadFilename;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
@@ -34,6 +35,7 @@ uses()->beforeEach(function (): void {
     HostPolicy::$allows = true;
     HostPolicy::$evaluations = 0;
     ManagementPolicy::reset();
+    DownloadFilename::forget();
 })->in(__DIR__);
 function ingest(UploadedFile $file, ?Placement $placement = null, ?IngestRules $rules = null): MediaAsset
 {

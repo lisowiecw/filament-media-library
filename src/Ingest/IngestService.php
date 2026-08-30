@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Delivery\Disposition;
+use Lisowiecw\MediaLibrary\Delivery\DownloadFilename;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Derivatives\SmallOriginal;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
@@ -159,6 +160,13 @@ class IngestService
      * browser's default already, and stating it would only be a promise the
      * plugin cannot keep once the object leaves its hands.
      *
+     * A saving disposition carries the Saved filename, resolved by the one
+     * resolver the Delivery route also asks, so a disk that ignores the
+     * route's response overrides still serves the name the route would have
+     * given. It is the resolver that is shared rather than the answer: this
+     * one is baked at upload, so a Display name edited afterwards moves the
+     * route's header and leaves this one where it was.
+     *
      * @return array<string, string>
      */
     public function storedHeaders(MediaAsset $asset): array
@@ -167,7 +175,7 @@ class IngestService
 
         return array_filter([
             'ContentType' => $asset->mime_type,
-            'ContentDisposition' => $disposition->isSaving() ? $disposition->value : null,
+            'ContentDisposition' => $disposition->isSaving() ? DownloadFilename::header($disposition, $asset) : null,
             'CacheControl' => self::CACHE_CONTROL,
         ], fn (?string $value): bool => $value !== null);
     }

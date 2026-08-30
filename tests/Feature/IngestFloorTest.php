@@ -146,11 +146,13 @@ it('never rejects, hides or deletes an asset when the rules tighten', function (
 it('writes onto the object the disposition the delivery rule earns', function (): void {
     $service = app(IngestService::class);
 
-    $active = new MediaAsset(['mime_type' => 'text/html', 'mime_source' => MimeSource::Sniffed]);
-    $guessed = new MediaAsset(['mime_type' => 'image/png', 'mime_source' => MimeSource::Unknown]);
+    $named = ['original_client_filename' => 'notes.html', 'extension' => 'html'];
+
+    $active = new MediaAsset(['mime_type' => 'text/html', 'mime_source' => MimeSource::Sniffed] + $named);
+    $guessed = new MediaAsset(['mime_type' => 'image/png', 'mime_source' => MimeSource::Unknown] + $named);
     $renders = new MediaAsset(['mime_type' => 'image/png', 'mime_source' => MimeSource::Sniffed]);
 
-    expect($service->storedHeaders($active))->toHaveKey('ContentDisposition', 'attachment')
-        ->and($service->storedHeaders($guessed))->toHaveKey('ContentDisposition', 'attachment')
+    expect($service->storedHeaders($active))->toHaveKey('ContentDisposition', 'attachment; filename=notes.html')
+        ->and($service->storedHeaders($guessed))->toHaveKey('ContentDisposition', 'attachment; filename=notes.html')
         ->and($service->storedHeaders($renders))->not->toHaveKey('ContentDisposition');
 });
