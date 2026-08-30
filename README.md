@@ -124,6 +124,75 @@ If you deliberately serve a public disk through your own origin, set
 `media-library.enforce_disk_visibility` (`MEDIA_LIBRARY_ENFORCE_DISK_VISIBILITY`)
 to false, which stands both rules down.
 
+#### Two buckets, one library
+
+A Cloudflare R2 deployment that keeps public and private media apart runs two
+buckets, and a bucket is a Laravel disk, so the whole arrangement is two disks
+named once:
+
+```php
+// config/filesystems.php
+'r2-public' => [
+    'driver' => 's3',
+    // ... key, secret, region, bucket, endpoint
+    'url' => env('R2_PUBLIC_URL'),  // the public hostname bound to this bucket
+],
+
+'r2-private' => [
+    'driver' => 's3',
+    // ... key, secret, region, bucket, endpoint
+    // no `url`: nothing about this bucket is publicly addressable
+],
+```
+
+```dotenv
+MEDIA_LIBRARY_PUBLIC_DISK=r2-public
+MEDIA_LIBRARY_PRIVATE_DISK=r2-private
+```
+
+With the pair set, a field states its visibility and nothing else, and its
+uploads land in the matching bucket:
+
+```php
+MediaPicker::make('gallery')->visibility('public');   // r2-public
+MediaPicker::make('contracts')->visibility('private'); // r2-private
+```
+
+No field needs a disk of its own once the pair is set. `media-library.disk`
+narrows to the fallback for a visibility whose half of the pair is unset, which
+is what a half-migrated deployment gets. See
+[ADR 0012](docs/adr/0012-the-disk-pair-is-configured-not-named-per-field.md).
+
+#### The bucket is the enforcement
+
+On R2 the asset's `visibility` column is delivery intent: it decides how the
+package addresses the bytes, not who can read them. Access is a property of the
+bucket. A private asset sitting in a public bucket is not private, however the
+column reads: the package will route it through the Delivery route and check
+`view` on it, while anyone who guesses the object key fetches it straight from
+the bucket.
+
+That is why the pairing is a guard rather than a convention, and why the guard
+above refuses those two pairings when the placement resolves. It reads your
+configuration only, so a bucket left public by mistake at the provider is still
+something only you can see. See
+[ADR 0013](docs/adr/0013-a-disk-that-cannot-deliver-its-visibility-is-refused.md).
+
+#### ACLs, and why the package makes none
+
+Laravel's S3 adapter sends an `ACL` parameter on every `PutObject`, derived from
+the visibility it was handed and, where the disk names no `visibility` of its
+own, from Laravel's default for the S3 driver, which is `public`. R2 implements
+no ACL headers at all (`x-amz-acl` and `x-amz-grant-*` are unimplemented) and no
+ACL operations (`GetObjectAcl`, `PutObjectAcl`), so that parameter is accepted
+and ignored. On R2 it is neither the reason a public object is readable nor a
+leak on a private one: the bucket is.
+
+The package makes no ACL call of its own, and never reads visibility back from
+the provider. `Storage::getVisibility()` is a `GetObjectAcl` behind the scenes,
+which R2 does not implement, so on an R2 disk it fails rather than answering.
+The stored column and your two buckets are the whole picture.
+
 ### Delivery
 
 A private asset's content reaches a browser through one signed route the plugin
@@ -139,6 +208,15 @@ served for saving, and `?download=1` forces that anyway. Every response carries
 `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox`,
 and an asset that renders in place is streamed rather than redirected so the header
 survives.
+
+A redirect asks the disk to honour the S3 `response-content-type` and
+`response-content-disposition` query overrides, so the earned disposition
+survives the hop. Those overrides are standard on AWS S3. On R2 they are
+**observed to work rather than documented**: Cloudflare's S3 compatibility page
+says nothing about them either way, and they were observed working on 2026-08-27
+against a live R2 bucket, over both an `r2.dev` development URL and a custom
+domain. A disk that ignores them serves the object's stored headers instead,
+which is why they are written to say the same thing at upload (see below).
 
 **The route's URL, name and parameters are internal.** They may change in any
 release. Do not build them by hand or hardcode them in a template.
@@ -166,6 +244,66 @@ cannot break or inject a header, and the asset's own extension is appended where
 the answer is a stem without one. The same resolver names both the route's
 `Content-Disposition` and the one written onto the object at upload, so a disk
 that ignores response overrides still serves the same name.
+
+#### A delivery gate of your own
+
+An application whose downloads carry rules the plugin knows nothing about, an
+order token, an expiry, a remaining-downloads count, keeps its own route and
+controller and reads the storage location off the `MediaAsset`:
+
+```php
+Route::get('/orders/{order}/download/{token}', function (Order $order, string $token) {
+    abort_unless($order->downloadTokenIsValid($token), 403);
+    abort_if($order->downloads_remaining < 1, 410);
+
+    $asset = $order->product->pdf;   // a MediaAsset, however your app reaches it
+
+    $order->decrement('downloads_remaining');
+
+    return Storage::disk($asset->disk)->download(
+        $asset->object_key,
+        DownloadFilename::for($asset),
+    );
+})->name('orders.download');
+```
+
+`Lisowiecw\MediaLibrary\Delivery\DownloadFilename` is what the plugin's own
+route asks, so your gate saves a file under the same name rather than deriving a
+second one. `download()` streams the bytes through your application. To hand the transfer to
+the bucket instead, sign your own URL from the same two columns:
+
+```php
+return redirect()->away(Storage::disk($asset->disk)->temporaryUrl(
+    $asset->object_key,
+    now()->addMinutes(5),
+));
+```
+
+Signing means the count is spent when the link is issued rather than when the
+bytes are fetched, and the signature outlives a rule you change in the next
+minute. Stream where the rules are strict, sign where the files are large.
+
+What this recipe leans on is promised surface: the `MediaAsset` model, its
+`disk` and `object_key` columns, `DownloadFilename`, and the policy abilities. **The Delivery route's
+URL, name and parameters are not**, so build your own route rather than signing
+or wrapping the plugin's.
+
+The alternative is to fold the rule into the `view` ability instead, and let the
+plugin's own route enforce it:
+
+```php
+public function view(?User $user, MediaAsset $asset): bool
+{
+    return $user !== null && Order::forUser($user)->hasUnspentDownloadOf($asset);
+}
+```
+
+Then `$asset->downloadUrl()` is the whole integration, and the rule is re-checked
+on every hit of the route rather than once at issue. Reach for it when the rule
+is a property of the viewer and the asset, since that is the question `view` asks.
+Keep your own route when the rule belongs to something else entirely, an order,
+a token, a counter to decrement, because a policy is asked whether access is
+allowed, not told to spend something.
 
 ### Card placeholders
 
