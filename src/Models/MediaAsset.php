@@ -43,6 +43,7 @@ use Lisowiecw\MediaLibrary\Lifecycle\AssetLifecycle;
  * @property string|null $uploaded_by
  * @property string|null $tenant_id
  * @property string|null $blurhash
+ * @property Carbon|null $unattached_since
  * @property Carbon|null $created_at
  */
 class MediaAsset extends Model
@@ -196,10 +197,14 @@ class MediaAsset extends Model
      * report-only sweep lists, and what a management page's cleanup filter
      * narrows to.
      *
-     * The age is the asset's own rather than its last detach, because the
-     * package does not record when an attachment went; an asset uploaded and
-     * never attached is exactly the case the grace period is protecting, and
-     * that one has no detach to date from.
+     * The clock is `unattached_since`, stamped when the asset's last
+     * attachment row went, so "unattached" means unattached for a while rather
+     * than uploaded a while ago. An asset that was never attached has no
+     * detach to date from and falls back to its upload, which is exactly the
+     * case the grace period protects.
+     *
+     * The candidate set is still the assets with no attachment rows: the
+     * column only orders that set in time, and never decides membership of it.
      *
      * Being unattached is evidence rather than proof, so nothing here deletes.
      *
@@ -207,8 +212,27 @@ class MediaAsset extends Model
      */
     public function scopeUnattachedFor(Builder $query, int $days): void
     {
+        $cutoff = now()->subDays($days);
+
+        // Spelled as a comparison on the column rather than as a coalesce
+        // around it, so the index on `unattached_since` is usable: a coalesce
+        // makes the predicate an expression and the index dead weight.
         $query->whereDoesntHave('attachments')
-            ->where('created_at', '<=', now()->subDays($days));
+            ->where(fn (Builder $query) => $query
+                ->where('unattached_since', '<=', $cutoff)
+                ->orWhere(fn (Builder $query) => $query
+                    ->whereNull('unattached_since')
+                    ->where('created_at', '<=', $cutoff)));
+    }
+
+    /**
+     * When this asset stopped being referenced, as the grace period reads it:
+     * the same fallback `unattachedFor` filters on, so what a report prints
+     * beside an asset is the date it was selected by.
+     */
+    public function unattachedSince(): ?Carbon
+    {
+        return $this->unattached_since ?? $this->created_at;
     }
 
     /**
@@ -253,6 +277,7 @@ class MediaAsset extends Model
             'visibility' => Visibility::class,
             'source' => MediaSource::class,
             'size' => 'integer',
+            'unattached_since' => 'datetime',
         ];
     }
 }

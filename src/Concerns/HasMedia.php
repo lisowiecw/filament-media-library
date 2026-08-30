@@ -57,13 +57,18 @@ trait HasMedia
      * Detach touches the attachment row and nothing else: the asset keeps its
      * record, its object and its renderings, and stays wherever else it is
      * attached. Deleting a file is a separate, explicit act on the library.
+     *
+     * The rows go one model at a time rather than in one statement, so the
+     * attachment's own events fire and the asset's unattached clock is
+     * maintained here as it is everywhere else.
      */
     public function detachMedia(string $field, MediaAsset $asset): void
     {
         $this->mediaAttachments()
             ->forField($this, $field)
             ->where('media_asset_id', $asset->getKey())
-            ->delete();
+            ->get()
+            ->each(fn (MediaAttachment $attachment) => $attachment->delete());
     }
 
     /**

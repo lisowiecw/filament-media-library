@@ -196,7 +196,10 @@ php artisan media:unattached-assets --days=90
 
 It lists assets nothing has referenced for longer than the grace period
 (`media-library.unattached_grace_days`, 30 days by default), deletes nothing, and
-is not scheduled by the package. Being unattached is evidence rather than proof:
+is not scheduled by the package. The period counts from when an asset last
+stopped being referenced, recorded on `media_assets.unattached_since`, so an
+asset detached yesterday keeps its full grace period however old it is; an asset
+nothing ever referenced counts from its upload instead. Being unattached is evidence rather than proof:
 a URL can live in a sent email or an export the plugin cannot see.
 
 ## Changelog

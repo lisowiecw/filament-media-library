@@ -49,7 +49,7 @@ class ReportUnattachedAssets extends Command
 
             $this->components->twoColumnDetail(
                 $asset->ulid.' '.$asset->display_name,
-                $asset->disk.':'.$asset->object_key.' '.$asset->created_at?->diffForHumans(),
+                $asset->disk.':'.$asset->object_key.' '.$asset->unattachedSince()?->diffForHumans(),
             );
         }
 

@@ -7,6 +7,7 @@ namespace Lisowiecw\MediaLibrary\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * A relationship between a Media Asset and a host model. An attachment belongs
@@ -36,6 +37,53 @@ class MediaAttachment extends Model
         'reference_label',
         'order',
     ];
+
+    /**
+     * The unattached clock is maintained here rather than at each calling
+     * site, because nearly every attachment write goes through this model:
+     * the reconciler behind a picker save and a replace, a host's own detach
+     * helper, and an external reference being revoked all end up on these two
+     * events.
+     *
+     * The one write that does not is the mass delete of attachment rows during
+     * a force delete, which fires no model events and needs none: the asset it
+     * belongs to is going with them.
+     *
+     * The column is a cache of when the last row went, so it is written only
+     * once the rows themselves say so; a column that disagreed with them would
+     * lose anyway.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (self $attachment): void {
+            $attachment->stampAsset(null);
+        });
+
+        static::deleted(function (self $attachment): void {
+            $stillReferenced = self::query()
+                ->where('media_asset_id', $attachment->media_asset_id)
+                ->exists();
+
+            if ($stillReferenced) {
+                return;
+            }
+
+            $attachment->stampAsset(now());
+        });
+    }
+
+    /**
+     * Write the clock past the model, so maintaining it never counts as the
+     * asset itself being touched: nothing about the asset changed, only what
+     * references it.
+     */
+    private function stampAsset(?Carbon $at): void
+    {
+        MediaAsset::withTrashed()
+            ->whereKey($this->media_asset_id)
+            ->toBase()
+            ->update(['unattached_since' => $at]);
+    }
 
     /**
      * Narrow to the rows one host model holds in one field context. This is

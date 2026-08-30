@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
 use Lisowiecw\MediaLibrary\Exceptions\DeleteBlocked;
 use Lisowiecw\MediaLibrary\Jobs\PurgeStoredObjects;
 use Lisowiecw\MediaLibrary\Lifecycle\AssetLifecycle;
@@ -249,5 +250,111 @@ describe('the unattached report', function (): void {
 
     it('refuses a grace period that is not a whole number of days', function (): void {
         $this->artisan('media:unattached-assets', ['--days' => 'soon'])->assertFailed();
+    });
+});
+
+describe('the unattached clock', function (): void {
+    it('stamps the asset when its last attachment goes', function (): void {
+        $host = article();
+        $asset = storedAsset();
+        attach($host, $asset);
+
+        $host->detachMedia('cover_image', $asset);
+
+        expect($asset->fresh()->unattached_since)->not->toBeNull();
+    });
+
+    it('leaves the stamp null while something still references the asset', function (): void {
+        [$one, $two] = [article('One'), article('Two')];
+        $asset = storedAsset();
+        attach($one, $asset);
+        attach($two, $asset);
+
+        $one->detachMedia('cover_image', $asset);
+
+        expect($asset->fresh()->unattached_since)->toBeNull();
+    });
+
+    it('stamps when the last external reference is revoked', function (): void {
+        $asset = storedAsset();
+        externalReference($asset)->delete();
+
+        expect($asset->fresh()->unattached_since)->not->toBeNull();
+    });
+
+    it('clears the stamp when the asset is attached again', function (): void {
+        $host = article();
+        $asset = storedAsset();
+        attach($host, $asset);
+        $host->detachMedia('cover_image', $asset);
+
+        attach(article('Later'), $asset);
+
+        expect($asset->fresh()->unattached_since)->toBeNull();
+    });
+
+    it('stamps on the reconciler, which is the path a replace takes', function (): void {
+        $host = article();
+        [$previous, $next] = [storedAsset(), storedAsset()];
+        app(AttachmentReconciler::class)->reconcile($host, 'cover_image', [$previous->id]);
+
+        app(AttachmentReconciler::class)->reconcile($host, 'cover_image', [$next->id]);
+
+        expect($previous->fresh()->unattached_since)->not->toBeNull()
+            ->and($next->fresh()->unattached_since)->toBeNull();
+    });
+
+    it('reports an asset detached long ago rather than one detached just now', function (): void {
+        $stale = storedAsset();
+        $stale->forceFill(['created_at' => now()->subDays(400), 'unattached_since' => now()->subDays(40)])->save();
+        $justDetached = storedAsset();
+        $justDetached->forceFill(['created_at' => now()->subDays(400), 'unattached_since' => now()])->save();
+
+        $this->artisan('media:unattached-assets')
+            ->expectsOutputToContain($stale->ulid)
+            ->doesntExpectOutputToContain($justDetached->ulid)
+            ->assertSuccessful();
+    });
+
+    it('falls back to the upload date for an asset that was never attached', function (): void {
+        $old = storedAsset();
+        $old->forceFill(['created_at' => now()->subDays(40)])->save();
+        $fresh = storedAsset();
+
+        $this->artisan('media:unattached-assets')
+            ->expectsOutputToContain($old->ulid)
+            ->doesntExpectOutputToContain($fresh->ulid)
+            ->assertSuccessful();
+    });
+
+    it('needs no stamp from a force delete, which takes the asset with the rows', function (): void {
+        $asset = storedAsset();
+        attach(article(), $asset);
+
+        lifecycle()->delete($asset, force: true);
+
+        expect(MediaAsset::withTrashed()->find($asset->id))->toBeNull()
+            ->and(MediaAttachment::query()->where('media_asset_id', $asset->id)->count())->toBe(0);
+    });
+
+    it('does not stamp when the host row goes, since that attachment is still a use', function (): void {
+        $host = article();
+        $asset = storedAsset();
+        attach($host, $asset);
+
+        $host->delete();
+
+        expect($asset->fresh()->unattached_since)->toBeNull();
+    });
+
+    it('backfills existing rows with their upload date', function (): void {
+        $asset = storedAsset();
+        $asset->forceFill(['created_at' => now()->subDays(40)])->save();
+        MediaAsset::withTrashed()->whereKey($asset->id)->toBase()->update(['unattached_since' => null]);
+
+        (require __DIR__.'/../../database/migrations/record_unattached_since_on_media_assets.php')->up();
+
+        expect($asset->fresh()->unattached_since?->toDateTimeString())
+            ->toBe($asset->created_at?->toDateTimeString());
     });
 });
