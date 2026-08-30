@@ -221,19 +221,78 @@ describe('resolving a thumbnail at render time', function (): void {
 });
 
 describe('a derivative row', function (): void {
-    it('has no URL while its parent is private', function (): void {
+    it('addresses a private parent through the Delivery route rather than the disk', function (): void {
         $asset = makeAsset();
         storeImage($asset);
 
         Derivatives::dispatchEagerly($asset, DerivativeVariant::Thumb);
         (new GenerateDerivative($asset->id, DerivativeVariant::Thumb))->handle();
 
-        expect($asset->derivatives()->first()->url())->toBeNull();
+        expect($asset->derivatives()->first()->url())
+            ->toContain('/admin/media/'.$asset->ulid)
+            ->toContain('variant=thumb')
+            ->not->toContain($asset->derivatives()->first()->object_key);
     });
 
     it('follows the parent placement and visibility', function (): void {
         $asset = ingest(largeImage(), Placement::resolve());
 
         expect($asset->derivatives()->first()->disk)->toBe($asset->disk);
+    });
+});
+
+describe('resolving a preview on demand', function (): void {
+    it('queues nothing at upload', function (): void {
+        Queue::fake();
+
+        $asset = ingest(largeImage());
+
+        expect($asset->derivatives()->where('variant', DerivativeVariant::Preview->value)->count())->toBe(0);
+    });
+
+    it('queues the preview on its first actual request', function (): void {
+        Bus::fake();
+
+        $asset = makeAsset(['size' => 900_000]);
+
+        expect(Derivatives::previewUrl($asset))->toBeNull();
+
+        Bus::assertDispatched(
+            GenerateDerivative::class,
+            fn (GenerateDerivative $job): bool => (fn (): bool => $this->variant === DerivativeVariant::Preview)->call($job),
+        );
+    });
+
+    it('queues nothing on a second request while one is in flight', function (): void {
+        Bus::fake();
+
+        $asset = makeAsset(['size' => 900_000]);
+
+        Derivatives::previewUrl($asset);
+        Derivatives::previewUrl($asset->fresh());
+
+        Bus::assertDispatchedTimes(GenerateDerivative::class, 1);
+    });
+
+    it('paints a ready preview through the route', function (): void {
+        $asset = makeAsset();
+        storeImage($asset);
+
+        Derivatives::dispatchLazily($asset, DerivativeVariant::Preview);
+        (new GenerateDerivative($asset->id, DerivativeVariant::Preview))->handle();
+
+        expect(Derivatives::previewUrl($asset->fresh()))->toContain('variant=preview');
+    });
+
+    it('paints an original that is already its own picture', function (): void {
+        $asset = ingest(pngUpload());
+
+        expect(Derivatives::previewUrl($asset))->toBe($asset->url());
+    });
+
+    it('is what the asset itself hands out', function (): void {
+        $asset = makeAsset(['size' => 900_000]);
+
+        expect($asset->previewUrl())->toBe(Derivatives::previewUrl($asset));
     });
 });

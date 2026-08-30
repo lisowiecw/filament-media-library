@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
+use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
@@ -99,6 +100,19 @@ class MediaAsset extends Model
         return $this->visibility->isPublic()
             ? Storage::disk($this->disk)->url($this->object_key)
             : DeliveryRoute::signedUrl($this);
+    }
+
+    /**
+     * Where this asset's full-size rendering is addressed, or null while there
+     * is none yet and the caller paints its placeholder.
+     *
+     * This is what a lightbox and a view panel ask for, so that opening an
+     * asset full size never fetches the original: the preview is generated on
+     * this first actual request and served through the same checked route.
+     */
+    public function previewUrl(): ?string
+    {
+        return Derivatives::previewUrl($this);
     }
 
     /**

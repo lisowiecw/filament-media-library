@@ -14,26 +14,59 @@ use Lisowiecw\MediaLibrary\Models\MediaDerivative;
  * The one way in and out of the derivative pipeline: what a card asks for a
  * picture, and what ingest asks to have one made.
  *
- * There is a single self-healing path, and it is `thumbnailUrl()`. A missing
- * rendering at render time queues the job and paints the pending tile, which
- * is what covers imports the pipeline never saw, jobs that were lost, and
- * dimensions the operator changed yesterday. Nothing sweeps, and nothing
- * generates inline in a web request.
+ * Resolving is the only self-healing path there is, and both variants take
+ * it: a missing rendering at render time queues the job and paints the pending
+ * tile, which is what covers imports the pipeline never saw, jobs that were
+ * lost, and dimensions the operator changed yesterday. Nothing sweeps, and
+ * nothing generates inline in a web request.
  */
 final readonly class Derivatives
 {
     /**
      * What a card paints for this asset, or null when there is nothing to
      * paint yet and the quiet tile is the answer.
-     *
-     * Order matters. A rendering that exists wins, however stale, because a
-     * settings change must never blank the grid. Failing that, an original
-     * small enough to serve as its own thumbnail is painted directly, so an
-     * icon costs nothing. Only then is a job asked for.
      */
     public static function thumbnailUrl(MediaAsset $asset): ?string
     {
-        $derivative = self::existing($asset, DerivativeVariant::Thumb);
+        return self::resolve($asset, DerivativeVariant::Thumb);
+    }
+
+    /**
+     * What a full-size view paints for this asset, or null when there is
+     * nothing to paint yet.
+     *
+     * The preview is the one variant nothing queues at upload: an asset nobody
+     * ever opens full size costs no generation, no object and no write. This
+     * call is the first actual request, and it is what makes one.
+     */
+    public static function previewUrl(MediaAsset $asset): ?string
+    {
+        return self::resolve($asset, DerivativeVariant::Preview);
+    }
+
+    /**
+     * The ready rendering of one variant, or null while there is none. What
+     * the Delivery route answers a variant request from, so a request and a
+     * render agree on what exists without either owning the query.
+     */
+    public static function ready(MediaAsset $asset, DerivativeVariant $variant): ?MediaDerivative
+    {
+        $derivative = self::existing($asset, $variant);
+
+        return $derivative?->status->isReady() === true ? $derivative : null;
+    }
+
+    /**
+     * The one resolution both variants take.
+     *
+     * Order matters. A rendering that exists wins, however stale, because a
+     * settings change must never blank the grid. Failing that, an original
+     * small enough to be its own picture is painted directly, so an icon costs
+     * nothing. Only then is a job asked for.
+     */
+    private static function resolve(MediaAsset $asset, DerivativeVariant $variant): ?string
+    {
+        $derivative = self::existing($asset, $variant);
 
         if ($derivative?->status->isReady() === true) {
             return $derivative->url();
@@ -47,7 +80,7 @@ final readonly class Derivatives
         // exhausted its retries: neither is re-dispatched, so a broken file is
         // not retried forever and a busy grid does not pile jobs on itself.
         if ($derivative === null) {
-            self::dispatchLazily($asset, DerivativeVariant::Thumb);
+            self::dispatchLazily($asset, $variant);
         }
 
         return null;
@@ -92,10 +125,11 @@ final readonly class Derivatives
     }
 
     /**
-     * Whether the asset is already the picture a card wants. A sanitized SVG
-     * is its own thumbnail, at any size, which is what keeps a rasterizer out
-     * of the pipeline; and a small enough raster is painted directly rather
-     * than rendered a second time.
+     * Whether the asset is already the picture, at any variant. A sanitized SVG
+     * is its own rendering, at any size, which is what keeps a rasterizer out
+     * of the pipeline; and a raster under the small-original ceiling earns no
+     * derivative rows at all, so it is painted directly rather than rendered a
+     * second time.
      */
     private static function paintsItself(MediaAsset $asset): bool
     {

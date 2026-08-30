@@ -2,13 +2,17 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
+use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
+use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
+use Lisowiecw\MediaLibrary\Models\MediaDerivative;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\HostPolicy;
 
 beforeEach(function (): void {
@@ -178,4 +182,197 @@ it('streams rather than redirects what renders in place, so the content policy s
 it('registers the route inside the panel middleware', function (): void {
     expect(DeliveryRoute::name())->toBe('filament.admin.media-library.asset')
         ->and(DeliveryRoute::signedUrl(storedAsset()))->toContain('/admin/media/');
+});
+
+describe('the variant parameter', function (): void {
+    /**
+     * A ready derivative of a private parent, with its own bytes on the disk.
+     */
+    function readyDerivative(MediaAsset $asset, DerivativeVariant $variant = DerivativeVariant::Thumb): MediaDerivative
+    {
+        $key = MediaDerivative::keyFor($asset, $variant);
+
+        Storage::disk($asset->disk)->put($key, 'the rendering');
+
+        $derivative = MediaDerivative::create([
+            'media_asset_id' => $asset->id,
+            'variant' => $variant->value,
+            'disk' => $asset->disk,
+            'object_key' => $key,
+            'status' => DerivativeStatus::Ready->value,
+            'config_digest' => $variant->digest(),
+        ]);
+
+        $asset->setRelation('derivatives', $asset->derivatives()->get());
+
+        return $derivative;
+    }
+
+    it('streams a private derivative through the same checked route', function (): void {
+        $asset = storedAsset();
+        $derivative = readyDerivative($asset);
+
+        $response = $this->get($derivative->url());
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'image/webp')
+            ->assertHeader('content-security-policy', contentPolicy());
+
+        expect($response->streamedContent())->toBe('the rendering');
+    });
+
+    it('re-checks view for a derivative too', function (): void {
+        $url = readyDerivative(storedAsset())->url();
+
+        HostPolicy::$allows = false;
+
+        $this->get($url)->assertForbidden();
+    });
+
+    it('renders a derivative in place whatever the parent disposition would be', function (): void {
+        $asset = storedAsset(['mime_source' => MimeSource::Extension]);
+
+        $response = $this->get(readyDerivative($asset)->url());
+
+        expect($response->headers->get('content-disposition'))->toStartWith('inline');
+    });
+
+    it('carries a private immutable caching instruction that ends with the bucket', function (): void {
+        $bucket = (int) config('media-library.derivative_url_bucket');
+        $this->travelTo(Carbon::createFromTimestamp(intdiv(now()->getTimestamp(), $bucket) * $bucket));
+
+        $response = $this->get(readyDerivative(storedAsset())->url());
+
+        expect($response->headers->get('cache-control'))
+            ->toContain('private')
+            ->toContain('immutable')
+            ->toContain('max-age='.$bucket);
+    });
+
+    it('names a saved derivative after its parent', function (): void {
+        $asset = storedAsset();
+
+        $response = $this->get(readyDerivative($asset)->url());
+
+        expect($response->headers->get('content-disposition'))->toContain('holiday photo-thumb.webp');
+    });
+
+    it('streams rather than presigning, whatever the disk offers', function (): void {
+        Storage::disk('media')->buildTemporaryUrlsUsing(
+            fn (string $path, DateTimeInterface $expiry, array $options): string => 'https://bucket.test/'.$path,
+        );
+
+        $this->get(readyDerivative(storedAsset())->url())->assertOk();
+    });
+
+    it('hands out no URL for a derivative that is not ready', function (): void {
+        $asset = storedAsset();
+        $derivative = readyDerivative($asset);
+        $derivative->update(['status' => DerivativeStatus::Pending->value]);
+
+        expect($derivative->url())->toBeNull();
+    });
+
+    it('answers a variant that was never generated with a not found', function (): void {
+        $asset = storedAsset();
+        readyDerivative($asset);
+
+        $url = URL::temporarySignedRoute(DeliveryRoute::name(), now()->addMinute(), [
+            'asset' => $asset->ulid,
+            'variant' => DerivativeVariant::Preview->value,
+        ]);
+
+        $this->get($url)->assertNotFound();
+    });
+
+    it('answers an unknown variant name with a not found', function (): void {
+        $asset = storedAsset();
+
+        $url = URL::temporarySignedRoute(DeliveryRoute::name(), now()->addMinute(), [
+            'asset' => $asset->ulid,
+            'variant' => 'gigantic',
+        ]);
+
+        $this->get($url)->assertNotFound();
+    });
+
+    it('refuses an unsigned variant URL', function (): void {
+        $asset = storedAsset();
+        readyDerivative($asset);
+
+        $this->get(route(DeliveryRoute::name(), [
+            'asset' => $asset->ulid,
+            'variant' => DerivativeVariant::Thumb->value,
+        ]))->assertForbidden();
+    });
+
+    it('resolves a public parent derivative at the disk rather than the route', function (): void {
+        $asset = storedAsset(['visibility' => 'public']);
+        $derivative = readyDerivative($asset);
+
+        expect($derivative->url())->not->toContain('/admin/media/');
+
+        $url = URL::temporarySignedRoute(DeliveryRoute::name(), now()->addMinute(), [
+            'asset' => $asset->ulid,
+            'variant' => DerivativeVariant::Thumb->value,
+        ]);
+
+        $this->get($url)->assertNotFound();
+    });
+});
+
+describe('derivative URL quantization', function (): void {
+    it('is byte-stable within one bucket', function (): void {
+        $asset = storedAsset();
+
+        // Anchored to a boundary, so the half-bucket step below cannot land in
+        // the next window and pass the test for the wrong reason.
+        $bucket = (int) config('media-library.derivative_url_bucket');
+        $this->travelTo(Carbon::createFromTimestamp(intdiv(now()->getTimestamp(), $bucket) * $bucket));
+
+        $first = DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb);
+
+        $this->travel($bucket / 2)->seconds();
+
+        expect(DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb))->toBe($first);
+    });
+
+    it('changes across a boundary', function (): void {
+        $asset = storedAsset();
+
+        $first = DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb);
+
+        $this->travel(config('media-library.derivative_url_bucket') + 1)->seconds();
+
+        expect(DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb))->not->toBe($first);
+    });
+
+    it('changes when the settings that produced the rendering change', function (): void {
+        $asset = storedAsset();
+
+        $first = DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb);
+
+        config()->set('media-library.derivatives.variants.thumb.edge', 320);
+
+        expect(DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb))->not->toBe($first);
+    });
+
+    it('leaves the original on its own per-render signature', function (): void {
+        $asset = storedAsset();
+
+        $first = DeliveryRoute::signedUrl($asset);
+
+        $this->travel(60)->seconds();
+
+        expect(DeliveryRoute::signedUrl($asset))->not->toBe($first);
+    });
+
+    it('still expires, so a copied derivative URL does not live forever', function (): void {
+        $asset = storedAsset();
+        $url = DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb);
+
+        $this->travel(config('media-library.derivative_url_bucket') + 1)->seconds();
+
+        $this->get($url)->assertForbidden();
+    });
 });

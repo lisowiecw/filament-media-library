@@ -9,7 +9,10 @@ use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
 use Lisowiecw\MediaLibrary\Delivery\Disposition;
+use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
+use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
+use Lisowiecw\MediaLibrary\Models\MediaDerivative;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -35,6 +38,12 @@ class DeliveryController
     public function __invoke(Request $request, string $asset): Response
     {
         $asset = MediaAsset::where('ulid', $asset)->firstOrFail();
+
+        $variant = $request->string('variant')->toString();
+
+        if ($variant !== '') {
+            return $this->derivative($asset, DerivativeVariant::tryFrom($variant));
+        }
 
         $download = $request->boolean('download');
 
@@ -83,6 +92,47 @@ class DeliveryController
                 'ResponseContentDisposition' => $disposition->value.'; filename="'.$filename.'"',
             ],
         )));
+    }
+
+    /**
+     * Serves one variant of the asset already loaded, on the same check the
+     * original just passed rather than a second lookup of its own.
+     *
+     * A derivative always streams. A presigned URL would hand out bytes the
+     * route could no longer take back, and there is nothing to gain by it:
+     * the rendering is small, and the content policy has to survive.
+     */
+    private function derivative(MediaAsset $asset, ?DerivativeVariant $variant): Response
+    {
+        // A public parent's rendering is already addressable at the disk's own
+        // URL, which is what the row hands out for one, so the route has no
+        // answer for it, exactly as it has none for a public original.
+        abort_if($variant === null || $asset->visibility->isPublic(), 404);
+
+        abort_unless($this->authorization->allowsView($asset), 403);
+
+        $derivative = Derivatives::ready($asset, $variant);
+
+        // A row that is pending or failed has no bytes behind it, so it is a
+        // variant that does not exist rather than one that is refused.
+        abort_if($derivative === null, 404);
+
+        $response = Storage::disk($derivative->disk)->response(
+            $derivative->object_key,
+            MediaDerivative::filenameFor($asset, $variant),
+            [
+                'Content-Type' => MediaDerivative::MIME_TYPE,
+                // A derivative's bytes never change under its key, so the
+                // response is immutable; it is private because the parent is.
+                // The lifetime runs to the end of the URL's own quantization
+                // bucket, so a cached response never outlives the signature
+                // that earned it.
+                'Cache-Control' => 'private, immutable, max-age='.DeliveryRoute::bucketRemaining(),
+            ],
+            Disposition::Inline->value,
+        );
+
+        return $this->guarded($response);
     }
 
     private function guarded(Response $response): Response

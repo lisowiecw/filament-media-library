@@ -7,6 +7,7 @@ namespace Lisowiecw\MediaLibrary\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
+use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 
@@ -34,6 +35,12 @@ use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
  */
 class MediaDerivative extends Model
 {
+    /**
+     * Every derivative is WEBP, whatever the original was: one encoder, one
+     * key suffix, one response type.
+     */
+    public const string MIME_TYPE = 'image/webp';
+
     protected $table = 'media_derivatives';
 
     /** @var list<string> */
@@ -60,6 +67,18 @@ class MediaDerivative extends Model
         return self::prefix().'/'.$asset->ulid.'/'.$variant->value.'.webp';
     }
 
+    /**
+     * What a saved derivative is called, read from the parent's own names so
+     * a person who saves one recognises it, with the original extension
+     * dropped because the bytes are no longer that format.
+     */
+    public static function filenameFor(MediaAsset $asset, DerivativeVariant $variant): string
+    {
+        $name = pathinfo($asset->original_client_filename ?? $asset->display_name, PATHINFO_FILENAME);
+
+        return $name.'-'.$variant->value.'.webp';
+    }
+
     private static function prefix(): string
     {
         /** @var string $prefix */
@@ -69,25 +88,26 @@ class MediaDerivative extends Model
     }
 
     /**
-     * Where this derivative's content is addressed, or null while there is no
-     * way to address it.
+     * Where this derivative's content is addressed, or null while there is
+     * nothing to address.
      *
      * A public parent resolves to the disk's own URL, exactly as the original
-     * does. A private one has no answer here yet: its bytes reach a browser
-     * only through the Delivery route's variant parameter, which the variant
-     * delivery ticket adds. Handing back the disk URL meanwhile would publish
-     * a private asset's rendering, and handing back the parent's URL would
-     * serve the wrong bytes, so a caller with no URL paints the pending tile.
+     * does. A private one resolves to the Delivery route's variant parameter,
+     * which re-checks View on every hit; the disk URL is never handed out for
+     * it, and neither is a presigned one, because a derivative of a private
+     * asset is exactly as private as its parent.
      */
     public function url(): ?string
     {
         $asset = $this->asset;
 
-        if (! $this->status->isReady() || $asset === null || ! $asset->visibility->isPublic()) {
+        if (! $this->status->isReady() || $asset === null) {
             return null;
         }
 
-        return Storage::disk($this->disk)->url($this->object_key);
+        return $asset->visibility->isPublic()
+            ? Storage::disk($this->disk)->url($this->object_key)
+            : DeliveryRoute::derivativeUrl($asset, $this->variant);
     }
 
     /**

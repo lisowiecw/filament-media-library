@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Lisowiecw\MediaLibrary\Delivery;
 
 use Filament\Facades\Filament;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\URL;
+use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Http\Controllers\DeliveryController;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use RuntimeException;
@@ -76,6 +78,61 @@ final readonly class DeliveryRoute
                 ? ['asset' => $asset->ulid, 'download' => 1]
                 : ['asset' => $asset->ulid],
         );
+    }
+
+    /**
+     * A signed URL for one variant of an asset, which is how a private
+     * Derivative's bytes are addressed at all.
+     *
+     * The expiry is quantized to a bucket boundary rather than counted from
+     * now, so the URL is byte-identical for every render inside that window
+     * and the browser's cache of the response is actually reachable. Nothing
+     * about the check is weakened by it: View is still re-read on every hit,
+     * and the window is a bound on a copied link, not a grant.
+     */
+    public static function derivativeUrl(MediaAsset $asset, DerivativeVariant $variant): string
+    {
+        return URL::temporarySignedRoute(
+            self::name(),
+            self::bucketExpiry(),
+            // The digest rides along so that a regeneration under changed
+            // settings, which overwrites the object in place, hands out a URL
+            // nothing has cached rather than leaving a stale rendering pinned
+            // until the bucket rolls. The route itself ignores it.
+            ['asset' => $asset->ulid, 'variant' => $variant->value, 'digest' => $variant->digest()],
+        );
+    }
+
+    /**
+     * How long the current bucket has left, which is how long a derivative
+     * response may be cached: never past the signature that earned it.
+     */
+    public static function bucketRemaining(): int
+    {
+        return max(0, self::bucketExpiry()->getTimestamp() - now()->getTimestamp());
+    }
+
+    /**
+     * The end of the bucket the current moment falls in, measured from the
+     * epoch so every process agrees on where the boundary is without sharing
+     * any state.
+     */
+    private static function bucketExpiry(): Carbon
+    {
+        $bucket = self::bucket();
+
+        return Carbon::createFromTimestamp((intdiv(now()->getTimestamp(), $bucket) + 1) * $bucket);
+    }
+
+    /**
+     * How wide a quantization bucket is, in seconds.
+     */
+    private static function bucket(): int
+    {
+        /** @var int $bucket */
+        $bucket = config('media-library.derivative_url_bucket', 6 * 60 * 60);
+
+        return max(1, $bucket);
     }
 
     /**

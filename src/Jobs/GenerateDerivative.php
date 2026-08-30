@@ -79,7 +79,7 @@ class GenerateDerivative implements ShouldQueue
         // working and the old digest describing it truthfully.
         Storage::disk($asset->disk)->put($key, $bytes, [
             'visibility' => $asset->visibility->value,
-            'ContentType' => 'image/webp',
+            'ContentType' => MediaDerivative::MIME_TYPE,
             'CacheControl' => IngestService::CACHE_CONTROL,
         ]);
 
