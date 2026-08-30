@@ -6,6 +6,7 @@ namespace Lisowiecw\MediaLibrary\Filament\Resources;
 
 use BackedEnum;
 use Filament\Actions\ViewAction;
+use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
@@ -183,6 +184,15 @@ class MediaAssetResource extends Resource
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
+            // The rendering rather than the original: opening an asset here is
+            // a look, not a download, and asking for the preview is what
+            // generates it. A row with nothing to paint hides the entry rather
+            // than showing a broken frame, which is also every non-image.
+            ImageEntry::make('preview')
+                ->hiddenLabel()
+                ->state(fn (MediaAsset $record): ?string => $record->previewUrl())
+                ->visible(fn (MediaAsset $record): bool => $record->previewUrl() !== null)
+                ->extraImgAttributes(['class' => 'max-w-full rounded-lg']),
             Section::make(__('media-library::messages.management.sections.asset'))
                 ->schema([
                     TextEntry::make('display_name')

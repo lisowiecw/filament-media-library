@@ -91,9 +91,10 @@ Gate::define('uploadMedia', fn (User $user, Model|string|null $host, ?string $fi
 Gate::define('attachMedia', fn (User $user, Model|string|null $host, ?string $field) => $user->isEditor());
 ```
 
-The policy abilities are `viewAny`, `view`, `update`, `delete`, `forceDelete` and
-`detach`. Renaming an asset asks `update` and downloading one asks `view`; neither
-has an ability of its own. `view` governs an asset's actual content rather than its
+The policy abilities are `viewAny`, `view`, `update`, `delete`, `forceDelete`,
+`restore`, `detach`, and, for the management page's bulk buttons alone,
+`deleteAny` and `restoreAny`. Renaming an asset asks `update` and downloading
+one asks `view`; neither has an ability of its own. `view` governs an asset's actual content rather than its
 listing, so it is checked where bytes are delivered and never per row in a grid.
 Reading a public asset asks nothing, since its content is already publicly
 addressable. That exception is the plugin's rather than the policy's, because

@@ -5,6 +5,11 @@ parameters:
         - config
         - database
         - workbench
+    # Compiled Blade is generated output rather than source. Analysing it
+    # reports thousands of undefined variables from Filament's own view
+    # internals, which no change here could fix.
+    excludePaths:
+        - workbench/storage/framework/views
     tmpDir: build/phpstan
     configDirectories:
         - config

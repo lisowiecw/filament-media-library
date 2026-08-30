@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Derivatives\DerivativeHealth;
+use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Filament\Resources\MediaAssetResource;
@@ -235,6 +236,21 @@ it('shows the storage identity and the usage panel on the view page', function (
         ->assertSee('media/rooftop.jpg')
         ->assertSee('legacy/rooftop.jpg')
         ->assertSee('The rooftop post');
+});
+
+it('paints a larger rendering of an image on the view page', function (): void {
+    $asset = storedAsset(['size' => 5 * 1024 * 1024]);
+    readyDerivative($asset, DerivativeVariant::Preview);
+
+    viewPage($asset)->assertSee($asset->previewUrl());
+});
+
+it('paints no rendering on the view page of something that is not an image', function (): void {
+    $asset = storedAsset(['mime_type' => 'application/pdf', 'object_key' => 'media/report.pdf']);
+
+    expect($asset->previewUrl())->toBeNull();
+
+    viewPage($asset)->assertOk();
 });
 
 it('never exposes the importer as an action', function (): void {
