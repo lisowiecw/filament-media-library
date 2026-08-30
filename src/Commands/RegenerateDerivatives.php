@@ -6,10 +6,8 @@ namespace Lisowiecw\MediaLibrary\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Derivatives\LazyDispatch;
-use Lisowiecw\MediaLibrary\Derivatives\SmallOriginal;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
@@ -119,6 +117,10 @@ class RegenerateDerivatives extends Command
      * one of missing, failed or stale, and reading them apart is what lets the
      * report say which.
      *
+     * The reason travels as a plain string rather than a type of its own: it
+     * is three values with one consumer, the report column, and nothing
+     * branches on it.
+     *
      * @param  list<DerivativeVariant>  $variants
      * @return iterable<array{MediaAsset, DerivativeVariant, string}>
      */
@@ -166,10 +168,6 @@ class RegenerateDerivatives extends Command
      * Assets that could have a rendering of a variant and have no row for it
      * at all: imports the pipeline never saw, and previews nobody has opened.
      *
-     * The small-original rule is asked in its byte-only half here, exactly as
-     * a card asks it, because the pixels are known only where the object has
-     * been read and this walks rows rather than objects.
-     *
      * @param  list<DerivativeVariant>  $variants
      * @return iterable<array{MediaAsset, DerivativeVariant, string}>
      */
@@ -178,15 +176,8 @@ class RegenerateDerivatives extends Command
         $assets = MediaAsset::query()->with('derivatives')->orderBy('id');
 
         foreach ($assets->lazyById(self::CHUNK) as $asset) {
-            if (! Derivatives::generatable($asset) || SmallOriginal::paintsOriginal($asset)) {
-                continue;
-            }
-
-            /** @var Collection<int, MediaDerivative> $existing */
-            $existing = $asset->derivatives;
-
             foreach ($variants as $variant) {
-                if ($existing->firstWhere('variant', $variant) === null) {
+                if (Derivatives::wanted($asset, $variant)) {
                     yield [$asset, $variant, 'missing'];
                 }
             }

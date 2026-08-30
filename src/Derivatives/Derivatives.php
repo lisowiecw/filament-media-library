@@ -121,6 +121,11 @@ final readonly class Derivatives
      * digest only once the write succeeded, so a refresh that fails leaves a
      * working card rather than an empty one. Only a variant with nothing
      * behind it is marked pending, where there is no card to blank.
+     *
+     * The return says whether anything was queued. A caller that has already
+     * asked `wanted()` will only ever see true, but a caller holding an
+     * arbitrary asset, which is what a row-driven selector hands over, will
+     * not.
      */
     public static function regenerate(MediaAsset $asset, DerivativeVariant $variant): bool
     {
@@ -137,6 +142,27 @@ final readonly class Derivatives
         self::dispatch($asset, $variant);
 
         return true;
+    }
+
+    /**
+     * Whether this asset wants a rendering of this variant that it does not
+     * have: generatable, not already its own picture, and with no row of any
+     * status behind it.
+     *
+     * The question lives here rather than in whatever is asking, because it is
+     * the same question `resolve()` asks on a render, and an answer that drifts
+     * between the two would have the command queueing work a card would not,
+     * or skipping work a card would.
+     *
+     * The small-original rule is reached in its byte-only half, exactly as a
+     * card reaches it, because the pixels are known only where the object has
+     * been read and a caller may be walking rows rather than objects.
+     */
+    public static function wanted(MediaAsset $asset, DerivativeVariant $variant): bool
+    {
+        return self::generatable($asset)
+            && ! self::paintsItself($asset)
+            && self::existing($asset, $variant) === null;
     }
 
     /**

@@ -34,6 +34,10 @@ final readonly class DerivativeHealth
     /**
      * Renderings that exhausted their retries and are no longer re-dispatched
      * by anything, so this is the count that only a command clears.
+     *
+     * The failed count is properly the management page's, not staleness's, but
+     * it is the same query against the same scope and the same command clears
+     * both, so it sits here rather than waiting to be written twice.
      */
     public static function failed(): int
     {

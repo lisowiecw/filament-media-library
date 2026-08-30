@@ -150,6 +150,11 @@ class MediaDerivative extends Model
      * The same comparison as a query, asked per variant because each variant
      * has a digest of its own.
      *
+     * The rule is stated twice, here and in `isStale()`, on purpose: a count
+     * and a command have to select without loading every row, and a card has
+     * to ask about the row it is already holding. Both are tested, and the
+     * digest each compares against comes from the one place, the variant.
+     *
      * @param  Builder<$this>  $query
      */
     public function scopeStale(Builder $query): void

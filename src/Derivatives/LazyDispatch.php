@@ -59,7 +59,10 @@ class LazyDispatch
      * dozens of jobs, means nothing to it; the per-minute cap is the one that
      * protects the object store, and it is the one a regeneration run obeys.
      * Waiting rather than refusing is what makes a run over a large library
-     * finish instead of stopping a minute in.
+     * finish instead of stopping a minute in. The cost is that the run's wall
+     * time is the library's size over the cap, so a big regeneration is a
+     * thing an operator leaves running, and `--dry-run` is how they find out
+     * how long it will be before starting it.
      */
     public function await(): void
     {
