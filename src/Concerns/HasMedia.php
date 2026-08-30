@@ -52,6 +52,21 @@ trait HasMedia
     }
 
     /**
+     * Remove one asset from one field context on this host.
+     *
+     * Detach touches the attachment row and nothing else: the asset keeps its
+     * record, its object and its renderings, and stays wherever else it is
+     * attached. Deleting a file is a separate, explicit act on the library.
+     */
+    public function detachMedia(string $field, MediaAsset $asset): void
+    {
+        $this->mediaAttachments()
+            ->forField($this, $field)
+            ->where('media_asset_id', $asset->getKey())
+            ->delete();
+    }
+
+    /**
      * Every attachment this host holds, whatever the field context.
      *
      * @return MorphMany<MediaAttachment, $this>

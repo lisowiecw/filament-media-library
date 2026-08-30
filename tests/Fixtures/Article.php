@@ -16,4 +16,13 @@ class Article extends Model
     use HasMedia;
 
     protected $guarded = [];
+
+    /**
+     * What a usage list calls this record, which is the optional hook a host
+     * model offers so the list reads in the application's own terms.
+     */
+    public function mediaUsageLabel(): string
+    {
+        return $this->title;
+    }
 }

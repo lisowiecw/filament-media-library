@@ -12,7 +12,6 @@ use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
-use Lisowiecw\MediaLibrary\Models\MediaDerivative;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\HostPolicy;
 
 beforeEach(function (): void {
@@ -29,23 +28,6 @@ beforeEach(function (): void {
 function contentPolicy(): string
 {
     return "default-src 'none'; style-src 'unsafe-inline'; sandbox";
-}
-
-/**
- * An asset whose bytes are actually on the faked disk.
- */
-function storedAsset(array $overrides = []): MediaAsset
-{
-    $asset = makeAsset(array_merge([
-        'object_key' => 'media/'.Str::random(12).'.jpg',
-        'mime_type' => 'image/jpeg',
-        'mime_source' => MimeSource::Sniffed,
-        'visibility' => 'private',
-    ], $overrides));
-
-    Storage::disk($asset->disk)->put($asset->object_key, 'the bytes');
-
-    return $asset;
 }
 
 it('streams a private asset the policy allows', function (): void {
@@ -185,29 +167,6 @@ it('registers the route inside the panel middleware', function (): void {
 });
 
 describe('the variant parameter', function (): void {
-    /**
-     * A ready derivative of a private parent, with its own bytes on the disk.
-     */
-    function readyDerivative(MediaAsset $asset, DerivativeVariant $variant = DerivativeVariant::Thumb): MediaDerivative
-    {
-        $key = MediaDerivative::keyFor($asset, $variant);
-
-        Storage::disk($asset->disk)->put($key, 'the rendering');
-
-        $derivative = MediaDerivative::create([
-            'media_asset_id' => $asset->id,
-            'variant' => $variant->value,
-            'disk' => $asset->disk,
-            'object_key' => $key,
-            'status' => DerivativeStatus::Ready->value,
-            'config_digest' => $variant->digest(),
-        ]);
-
-        $asset->setRelation('derivatives', $asset->derivatives()->get());
-
-        return $derivative;
-    }
-
     it('streams a private derivative through the same checked route', function (): void {
         $asset = storedAsset();
         $derivative = readyDerivative($asset);

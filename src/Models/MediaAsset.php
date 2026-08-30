@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -19,6 +20,7 @@ use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Ingest\ActiveContent;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
+use Lisowiecw\MediaLibrary\Lifecycle\AssetLifecycle;
 
 /**
  * A reusable file record with human-readable file metadata and storage
@@ -41,6 +43,7 @@ use Lisowiecw\MediaLibrary\Ingest\IngestRules;
  * @property string|null $uploaded_by
  * @property string|null $tenant_id
  * @property string|null $blurhash
+ * @property Carbon|null $created_at
  */
 class MediaAsset extends Model
 {
@@ -54,6 +57,15 @@ class MediaAsset extends Model
      * offer the person a choice; it never blocks and never overwrites.
      */
     public bool $nameCollided = false;
+
+    /**
+     * Transient, never persisted: the objects this asset's delete will leave
+     * in the bucket, read while the derivative rows are still there and spent
+     * once the delete has actually happened.
+     *
+     * @var array<string, list<string>>
+     */
+    public array $objectsQueuedForRemoval = [];
 
     /** @var list<string> */
     protected $fillable = [
@@ -79,6 +91,25 @@ class MediaAsset extends Model
     {
         static::creating(function (self $asset): void {
             $asset->ulid ??= (string) Str::ulid();
+        });
+
+        // Cleanup hangs off the model's own events rather than off the
+        // lifecycle service, so a delete performed anywhere cleans up the same
+        // way: the keys are read while the derivative rows are still there,
+        // and the removal is queued only once the delete has happened.
+        static::deleting(function (self $asset): void {
+            $asset->objectsQueuedForRemoval = AssetLifecycle::objectsOf($asset);
+
+            // A force delete takes the attachment rows with it here rather
+            // than through the database's own cascade, which not every
+            // connection is configured to enforce.
+            if ($asset->isForceDeleting()) {
+                $asset->attachments()->delete();
+            }
+        });
+
+        static::deleted(function (self $asset): void {
+            AssetLifecycle::purge($asset, $asset->objectsQueuedForRemoval);
         });
     }
 
@@ -158,6 +189,26 @@ class MediaAsset extends Model
             ->where(fn (Builder $query) => $query
                 ->whereNull('mime_type')
                 ->orWhereNotIn(DB::raw('lower(mime_type)'), $rules->blockedMimeTypes()));
+    }
+
+    /**
+     * Assets nothing has referenced for longer than the grace period: what the
+     * report-only sweep lists, and what a management page's cleanup filter
+     * narrows to.
+     *
+     * The age is the asset's own rather than its last detach, because the
+     * package does not record when an attachment went; an asset uploaded and
+     * never attached is exactly the case the grace period is protecting, and
+     * that one has no detach to date from.
+     *
+     * Being unattached is evidence rather than proof, so nothing here deletes.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeUnattachedFor(Builder $query, int $days): void
+    {
+        $query->whereDoesntHave('attachments')
+            ->where('created_at', '<=', now()->subDays($days));
     }
 
     /**

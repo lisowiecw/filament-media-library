@@ -146,6 +146,59 @@ The package's own painting lives entirely in that element's `style` attribute,
 so a decoder that renders over the top either paints above it or clears it with
 `tile.style.background = ''`.
 
+### Lifecycle and cleanup
+
+Removing a picture from a record detaches it, which touches the attachment row and
+nothing else. The asset, its object and its renderings stay, and so does every
+other place it is attached:
+
+```php
+$article->detachMedia('cover_image', $asset);
+```
+
+Deleting is the separate, explicit act. It soft-deletes the record and queues
+removal of the backing object and every derivative made from it, so a mistake is
+recoverable for as long as the queue takes and the bucket is still cleaned
+afterwards. The removal job uses the queue's own retries and lands in
+`failed_jobs` when they are exhausted, so a bucket outage is retried with
+`queue:retry` like anything else.
+
+A delete is blocked while anything still references the asset, including an
+external reference. The refusal carries the usage list, so the caller can show it
+and ask again:
+
+```php
+use Lisowiecw\MediaLibrary\Exceptions\DeleteBlocked;
+use Lisowiecw\MediaLibrary\Lifecycle\AssetLifecycle;
+
+try {
+    app(AssetLifecycle::class)->delete($asset);
+} catch (DeleteBlocked $blocked) {
+    // $blocked->usage is the list to review, then:
+    app(AssetLifecycle::class)->delete($asset, force: true);
+}
+```
+
+A host model may say how it reads in that list by defining `mediaUsageLabel()`;
+without one, the list names the model and its key. Restoring a soft-deleted asset
+brings back the record alone: its renderings are regenerated lazily on the next
+render rather than resurrected.
+
+These rules are package-global. A field cannot switch them off, because the asset
+one field deletes is the asset every other field shares.
+
+Finding unused files is a report you ask for, never something that happens to you:
+
+```bash
+php artisan media:unattached-assets
+php artisan media:unattached-assets --days=90
+```
+
+It lists assets nothing has referenced for longer than the grace period
+(`media-library.unattached_grace_days`, 30 days by default), deletes nothing, and
+is not scheduled by the package. Being unattached is evidence rather than proof:
+a URL can live in a sent email or an export the plugin cannot see.
+
 ## Changelog
 
 Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.

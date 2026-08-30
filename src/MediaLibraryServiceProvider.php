@@ -7,6 +7,7 @@ namespace Lisowiecw\MediaLibrary;
 use Illuminate\Support\Facades\Log;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Commands\RegenerateDerivatives;
+use Lisowiecw\MediaLibrary\Commands\ReportUnattachedAssets;
 use Lisowiecw\MediaLibrary\Derivatives\LazyDispatch;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\UploadCeiling;
@@ -25,6 +26,9 @@ class MediaLibraryServiceProvider extends PackageServiceProvider
             ->hasViews(static::$name)
             ->hasTranslations()
             ->hasCommand(RegenerateDerivatives::class)
+            // Registered, never scheduled: installing the package schedules
+            // nothing, and the sweep only ever reports.
+            ->hasCommand(ReportUnattachedAssets::class)
             ->discoversMigrations()
             ->runsMigrations();
     }
