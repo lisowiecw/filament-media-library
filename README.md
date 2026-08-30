@@ -202,6 +202,43 @@ asset detached yesterday keeps its full grace period however old it is; an asset
 nothing ever referenced counts from its upload instead. Being unattached is evidence rather than proof:
 a URL can live in a sent email or an export the plugin cannot see.
 
+### The management page
+
+The picker is what an editor uses. The library itself is a separate page, off by
+default and opted into per panel:
+
+```php
+->plugin(MediaLibraryPlugin::make()->withLibraryManagement())
+```
+
+Opting in is not opening up: the page is still gated on the `viewAny` ability,
+which the packaged policy refuses until your own policy says otherwise. The bulk
+actions ask for `deleteAny` and `restoreAny` for the button, then ask about every
+row individually before touching it, so a bulk action can only ever do what the
+same person could have done a row at a time.
+
+It is a table rather than the picker's grid, it lists everything the picker hides
+(private assets, blocked types, and the soft-deleted behind the trashed filter),
+and an object key pasted into the search box finds its asset. The view page shows
+the disk and object key as copyable fields, where the type came from, where an
+import came from, and the usage list that a force delete asks you to review.
+
+What it can do is rename (name and alt text), delete, restore, force delete,
+download and upload. What it deliberately cannot do is replace an asset's bytes
+in place, change its visibility, or move it between disks or directories: a
+published URL is a promise, and each of those would change what an existing
+address serves. Renaming is offered precisely because it touches nothing in
+storage.
+
+Cleanup has its own filter with a grace-period preset, and a bulk delete
+restricted to what that preset selects. Eligibility is recomputed at the moment
+of the delete rather than trusted from the filter the rows were listed under.
+
+A health readout carries the failed, missing and stale derivative counts with a
+regenerate action beside them. It queues a bounded batch, since it runs in a
+request, and names `media:regenerate-derivatives` for whatever is left. The
+importer stays a command and is never exposed here.
+
 ## Changelog
 
 Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.

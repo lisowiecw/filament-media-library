@@ -21,6 +21,11 @@ use Lisowiecw\MediaLibrary\MediaLibraryPlugin;
  * The panel every test runs against. It is deliberately as close to a real
  * application panel as Testbench allows, so a plugin that boots here boots
  * in a host application too.
+ *
+ * Management is opted in here because Testbench builds the panel during setup,
+ * before a test body could flip it. That the opt-in is honoured, and that a
+ * panel without it gets no resource, is asserted against a panel built by hand
+ * instead.
  */
 class TestPanelProvider extends PanelProvider
 {
@@ -41,6 +46,6 @@ class TestPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
-            ->plugin(MediaLibraryPlugin::make());
+            ->plugin(MediaLibraryPlugin::make()->withLibraryManagement());
     }
 }

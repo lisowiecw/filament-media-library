@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Commands;
 
+use Generator;
 use Illuminate\Console\Command;
-use Illuminate\Database\Eloquent\Builder;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Derivatives\LazyDispatch;
-use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
+use Lisowiecw\MediaLibrary\Derivatives\RegenerationTargets;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
-use Lisowiecw\MediaLibrary\Models\MediaDerivative;
 
 /**
  * The only way a derivative is ever regenerated in bulk, and always because
@@ -25,11 +24,6 @@ use Lisowiecw\MediaLibrary\Models\MediaDerivative;
  */
 class RegenerateDerivatives extends Command
 {
-    /**
-     * How many assets are read at once while hunting for missing renderings.
-     */
-    private const int CHUNK = 200;
-
     protected $signature = 'media:regenerate-derivatives
         {--missing : Assets with no rendering of a variant at all}
         {--failed : Renderings that exhausted their retries}
@@ -83,6 +77,22 @@ class RegenerateDerivatives extends Command
     }
 
     /**
+     * Everything this run would queue, read from the one place that knows.
+     *
+     * @param  list<DerivativeVariant>  $variants
+     * @return Generator<array{MediaAsset, DerivativeVariant, string}>
+     */
+    private function targets(array $variants): Generator
+    {
+        return RegenerationTargets::for(
+            $variants,
+            failed: (bool) $this->option('failed'),
+            stale: (bool) $this->option('stale'),
+            missing: (bool) $this->option('missing'),
+        );
+    }
+
+    /**
      * The variants this run covers, or null when the selector names something
      * the package does not have.
      *
@@ -107,80 +117,5 @@ class RegenerateDerivatives extends Command
         }
 
         return [$variant];
-    }
-
-    /**
-     * Everything this run would queue, as asset, variant and the reason it was
-     * selected.
-     *
-     * Selectors are read in turn rather than unioned, since a row can only be
-     * one of missing, failed or stale, and reading them apart is what lets the
-     * report say which.
-     *
-     * The reason travels as a plain string rather than a type of its own: it
-     * is three values with one consumer, the report column, and nothing
-     * branches on it.
-     *
-     * @param  list<DerivativeVariant>  $variants
-     * @return iterable<array{MediaAsset, DerivativeVariant, string}>
-     */
-    private function targets(array $variants): iterable
-    {
-        if ($this->option('failed')) {
-            yield from $this->rows($variants, 'failed', fn (Builder $query): Builder => $query
-                ->where('status', DerivativeStatus::Failed->value));
-        }
-
-        if ($this->option('stale')) {
-            yield from $this->rows($variants, 'stale', fn (Builder $query): Builder => $query->stale());
-        }
-
-        if ($this->option('missing')) {
-            yield from $this->missing($variants);
-        }
-    }
-
-    /**
-     * Existing rows narrowed by whichever selector asked for them, reported
-     * under that selector's name. A row whose asset has been deleted is
-     * skipped: the object is queued for removal, and regenerating it would
-     * write a rendering of something nobody can reach.
-     *
-     * @param  list<DerivativeVariant>  $variants
-     * @param  callable(Builder<MediaDerivative>): Builder<MediaDerivative>  $narrow
-     * @return iterable<array{MediaAsset, DerivativeVariant, string}>
-     */
-    private function rows(array $variants, string $reason, callable $narrow): iterable
-    {
-        $query = MediaDerivative::query()
-            ->with('asset')
-            ->whereIn('variant', array_column($variants, 'value'))
-            ->orderBy('id');
-
-        foreach ($narrow($query)->lazy() as $derivative) {
-            if ($derivative->asset !== null) {
-                yield [$derivative->asset, $derivative->variant, $reason];
-            }
-        }
-    }
-
-    /**
-     * Assets that could have a rendering of a variant and have no row for it
-     * at all: imports the pipeline never saw, and previews nobody has opened.
-     *
-     * @param  list<DerivativeVariant>  $variants
-     * @return iterable<array{MediaAsset, DerivativeVariant, string}>
-     */
-    private function missing(array $variants): iterable
-    {
-        $assets = MediaAsset::query()->with('derivatives')->orderBy('id');
-
-        foreach ($assets->lazyById(self::CHUNK) as $asset) {
-            foreach ($variants as $variant) {
-                if (Derivatives::wanted($asset, $variant)) {
-                    yield [$asset, $variant, 'missing'];
-                }
-            }
-        }
     }
 }

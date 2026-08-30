@@ -88,4 +88,95 @@ return [
             ],
         ],
     ],
+
+    'management' => [
+        'model' => 'media asset',
+        'model_plural' => 'media assets',
+        'navigation' => 'Media library',
+
+        'sections' => [
+            'asset' => 'Asset',
+            'storage' => 'Storage',
+            'storage_hint' => 'Where the bytes live. Copyable, and not editable: a published URL is built from these.',
+            'usage' => 'Usage',
+        ],
+
+        'fields' => [
+            'display_name' => 'Name',
+            'alt' => 'Alt text',
+            'mime_type' => 'Type',
+            'mime_source' => 'Type resolved by',
+            'size' => 'Size',
+            'visibility' => 'Visibility',
+            'source' => 'Source',
+            'import_source' => 'Imported from',
+            'disk' => 'Disk',
+            'object_key' => 'Object key',
+            'usage' => 'Uses',
+            'created_at' => 'Added',
+            'reviewed' => 'I have reviewed the list above and still want to delete this asset.',
+            'files' => 'Files',
+        ],
+
+        'enums' => [
+            'upload' => 'Upload',
+            'import' => 'Import',
+            'header' => 'Declared header',
+            'sniffed' => 'Sniffed content',
+            'extension' => 'File extension',
+            'unknown' => 'Unknown',
+        ],
+
+        'filters' => [
+            'unattached' => 'Attachment',
+            'unattached_any' => 'Any',
+            'unattached_now' => 'Not attached anywhere',
+            'unattached_past_grace' => 'Unattached for more than :days day(s)',
+            'visibility_any' => 'Any visibility',
+            'visibility_public' => 'Public',
+            'visibility_private' => 'Private',
+        ],
+
+        'actions' => [
+            'rename' => 'Rename',
+            'download' => 'Download',
+            'delete' => 'Delete',
+            'force_delete' => 'Force delete',
+            'restore' => 'Restore',
+            'upload' => 'Upload',
+            'delete_unattached' => 'Delete unattached (:days+ days)',
+            'health' => 'Derivative health',
+            'regenerate' => 'Regenerate',
+        ],
+
+        'modals' => [
+            'force_delete' => 'Force delete',
+            'delete_unattached' => 'Only the selected assets that nothing has referenced for more than :days day(s) will be deleted. Everything else is left alone.',
+            'health' => 'Derivative health',
+        ],
+
+        'health' => [
+            'summary' => ':failed failed, :missing missing and :stale stale rendering(s). Regenerating queues a batch of them.',
+        ],
+
+        'usage' => [
+            'count' => 'Used in :count place(s).',
+        ],
+
+        'notifications' => [
+            'renamed' => 'Renamed. Nothing in storage changed.',
+            'deleted' => 'Deleted.',
+            'delete_blocked' => 'This asset is still in use and was not deleted.',
+            'force_deleted' => 'Deleted permanently.',
+            'restored' => 'Restored.',
+            'uploaded' => 'Uploaded :count file(s).',
+            'bulk_deleted' => 'Deleted :count asset(s).',
+            'bulk_restored' => 'Restored :count asset(s).',
+            'regenerating' => 'Queued :count rendering(s).',
+            'regenerate_remaining' => ':count more are waiting. Run media:regenerate-derivatives to finish them.',
+            'skipped_in_use' => 'Skipped :count still in use.',
+            'skipped_forbidden' => 'Skipped :count you may not act on.',
+            'skipped_attached' => 'Skipped :count not unattached for :days day(s) or more.',
+        ],
+    ],
 ];

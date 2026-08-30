@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Lisowiecw\MediaLibrary\Commands;
 
 use Illuminate\Console\Command;
+use Lisowiecw\MediaLibrary\Lifecycle\GracePeriod;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 
 /**
@@ -26,8 +27,6 @@ class ReportUnattachedAssets extends Command
      * loaded.
      */
     private const int CHUNK = 200;
-
-    public const int DEFAULT_GRACE_DAYS = 30;
 
     protected $signature = 'media:unattached-assets
         {--days= : Override the configured grace period, in days}';
@@ -69,13 +68,7 @@ class ReportUnattachedAssets extends Command
         $named = $this->option('days');
 
         if ($named === null) {
-            /** @var int $configured */
-            $configured = config('media-library.unattached_grace_days', self::DEFAULT_GRACE_DAYS);
-
-            // A negative period would date into the future and report
-            // nothing, which reads as "all clear" rather than as the
-            // misconfiguration it is.
-            return max(0, $configured);
+            return GracePeriod::days();
         }
 
         if (! ctype_digit($named)) {

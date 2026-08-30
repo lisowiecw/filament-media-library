@@ -51,6 +51,28 @@ class MediaAssetPolicy
         return false;
     }
 
+    public function restore(?Authenticatable $user, MediaAsset $asset): bool
+    {
+        return false;
+    }
+
+    /**
+     * The two abilities the management page's bulk actions are gated on, asked
+     * once for the button rather than per row. They are not a licence over the
+     * selection: every row is still asked about individually before it is
+     * touched, so a bulk action can only ever do what the same person could
+     * have done one row at a time.
+     */
+    public function deleteAny(?Authenticatable $user): bool
+    {
+        return false;
+    }
+
+    public function restoreAny(?Authenticatable $user): bool
+    {
+        return false;
+    }
+
     public function detach(?Authenticatable $user, MediaAsset $asset): bool
     {
         return false;
