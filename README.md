@@ -188,6 +188,34 @@ render rather than resurrected.
 These rules are package-global. A field cannot switch them off, because the asset
 one field deletes is the asset every other field shares.
 
+#### External references
+
+Something outside any host model can record that it uses an asset: a newsletter,
+an export, a scheduled campaign. It is written as an attachment with no host, so
+it appears in the usage list and blocks a delete exactly like a host row does,
+with no second mechanism behind it:
+
+```php
+$asset->attachments()->createExternal('newsletter-2026-08', 'Campaign #412');
+```
+
+The identifier is your own handle on the thing making the reference and the label
+is what a person reviewing a delete reads. Registering the same identifier twice
+is the same reference stated again, so it lands on one row, enforced by a unique
+index rather than by the order two runs happen to land in. A label is written
+only when one is given, so a rerun that names the identifier alone leaves the
+existing wording alone. Withdraw it when the thing that made it is gone:
+
+```php
+$asset->attachments()->revokeExternal('newsletter-2026-08');
+```
+
+An external reference belongs to no field context, so `media()` and `firstMedia()`
+never return one and a picker never sees it. On the management page it can also be
+revoked per row from the usage panel, behind the `detach` ability. Host rows are
+listed there but not removable, and neither revoke will touch one whatever it is
+handed, since detaching belongs on the host record.
+
 Finding unused files is a report you ask for, never something that happens to you:
 
 ```bash

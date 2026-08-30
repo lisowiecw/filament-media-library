@@ -33,9 +33,18 @@ return new class extends Migration
             $table->index(['host_type', 'host_id', 'field_name', 'order']);
 
             // One asset appears at most once in one host and field context.
-            // External references are unconstrained by it, since their host
-            // columns are null and a null never collides.
+            // External references fall outside it, since their host columns
+            // are null and a null never collides; the index below is theirs.
             $table->unique(['media_asset_id', 'host_type', 'host_id', 'field_name'], 'media_attachments_context_unique');
+
+            // One External reference per identifier per asset: registering the
+            // same identifier twice is the same reference stated again rather
+            // than a second use, and the code that registers one is usually
+            // the code that reruns. The index above cannot carry that rule,
+            // since every host column is null on an external row and a null
+            // never collides; this one has the same shape in reverse, because
+            // `reference_identifier` is null on every host row.
+            $table->unique(['media_asset_id', 'reference_identifier'], 'media_attachments_reference_unique');
         });
     }
 

@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Lisowiecw\MediaLibrary\Attachments\Attachments;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
@@ -236,11 +237,22 @@ class MediaAsset extends Model
     }
 
     /**
-     * @return HasMany<MediaAttachment, $this>
+     * Everything that references this asset, host rows and External
+     * references alike, as the one relation both are written and read
+     * through.
+     *
+     * @return Attachments<MediaAttachment, $this>
      */
-    public function attachments(): HasMany
+    public function attachments(): Attachments
     {
-        return $this->hasMany(MediaAttachment::class);
+        $related = new MediaAttachment;
+
+        return new Attachments(
+            $related->newQuery(),
+            $this,
+            $related->getTable().'.media_asset_id',
+            $this->getKeyName(),
+        );
     }
 
     /**

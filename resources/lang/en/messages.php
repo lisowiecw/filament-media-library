@@ -143,6 +143,7 @@ return [
             'upload' => 'Upload',
             'delete_unattached' => 'Delete unattached (:days+ days)',
             'health' => 'Derivative health',
+            'revoke' => 'Revoke',
             'regenerate' => 'Regenerate',
         ],
 
@@ -166,6 +167,7 @@ return [
             'delete_blocked' => 'This asset is still in use and was not deleted.',
             'force_deleted' => 'Deleted permanently.',
             'restored' => 'Restored.',
+            'revoked' => 'Reference revoked. The file itself was not touched.',
             'uploaded' => 'Uploaded :count file(s).',
             'bulk_deleted' => 'Deleted :count asset(s).',
             'bulk_restored' => 'Restored :count asset(s).',

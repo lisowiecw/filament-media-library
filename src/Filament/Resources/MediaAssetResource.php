@@ -232,7 +232,7 @@ class MediaAssetResource extends Resource
                 ])
                 ->columns(2),
             Section::make(__('media-library::messages.management.sections.usage'))
-                ->schema(UsageReadout::panel()),
+                ->schema(UsageReadout::revocablePanel()),
         ]);
     }
 

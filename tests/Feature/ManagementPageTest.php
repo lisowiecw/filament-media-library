@@ -8,6 +8,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Derivatives\DerivativeHealth;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
@@ -291,4 +292,44 @@ it('skips the rows a policy refuses during a bulk delete', function (): void {
 
     expect($mine->fresh()->trashed())->toBeTrue()
         ->and($theirs->fresh()->trashed())->toBeFalse();
+});
+
+describe('the usage panel', function (): void {
+    it('revokes one external reference where it stands', function (): void {
+        $asset = makeAsset();
+        $reference = $asset->attachments()->createExternal('newsletter-2026-08', 'Campaign #412');
+
+        viewPage($asset)
+            ->assertSee('Campaign #412')
+            ->assertSee(__('media-library::messages.management.actions.revoke'))
+            ->callAction(TestAction::make('revoke-'.$reference->id)->schemaComponent('usage-'.$reference->id));
+
+        expect($asset->attachments()->count())->toBe(0);
+    });
+
+    it('offers no revoke on a host model row', function (): void {
+        $asset = makeAsset();
+        $host = article();
+        app(AttachmentReconciler::class)->reconcile($host, 'cover', [$asset->getKey()]);
+
+        $row = $asset->attachments()->sole();
+
+        viewPage($asset)->assertActionDoesNotExist(TestAction::make('revoke-'.$row->id)->schemaComponent('usage-'.$row->id));
+
+        expect($asset->attachments()->count())->toBe(1);
+    });
+
+    it('offers no revoke the policy does not allow', function (): void {
+        ManagementPolicy::$allows['detach'] = false;
+
+        $asset = makeAsset();
+        $reference = $asset->attachments()->createExternal('newsletter-2026-08');
+
+        // An unauthorised action is not disabled here: Filament drops it from
+        // the panel altogether, so the row lists the reference and offers
+        // nothing to do about it.
+        viewPage($asset)->assertDontSee(__('media-library::messages.management.actions.revoke'));
+
+        expect($asset->attachments()->count())->toBe(1);
+    });
 });
