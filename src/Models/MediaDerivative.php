@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
@@ -106,8 +107,62 @@ class MediaDerivative extends Model
         }
 
         return $asset->visibility->isPublic()
-            ? Storage::disk($this->disk)->url($this->object_key)
-            : DeliveryRoute::derivativeUrl($asset, $this->variant);
+            ? $this->stamped(Storage::disk($this->disk)->url($this->object_key))
+            : DeliveryRoute::derivativeUrl($asset, $this->variant, $this->config_digest);
+    }
+
+    /**
+     * The recorded digest hung off a public disk URL.
+     *
+     * A public object is served straight off the disk with a long
+     * `Cache-Control`, and a regeneration overwrites it in place, so without
+     * this the browser keeps the pre-regeneration bytes for as long as it
+     * feels like. A row of unknown provenance carries no digest and so keeps
+     * the bare URL it has always had.
+     */
+    private function stamped(string $url): string
+    {
+        if ($this->config_digest === null) {
+            return $url;
+        }
+
+        return $url.(str_contains($url, '?') ? '&' : '?').'digest='.$this->config_digest;
+    }
+
+    /**
+     * Whether this rendering was generated under settings the application has
+     * since changed.
+     *
+     * Staleness is a comparison rather than an inspection, and unknown
+     * provenance is not staleness: a null digest predates the plugin knowing
+     * what produced a rendering, so an upgrade marks nothing stale. Only a
+     * ready rendering can be stale, since a pending or failed row has no
+     * bytes for the settings to be wrong about.
+     */
+    public function isStale(): bool
+    {
+        return $this->status->isReady()
+            && $this->config_digest !== null
+            && $this->config_digest !== $this->variant->digest();
+    }
+
+    /**
+     * The same comparison as a query, asked per variant because each variant
+     * has a digest of its own.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeStale(Builder $query): void
+    {
+        $query->where('status', DerivativeStatus::Ready->value)
+            ->whereNotNull('config_digest')
+            ->where(function (Builder $query): void {
+                foreach (DerivativeVariant::cases() as $variant) {
+                    $query->orWhere(fn (Builder $query): Builder => $query
+                        ->where('variant', $variant->value)
+                        ->where('config_digest', '!=', $variant->digest()));
+                }
+            });
     }
 
     /**

@@ -113,6 +113,33 @@ final readonly class Derivatives
     }
 
     /**
+     * The operator's path, called from `media:regenerate-derivatives` once the
+     * command's own rate cap has let it through.
+     *
+     * A rendering that is already ready keeps its row, its object and its old
+     * digest while the job runs: the job overwrites in place and moves the
+     * digest only once the write succeeded, so a refresh that fails leaves a
+     * working card rather than an empty one. Only a variant with nothing
+     * behind it is marked pending, where there is no card to blank.
+     */
+    public static function regenerate(MediaAsset $asset, DerivativeVariant $variant): bool
+    {
+        if (! self::generatable($asset)) {
+            return false;
+        }
+
+        if (self::existing($asset, $variant)?->status->isReady() === true) {
+            GenerateDerivative::dispatch($asset->id, $variant);
+
+            return true;
+        }
+
+        self::dispatch($asset, $variant);
+
+        return true;
+    }
+
+    /**
      * Whether a rendering of this asset is even a coherent thing to ask for.
      * A video is a glyph tile plus a play badge and always was, because the
      * alternative is a poster frame, and that means a binary.

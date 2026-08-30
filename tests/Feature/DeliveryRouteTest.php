@@ -347,14 +347,15 @@ describe('derivative URL quantization', function (): void {
         expect(DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb))->not->toBe($first);
     });
 
-    it('changes when the settings that produced the rendering change', function (): void {
+    it('changes when the digest recorded on the rendering changes', function (): void {
         $asset = storedAsset();
 
-        $first = DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb);
+        $first = DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb, 'abc123');
 
-        config()->set('media-library.derivatives.variants.thumb.edge', 320);
-
-        expect(DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb))->not->toBe($first);
+        // The URL moves with the bytes, which move on a successful write, not
+        // with the setting that will eventually produce them.
+        expect(DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb, 'abc123'))->toBe($first)
+            ->and(DeliveryRoute::derivativeUrl($asset, DerivativeVariant::Thumb, 'def456'))->not->toBe($first);
     });
 
     it('leaves the original on its own per-render signature', function (): void {

@@ -90,7 +90,7 @@ final readonly class DeliveryRoute
      * about the check is weakened by it: View is still re-read on every hit,
      * and the window is a bound on a copied link, not a grant.
      */
-    public static function derivativeUrl(MediaAsset $asset, DerivativeVariant $variant): string
+    public static function derivativeUrl(MediaAsset $asset, DerivativeVariant $variant, ?string $digest = null): string
     {
         return URL::temporarySignedRoute(
             self::name(),
@@ -99,7 +99,16 @@ final readonly class DeliveryRoute
             // settings, which overwrites the object in place, hands out a URL
             // nothing has cached rather than leaving a stale rendering pinned
             // until the bucket rolls. The route itself ignores it.
-            ['asset' => $asset->ulid, 'variant' => $variant->value, 'digest' => $variant->digest()],
+            //
+            // It is the digest recorded on the row, not the one the current
+            // settings would produce: the URL has to move when the bytes move,
+            // which is after a successful write, not when the setting is
+            // edited. A row of unknown provenance carries none.
+            array_filter([
+                'asset' => $asset->ulid,
+                'variant' => $variant->value,
+                'digest' => $digest,
+            ], fn (?string $value): bool => $value !== null),
         );
     }
 

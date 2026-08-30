@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Lisowiecw\MediaLibrary\Derivatives;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Sleep;
 
 /**
  * The cap on how much generation a page of cards is allowed to ask for.
@@ -34,10 +35,6 @@ class LazyDispatch
     /**
      * Whether one more lazy job may be dispatched, spending the allowance when
      * the answer is yes.
-     *
-     * The per-minute half is a counter rather than a lock: two workers racing
-     * it can overshoot by one, which is a cap doing its job rather than a
-     * queue admission control that has to be exact.
      */
     public function allows(): bool
     {
@@ -45,6 +42,41 @@ class LazyDispatch
             return false;
         }
 
+        if (! $this->spendMinuteAllowance()) {
+            return false;
+        }
+
+        $this->spentThisRequest++;
+
+        return true;
+    }
+
+    /**
+     * Wait until one more job may be dispatched, then spend the allowance.
+     *
+     * This is the command's way in. A command is not a render, so the
+     * per-request budget, which exists to stop one page of cards queueing
+     * dozens of jobs, means nothing to it; the per-minute cap is the one that
+     * protects the object store, and it is the one a regeneration run obeys.
+     * Waiting rather than refusing is what makes a run over a large library
+     * finish instead of stopping a minute in.
+     */
+    public function await(): void
+    {
+        while (! $this->spendMinuteAllowance()) {
+            Sleep::for($this->secondsToNextMinute())->seconds();
+        }
+    }
+
+    /**
+     * The per-minute half, shared by both ways in.
+     *
+     * It is a counter rather than a lock: two workers racing it can overshoot
+     * by one, which is a cap doing its job rather than a queue admission
+     * control that has to be exact.
+     */
+    private function spendMinuteAllowance(): bool
+    {
         $key = 'media-library:lazy-dispatch:'.now()->format('YmdHi');
 
         /** @var int $spent */
@@ -58,9 +90,12 @@ class LazyDispatch
         // read back after the window it belongs to has passed.
         Cache::put($key, $spent + 1, 120);
 
-        $this->spentThisRequest++;
-
         return true;
+    }
+
+    private function secondsToNextMinute(): int
+    {
+        return max(1, 60 - (int) now()->format('s'));
     }
 
     private function perMinute(): int
