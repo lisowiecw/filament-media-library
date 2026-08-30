@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Lisowiecw\MediaLibrary\Filament\Actions;
 
 use Filament\Actions\BulkAction;
-use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Gate;
 use Lisowiecw\MediaLibrary\Lifecycle\AssetLifecycle;
@@ -31,9 +30,7 @@ final readonly class RestoreAssetsInBulk
             ->deselectRecordsAfterCompletion()
             ->action(function (Collection $records): void {
                 $lifecycle = app(AssetLifecycle::class);
-
-                $restored = 0;
-                $forbidden = 0;
+                $report = new BulkReport;
 
                 /** @var MediaAsset $record */
                 foreach ($records as $record) {
@@ -42,23 +39,16 @@ final readonly class RestoreAssetsInBulk
                     }
 
                     if (! Gate::allows('restore', $record)) {
-                        $forbidden++;
+                        $report->skipped('forbidden', $record);
 
                         continue;
                     }
 
                     $lifecycle->restore($record);
-                    $restored++;
+                    $report->did();
                 }
 
-                Notification::make()
-                    ->title(__('media-library::messages.management.notifications.bulk_restored', ['count' => $restored]))
-                    ->body($forbidden === 0 ? null : (string) __(
-                        'media-library::messages.management.notifications.skipped_forbidden',
-                        ['count' => $forbidden],
-                    ))
-                    ->status($forbidden === 0 ? 'success' : 'warning')
-                    ->send();
+                $report->send('bulk_restored');
             });
     }
 }

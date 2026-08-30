@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Lisowiecw\MediaLibrary\Filament\Actions;
 
 use Filament\Actions\BulkAction;
-use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Gate;
 use Lisowiecw\MediaLibrary\Exceptions\DeleteBlocked;
@@ -21,9 +20,9 @@ use Lisowiecw\MediaLibrary\Models\MediaAsset;
  * used assets by checkbox. A row that is still used, or that this person may
  * not delete, is left alone and counted.
  *
- * The skips are reported rather than swallowed. A partial result nobody is
- * told about reads as a complete one, and the operator would have no way of
- * knowing which half happened.
+ * The skips are reported rather than swallowed, and by name: a partial result
+ * nobody is told about reads as a complete one, and a count alone still leaves
+ * the operator to work out which half happened.
  *
  * There is deliberately no bulk force delete. Forcing means reviewing a usage
  * list, and there is no way to review fifty of them at once, so the override
@@ -42,10 +41,7 @@ final readonly class DeleteAssetsInBulk
             ->deselectRecordsAfterCompletion()
             ->action(function (Collection $records): void {
                 $lifecycle = app(AssetLifecycle::class);
-
-                $deleted = 0;
-                $blocked = 0;
-                $forbidden = 0;
+                $report = new BulkReport;
 
                 /** @var MediaAsset $record */
                 foreach ($records as $record) {
@@ -54,43 +50,20 @@ final readonly class DeleteAssetsInBulk
                     }
 
                     if (! Gate::allows('delete', $record)) {
-                        $forbidden++;
+                        $report->skipped('forbidden', $record);
 
                         continue;
                     }
 
                     try {
                         $lifecycle->delete($record);
-                        $deleted++;
+                        $report->did();
                     } catch (DeleteBlocked) {
-                        $blocked++;
+                        $report->skipped('in_use', $record);
                     }
                 }
 
-                Notification::make()
-                    ->title(__('media-library::messages.management.notifications.bulk_deleted', ['count' => $deleted]))
-                    ->body(static::skips($blocked, $forbidden))
-                    ->status($blocked + $forbidden === 0 ? 'success' : 'warning')
-                    ->send();
+                $report->send('bulk_deleted');
             });
-    }
-
-    /**
-     * The two reasons a row can be skipped, said apart: "still in use" is
-     * something the operator can act on, and "not yours to delete" is not.
-     */
-    private static function skips(int $blocked, int $forbidden): ?string
-    {
-        $lines = [];
-
-        if ($blocked > 0) {
-            $lines[] = __('media-library::messages.management.notifications.skipped_in_use', ['count' => $blocked]);
-        }
-
-        if ($forbidden > 0) {
-            $lines[] = __('media-library::messages.management.notifications.skipped_forbidden', ['count' => $forbidden]);
-        }
-
-        return $lines === [] ? null : implode(' ', $lines);
     }
 }

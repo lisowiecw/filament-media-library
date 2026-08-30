@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Filament\Schemas;
 
+use Filament\Schemas\Components\Text;
 use Illuminate\Support\HtmlString;
 use Lisowiecw\MediaLibrary\Lifecycle\UsageEntry;
+use Lisowiecw\MediaLibrary\Lifecycle\UsageList;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 
 /**
@@ -50,6 +52,28 @@ final readonly class UsageReadout
         );
 
         return new HtmlString('<ul class="list-disc ps-4">'.implode('', $items).'</ul>');
+    }
+
+    /**
+     * The panel both the asset's own page and the force-delete confirmation
+     * show: the count, and the list under it where there is one.
+     *
+     * It is one method rather than two similar schemas because the review a
+     * person does before overriding a block has to be the same readout they
+     * were shown on the asset, down to the wording.
+     *
+     * @return list<Text>
+     */
+    public static function panel(): array
+    {
+        return [
+            Text::make(fn (MediaAsset $record): string => (string) __(
+                'media-library::messages.management.usage.count',
+                ['count' => self::count($record)],
+            )),
+            Text::make(fn (MediaAsset $record): HtmlString => self::html(UsageList::for($record)))
+                ->visible(fn (MediaAsset $record): bool => self::count($record) > 0),
+        ];
     }
 
     /**

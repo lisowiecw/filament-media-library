@@ -56,6 +56,10 @@ final readonly class RegenerationTargets
      * skipped: the object is queued for removal, and regenerating it would
      * write a rendering of something nobody can reach.
      *
+     * The reason travels as a plain string rather than an enum because it is
+     * report wording and nothing branches on it: a caller prints it beside a
+     * count and never asks which one it got.
+     *
      * @param  list<DerivativeVariant>  $variants
      * @param  callable(Builder<MediaDerivative>): Builder<MediaDerivative>  $narrow
      * @return Generator<array{MediaAsset, DerivativeVariant, string}>
@@ -79,7 +83,12 @@ final readonly class RegenerationTargets
      * at all: imports the pipeline never saw, and previews nobody has opened.
      *
      * The candidate set is narrowed in SQL to what could possibly want one, so
-     * a library of documents is not walked asset by asset to be told no.
+     * a library of documents is not walked asset by asset to be told no. The
+     * narrowing is deliberately looser than `Derivatives::generatable()` and
+     * case-insensitive, since it is an optimisation rather than the decision:
+     * `wanted()` still asks properly for every row that survives it, and a
+     * prefilter that dropped a row the pipeline wants would be a bug rather
+     * than a saving.
      *
      * @param  list<DerivativeVariant>  $variants
      * @return Generator<array{MediaAsset, DerivativeVariant, string}>
@@ -88,7 +97,7 @@ final readonly class RegenerationTargets
     {
         $assets = MediaAsset::query()
             ->with('derivatives')
-            ->where('mime_type', 'like', 'image/%')
+            ->whereRaw("lower(mime_type) like 'image/%'")
             ->orderBy('id');
 
         foreach ($assets->lazyById(self::CHUNK) as $asset) {

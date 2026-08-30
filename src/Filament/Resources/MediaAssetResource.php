@@ -10,18 +10,15 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
-use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Filament\Actions\DeleteAsset;
 use Lisowiecw\MediaLibrary\Filament\Actions\DeleteAssetsInBulk;
 use Lisowiecw\MediaLibrary\Filament\Actions\DeleteUnattachedAssetsInBulk;
@@ -37,7 +34,6 @@ use Lisowiecw\MediaLibrary\Filament\Resources\MediaAssets\Pages\ViewMediaAsset;
 use Lisowiecw\MediaLibrary\Filament\Schemas\UsageReadout;
 use Lisowiecw\MediaLibrary\Filament\Tables\UnattachedFilter;
 use Lisowiecw\MediaLibrary\Library\LibrarySearch;
-use Lisowiecw\MediaLibrary\Lifecycle\UsageList;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 
 /**
@@ -155,16 +151,6 @@ class MediaAssetResource extends Resource
                 SelectFilter::make('mime_source')
                     ->label(__('media-library::messages.management.fields.mime_source'))
                     ->options(static::enumOptions(MimeSource::cases())),
-                TernaryFilter::make('visibility')
-                    ->label(__('media-library::messages.management.fields.visibility'))
-                    ->placeholder(__('media-library::messages.management.filters.visibility_any'))
-                    ->trueLabel(__('media-library::messages.management.filters.visibility_public'))
-                    ->falseLabel(__('media-library::messages.management.filters.visibility_private'))
-                    ->queries(
-                        true: fn (Builder $query): Builder => $query->where('visibility', Visibility::Public->value),
-                        false: fn (Builder $query): Builder => $query->where('visibility', Visibility::Private->value),
-                        blank: fn (Builder $query): Builder => $query,
-                    ),
                 UnattachedFilter::make(),
             ])
             ->headerActions([
@@ -236,14 +222,7 @@ class MediaAssetResource extends Resource
                 ])
                 ->columns(2),
             Section::make(__('media-library::messages.management.sections.usage'))
-                ->schema([
-                    Text::make(fn (MediaAsset $record): string => __(
-                        'media-library::messages.management.usage.count',
-                        ['count' => UsageReadout::count($record)],
-                    )),
-                    Text::make(fn (MediaAsset $record) => UsageReadout::html(UsageList::for($record)))
-                        ->visible(fn (MediaAsset $record): bool => UsageReadout::count($record) > 0),
-                ]),
+                ->schema(UsageReadout::panel()),
         ]);
     }
 

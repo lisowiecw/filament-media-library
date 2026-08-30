@@ -132,9 +132,6 @@ return [
             'unattached_any' => 'Any',
             'unattached_now' => 'Not attached anywhere',
             'unattached_past_grace' => 'Unattached for more than :days day(s)',
-            'visibility_any' => 'Any visibility',
-            'visibility_public' => 'Public',
-            'visibility_private' => 'Private',
         ],
 
         'actions' => [
@@ -174,9 +171,10 @@ return [
             'bulk_restored' => 'Restored :count asset(s).',
             'regenerating' => 'Queued :count rendering(s).',
             'regenerate_remaining' => ':count more are waiting. Run media:regenerate-derivatives to finish them.',
-            'skipped_in_use' => 'Skipped :count still in use.',
-            'skipped_forbidden' => 'Skipped :count you may not act on.',
-            'skipped_attached' => 'Skipped :count not unattached for :days day(s) or more.',
+            'skipped_in_use' => 'Skipped :count still in use: :names.',
+            'skipped_forbidden' => 'Skipped :count you may not act on: :names.',
+            'skipped_attached' => 'Skipped :count not unattached for :days day(s) or more: :names.',
+            'and_more' => 'and :count more',
         ],
     ],
 ];
