@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use DateTimeInterface;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;

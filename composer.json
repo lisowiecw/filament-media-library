@@ -83,7 +83,7 @@
             "vendor/bin/pest --type-coverage --min=100"
         ],
         "test:unit": [
-            "vendor/bin/pest --parallel"
+            "@php -d ffi.enable=1 vendor/bin/pest --parallel"
         ],
         "test": [
             "@analyse",
