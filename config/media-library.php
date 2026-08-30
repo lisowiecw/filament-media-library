@@ -16,9 +16,22 @@ return [
     | application's own default filesystem disk, resolved through the Storage
     | facade at use time; the package never names a driver of its own.
     |
+    | A bucket is a disk. An application that keeps public and private media in
+    | two buckets names both disks below and says nothing more: a field that
+    | declares only its visibility lands in the matching one. That pair is the
+    | supported shape for a two-bucket deployment. Set neither key and disk
+    | resolution is exactly what it was before the pair existed; set one and the
+    | other visibility still falls through to the disk below, which is what a
+    | half-migrated deployment gets. A field that names a disk of its own always
+    | wins.
+    |
     */
 
     'disk' => env('MEDIA_LIBRARY_DISK'),
+
+    'public_disk' => env('MEDIA_LIBRARY_PUBLIC_DISK'),
+
+    'private_disk' => env('MEDIA_LIBRARY_PRIVATE_DISK'),
 
     'directory' => env('MEDIA_LIBRARY_DIRECTORY', 'media'),
 

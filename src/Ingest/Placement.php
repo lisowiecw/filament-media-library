@@ -22,6 +22,10 @@ final readonly class Placement
     /**
      * Field configuration wins over package configuration, which falls back to
      * the application's own default disk, a `media` prefix and private.
+     *
+     * A field that names no disk takes the one its resolved visibility is
+     * paired with, which is how a two-bucket deployment states its pairing once
+     * in config instead of at every call site.
      */
     public static function resolve(
         ?string $disk = null,
@@ -41,11 +45,17 @@ final readonly class Placement
         $configuredVisibility = config('media-library.visibility', 'private');
 
         $visibility ??= $configuredVisibility;
+        $visibility = $visibility instanceof Visibility ? $visibility : Visibility::from($visibility);
+
+        /** @var string|null $pairedDisk */
+        $pairedDisk = $visibility->isPublic()
+            ? config('media-library.public_disk')
+            : config('media-library.private_disk');
 
         return new self(
-            disk: $disk ?? $configuredDisk ?? $defaultDisk,
+            disk: $disk ?? $pairedDisk ?? $configuredDisk ?? $defaultDisk,
             directory: trim($directory ?? $configuredDirectory, '/'),
-            visibility: $visibility instanceof Visibility ? $visibility : Visibility::from($visibility),
+            visibility: $visibility,
         );
     }
 
