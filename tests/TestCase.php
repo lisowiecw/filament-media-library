@@ -86,6 +86,7 @@ abstract class TestCase extends Orchestra
         $app['config']->set('filesystems.disks.'.$this->disk, [
             'driver' => 'local',
             'root' => storage_path('app/'.$this->disk),
+            'url' => '/storage/'.$this->disk,
         ]);
 
         $app['view']->addNamespace('media-library-tests', __DIR__.'/Fixtures/views');

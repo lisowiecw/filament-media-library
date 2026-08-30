@@ -313,6 +313,7 @@ class MediaPicker extends Field
             disk: $this->evaluate($this->disk),
             directory: $this->evaluate($this->directory),
             visibility: $this->evaluate($this->visibility),
+            field: $this->getName(),
         );
     }
 

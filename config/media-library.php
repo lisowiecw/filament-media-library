@@ -39,6 +39,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Disk and visibility invariant
+    |--------------------------------------------------------------------------
+    |
+    | A placement whose disk cannot deliver its visibility is refused when the
+    | placement resolves: a public placement on a disk configured with no `url`
+    | has no address to hand a browser, and a private placement on a disk
+    | declared public, as the `public_disk` above or on the disk itself, is
+    | authorized on the way in while its bytes stay fetchable by anyone. The check reads this configuration only; nothing asks
+    | the provider, which on R2 would answer no ACL call anyway.
+    |
+    | Turn it off if the application deliberately serves a public disk through
+    | its own origin, which is a deployment the package cannot see.
+    |
+    */
+
+    'enforce_disk_visibility' => env('MEDIA_LIBRARY_ENFORCE_DISK_VISIBILITY', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Ingest floor
     |--------------------------------------------------------------------------
     |

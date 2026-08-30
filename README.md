@@ -102,6 +102,28 @@ the policy is the piece you replace: ask
 `Lisowiecw\MediaLibrary\Authorization\MediaAuthorization` rather than the `Gate`
 facade, and a public asset answers true without a policy ever being consulted.
 
+### Storage placement
+
+A field's placement is the disk, directory and visibility its uploads land with.
+An application that keeps public and private media in two buckets names both
+disks once, in `media-library.public_disk` and `media-library.private_disk`
+(`MEDIA_LIBRARY_PUBLIC_DISK`, `MEDIA_LIBRARY_PRIVATE_DISK`), and a field that
+declares only its visibility lands in the matching one. A field that names a disk
+of its own still wins.
+
+Because a bucket's access is a property of the bucket rather than of the object,
+a disk that cannot deliver the visibility declared on it is a configuration
+error. A public placement on a disk configured with no `url`, or a private
+placement on a disk you have declared public (as `public_disk`, or with
+`'visibility' => 'public'` on the disk itself), throws `PlacementMisconfigured` when
+the placement resolves, so the field fails on the first render rather than on the
+first upload. Nothing asks the storage provider: the check reads your
+configuration only.
+
+If you deliberately serve a public disk through your own origin, set
+`media-library.enforce_disk_visibility` (`MEDIA_LIBRARY_ENFORCE_DISK_VISIBILITY`)
+to false, which stands both rules down.
+
 ### Delivery
 
 A private asset's content reaches a browser through one signed route the plugin
