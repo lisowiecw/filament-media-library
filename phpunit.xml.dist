@@ -25,6 +25,12 @@
         <testsuite name="Unit">
             <directory>tests/Unit</directory>
         </testsuite>
+        <!-- Browser tests drive a real Chromium against the workbench, so they
+             are their own suite: `composer test:unit` names the other three and
+             leaves this one to `composer test:browser`. -->
+        <testsuite name="Browser">
+            <directory>tests/Browser</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>

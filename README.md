@@ -864,6 +864,36 @@ The suite reads the workbench, not the other way round. `Article` lives at
 migration, which `tests/TestCase.php` loads. The example and the tests attach
 media to one Article, so its schema is stated in one place.
 
+### Browser tests
+
+The suite that drives the workbench in a real browser is its own testsuite, so
+an environment without a browser still has a working build:
+
+```bash
+composer install
+npm install
+npx playwright install --with-deps chromium
+composer build                          # the suite opens the workbench panel
+vendor/bin/testbench filament:assets
+composer test:browser
+```
+
+It covers the parts that only exist in a browser: picking through the modal,
+dropping onto each drop surface, reordering from the keyboard, what a private
+delivery and a public disk URL each do to a request, what a card paints before
+its thumbnail exists, the management page, and what a refusal looks like to the
+person who caused it.
+
+There are no retries. A browser test that fails intermittently is made
+deterministic or deleted, which is
+[ADR 16](docs/adr/0016-a-flaky-browser-test-is-deleted-not-retried.md).
+
+One piece of scaffolding is worth knowing about. The in-process server the
+runner uses rebuilds each request from its raw body and does not carry
+uploaded files across, so `tests/Browser/RecoverUploadedFiles.php` is a
+test-only middleware that puts them back before the application sees the
+request. Without it no upload in the suite would arrive.
+
 ## Changelog
 
 Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.

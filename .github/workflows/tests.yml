@@ -69,6 +69,65 @@ jobs:
       - name: Test Suite
         run: composer test:unit
 
+  # The browser suite drives a real Chromium against the workbench, so it runs
+  # once rather than across the matrix: what it proves is that the panel works,
+  # which is a fact about the package rather than about a version pair. One
+  # Filament major is enough, and it is the one the workbench is built for.
+  browser:
+    name: browser
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.4
+          extensions: dom, curl, libxml, mbstring, zip, fileinfo, gd, sqlite, pdo_sqlite, bcmath, intl
+          ini-values: error_reporting=E_ALL
+          tools: composer:v2
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          composer update --prefer-stable --prefer-dist --no-interaction --no-progress --no-scripts
+          composer run prepare
+          npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # The suite opens the workbench panel, so the workbench has to exist and
+      # Filament's own assets have to be published for it.
+      - name: Build the workbench
+        run: |
+          composer build
+          vendor/bin/testbench filament:assets
+
+      - name: Browser Suite
+        run: composer test:browser 2>&1 | tee browser-tests.log
+
+      # What a failure leaves behind: the screenshot the runner saves for the
+      # test that failed, and the run's own output, which carries the console
+      # messages the page logged.
+      - name: Failure artefacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-failures
+          path: |
+            tests/Browser/Screenshots/
+            browser-tests.log
+          if-no-files-found: ignore
+          retention-days: 7
+
   # One stable name for branch protection to require, since every matrix leg is
   # named after the versions it ran. A leg that fails, or is cancelled by
   # fail-fast before it reports, leaves this red, so a red Filament 4 job blocks

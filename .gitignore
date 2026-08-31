@@ -13,3 +13,5 @@ composer.lock
 .vscode
 .playwright-mcp/
 .claude/worktrees/
+node_modules/
+tests/Browser/Screenshots/

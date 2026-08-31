@@ -20,6 +20,7 @@ use Lisowiecw\MediaLibrary\MediaLibraryPlugin;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Lisowiecw\MediaLibrary\Models\MediaDerivative;
+use Lisowiecw\MediaLibrary\Tests\Browser\BrowserTestCase;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\ArticleForm;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\HostPolicy;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\ManagementPolicy;
@@ -29,7 +30,10 @@ use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Workbench\App\Models\Article;
 
-uses(TestCase::class)->in(__DIR__);
+// The suite's own test case covers everything but the browser tests, which
+// drive the workbench application rather than the fixture panel.
+uses(TestCase::class)->in('ArchTest.php', 'Feature', 'Unit');
+uses(BrowserTestCase::class)->in('Browser');
 
 // The stand-in host policy answers through statics, so one test's answer would
 // otherwise be the next test's starting point.
@@ -39,7 +43,7 @@ uses()->beforeEach(function (): void {
     ManagementPolicy::reset();
     tenantIs(null);
     DownloadFilename::forget();
-})->in(__DIR__);
+})->in('ArchTest.php', 'Feature', 'Unit');
 /**
  * Tenants this panel for the rest of the test, the way a host application
  * does: on the plugin instance the panel already holds.

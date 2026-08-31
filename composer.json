@@ -36,6 +36,7 @@
         "laravel/pint": "^1.29",
         "orchestra/testbench": "^10.0||^11.0",
         "pestphp/pest": "^4.6||^5.0",
+        "pestphp/pest-plugin-browser": "^4.0||^5.0",
         "pestphp/pest-plugin-laravel": "^4.1||^5.0",
         "pestphp/pest-plugin-livewire": "^4.0||^5.0",
         "pestphp/pest-plugin-type-coverage": "^4.0||^5.0",
@@ -88,7 +89,10 @@
             "vendor/bin/pest --type-coverage --min=100"
         ],
         "test:unit": [
-            "@php -d ffi.enable=1 vendor/bin/pest --parallel"
+            "@php -d ffi.enable=1 vendor/bin/pest --parallel --testsuite=Arch,Feature,Unit"
+        ],
+        "test:browser": [
+            "@php vendor/bin/pest --testsuite=Browser"
         ],
         "test": [
             "@analyse",
