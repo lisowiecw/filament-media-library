@@ -14,6 +14,7 @@ use Lisowiecw\MediaLibrary\Import\Cardinality;
 use Lisowiecw\MediaLibrary\Import\ColumnDiscovery;
 use Lisowiecw\MediaLibrary\Import\DiscoverySource;
 use Lisowiecw\MediaLibrary\Import\DiskTraversal;
+use Lisowiecw\MediaLibrary\Import\ImportDrift;
 use Lisowiecw\MediaLibrary\Import\ImportOmission;
 use Lisowiecw\MediaLibrary\Import\ImportReport;
 use Lisowiecw\MediaLibrary\Import\ImportRequest;
@@ -44,6 +45,7 @@ class ImportLegacyMedia extends Command implements Isolatable
         {--visibility= : Record every adopted object as public or private, rather than resolving it}
         {--copy : Copy the bytes to a fresh key under the media directory instead of adopting in place}
         {--sniff : Read the bytes to resolve the mime type, at one full read per object}
+        {--check-drift : Compare an already-present asset to the disk and report what no longer matches. Repairs nothing}
         {--chunk=500 : Host rows read per batch}
         {--report= : Where to write the machine-readable report}
         {--dry-run : Report what would happen and write nothing}';
@@ -144,6 +146,7 @@ class ImportLegacyMedia extends Command implements Isolatable
             visibility: $this->visibility(),
             copy: (bool) $this->option('copy'),
             sniff: (bool) $this->option('sniff'),
+            checkDrift: (bool) $this->option('check-drift'),
             dryRun: (bool) $this->option('dry-run'),
             chunk: max((int) $chunk, 1),
         );
@@ -182,6 +185,7 @@ class ImportLegacyMedia extends Command implements Isolatable
             visibility: $this->visibility(),
             copy: (bool) $this->option('copy'),
             sniff: (bool) $this->option('sniff'),
+            checkDrift: (bool) $this->option('check-drift'),
             dryRun: (bool) $this->option('dry-run'),
             chunk: max((int) $chunk, 1),
         );
@@ -251,17 +255,23 @@ class ImportLegacyMedia extends Command implements Isolatable
             $reason = ImportOmission::from($omission['reason'])->label();
             $detail = $omission['detail'] === null ? $reason : $reason.' ('.$omission['detail'].')';
 
-            // A skipped element names its index, because the row it came from
-            // was otherwise adopted and a reader has to know which part of it
-            // was not.
-            $this->components->twoColumnDetail(
-                $omission['element'] === null ? $omission['path'] : $omission['path'].' ['.$omission['element'].']',
-                $detail,
-            );
+            $this->components->twoColumnDetail($this->itemLabel($omission['path'], $omission['element']), $detail);
+        }
+
+        // Drift is printed after the omissions and in its own shape: these
+        // rows were adopted and are still there, so a reader must not take
+        // them for things the run declined.
+        foreach ($report->drifts as $drift) {
+            $field = ImportDrift::from($drift['field']);
+            $detail = $drift['recorded'] === null && $drift['reported'] === null
+                ? $field->label()
+                : sprintf('%s (recorded %s, storage reports %s)', $field->label(), $drift['recorded'] ?? 'nothing', $drift['reported'] ?? 'nothing');
+
+            $this->components->twoColumnDetail($this->itemLabel($drift['path'], $drift['element']), $detail);
         }
 
         $this->components->info(sprintf(
-            '%d row(s) examined, %d %s, %d attached, %d already present, %d row(s) omitted, %d element(s) skipped.',
+            '%d row(s) examined, %d %s, %d attached, %d already present, %d row(s) omitted, %d element(s) skipped%s.',
             $report->examined,
             $report->registered,
             $report->request->dryRun ? 'would be adopted' : 'adopted',
@@ -269,7 +279,18 @@ class ImportLegacyMedia extends Command implements Isolatable
             $report->alreadyPresent,
             $report->omittedRows(),
             $report->skippedElements(),
+            $report->request->checkDrift ? sprintf(', %d drifted', count($report->drifts)) : '',
         ));
+    }
+
+    /**
+     * What one line of the report is named by. An element numbers itself,
+     * because the row it came from was otherwise adopted and a reader has to
+     * know which part of it this line is about.
+     */
+    private function itemLabel(string $path, ?int $element): string
+    {
+        return $element === null ? $path : $path.' ['.$element.']';
     }
 
     /**

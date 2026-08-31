@@ -34,11 +34,31 @@ final class ImportReport
      */
     public array $omissions = [];
 
+    /**
+     * What `--check-drift` found: an already-present asset whose recorded
+     * metadata no longer matches its object. Kept apart from the omissions
+     * because nothing here was declined, and because a reader diffing two runs
+     * wants to know which list a line moved between.
+     *
+     * @var list<array{path: string, field: string, recorded: string|null, reported: string|null, element: int|null}>
+     */
+    public array $drifts = [];
+
     public function __construct(public readonly ImportRequest $request) {}
 
     public function omit(string $path, ImportOmission $reason, ?string $detail = null, ?int $element = null): void
     {
         $this->omissions[] = ['path' => $path, 'reason' => $reason->value, 'detail' => $detail, 'element' => $element];
+    }
+
+    /**
+     * A field of an already-present row that the disk contradicts. Both values
+     * are carried, because a drift line that says only which field moved is
+     * one nobody can act on without going to the disk themselves.
+     */
+    public function drift(string $path, ImportDrift $field, ?string $recorded = null, ?string $reported = null, ?int $element = null): void
+    {
+        $this->drifts[] = ['path' => $path, 'field' => $field->value, 'recorded' => $recorded, 'reported' => $reported, 'element' => $element];
     }
 
     /**
@@ -77,8 +97,10 @@ final class ImportReport
                 'attached' => $this->attached,
                 'omitted-rows' => $this->omittedRows(),
                 'skipped-elements' => $this->skippedElements(),
+                'drifted' => count($this->drifts),
             ],
             'omissions' => $this->omissions,
+            'drifts' => $this->drifts,
         ];
     }
 

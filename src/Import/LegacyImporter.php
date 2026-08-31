@@ -231,6 +231,10 @@ class LegacyImporter
         if ($existing !== null) {
             $report->alreadyPresent++;
 
+            if ($request->checkDrift) {
+                $this->checkDrift($existing, $objectKey, $request, $report, $disk, $element);
+            }
+
             return $existing;
         }
 
@@ -306,6 +310,56 @@ class LegacyImporter
         $report->registered++;
 
         return $asset;
+    }
+
+    /**
+     * What the disk says about an already-present asset, against what the row
+     * records. Nothing is written: a drift is reported and the item is exited,
+     * because a repair is a decision an operator makes and not one a run makes
+     * on their behalf.
+     *
+     * An object that has gone is reported on its own and ends the check, since
+     * every other comparison would then be against nothing and would read as
+     * though the values had merely moved.
+     *
+     * The mime type is compared only where this run's ladder landed on the
+     * same rung the row records. Which rung answers is decided by whether the
+     * run was given `--sniff`, so a type read off a different rung is a
+     * statement about the two runs rather than about the object, and reporting
+     * it would call a sniffed row drifted the moment somebody checked without
+     * paying for a read.
+     *
+     * The key named is the one that was read, which under `--copy` is the
+     * destination rather than the legacy path an omission would name: the
+     * drift is about the object the row points at, and that is the copy.
+     */
+    private function checkDrift(
+        MediaAsset $asset,
+        string $objectKey,
+        ImportRequest $request,
+        ImportReport $report,
+        FilesystemAdapter $disk,
+        ?int $element,
+    ): void {
+        if (! $disk->exists($objectKey)) {
+            $report->drift($objectKey, ImportDrift::MissingObject, element: $element);
+
+            return;
+        }
+
+        $size = $this->size($disk, $objectKey);
+
+        if ($size === null) {
+            $report->drift($objectKey, ImportDrift::UnreadableMetadata, element: $element);
+        } elseif ($size !== $asset->size) {
+            $report->drift($objectKey, ImportDrift::Size, (string) $asset->size, (string) $size, $element);
+        }
+
+        $mime = MimeLadder::resolve($disk, $objectKey, $asset->extension, $request->sniff);
+
+        if ($mime->source === $asset->mime_source && $mime->mimeType !== $asset->mime_type) {
+            $report->drift($objectKey, ImportDrift::MimeType, $asset->mime_type, $mime->mimeType, $element);
+        }
     }
 
     /**

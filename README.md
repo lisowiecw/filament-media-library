@@ -586,6 +586,18 @@ Imports say who the adopted objects belong to, and `none` is a valid answer:
 php artisan media:import --disk=media --prefix=legacy --source=disk --tenant=none
 ```
 
+An import that has already run can be asked what has moved under it since:
+
+```bash
+php artisan media:import --disk=media --model="App\Models\Post" --column=cover_path --tenant=none --check-drift
+```
+
+That compares every already-present asset to its object and reports what no
+longer matches, naming the field, the recorded value and the value storage
+reports. It repairs nothing, and it is a flag rather than a default because it
+reads every object the run already holds, which is the cost the default re-run
+exists to avoid.
+
 Jobs and commands are neither scoped nor policy-checked. An operator on the
 server is not a request inside a panel, and a claim that could only be made from
 inside the tenant it was claiming for could never be made at all.

@@ -15,6 +15,10 @@ use Lisowiecw\MediaLibrary\Enums\Visibility;
  * share and no field on it is nullable for the sake of the other kind. See
  * ADR 15.
  *
+ * Drift checking is opt-in for the same reason a sniff is: an already-present
+ * row costs one query and no object read, and comparing it to the disk costs a
+ * read of every one of them on every run.
+ *
  * The tenant is null when the run was told `none`, which is the operator
  * saying these bytes belong to no one rather than saying nothing. The command
  * makes them say one or the other.
@@ -30,6 +34,7 @@ final readonly class ImportRequest
         public ?Visibility $visibility = null,
         public bool $copy = false,
         public bool $sniff = false,
+        public bool $checkDrift = false,
         public bool $dryRun = false,
         public int $chunk = 500,
     ) {}

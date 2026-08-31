@@ -7,6 +7,7 @@ use Illuminate\Testing\PendingCommand;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
+use Lisowiecw\MediaLibrary\Import\ImportDrift;
 use Lisowiecw\MediaLibrary\Import\ImportOmission;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\LegacyRecord;
@@ -291,5 +292,134 @@ describe('copy mode', function (): void {
         expect(MediaAsset::query()->count())->toBe(1)
             ->and(importReport()['counts']['already-present'])->toBe(1)
             ->and(importReport()['counts']['copied'])->toBe(0);
+    });
+});
+
+describe('drift', function (): void {
+    it('reports a recorded size that no longer matches the disk', function (): void {
+        legacyRow('avatars/drifted.txt');
+
+        runImport()->run();
+
+        MediaAsset::query()->sole()->update(['size' => 3]);
+
+        runImport(['--check-drift' => true])->assertSuccessful()->run();
+
+        $report = importReport();
+
+        expect($report['counts']['drifted'])->toBe(1)
+            ->and($report['drifts'])->toHaveCount(1)
+            ->and($report['drifts'][0]['path'])->toBe('avatars/drifted.txt')
+            ->and($report['drifts'][0]['field'])->toBe(ImportDrift::Size->value)
+            ->and($report['drifts'][0]['recorded'])->toBe('3')
+            ->and($report['drifts'][0]['reported'])->toBe((string) strlen('the legacy bytes'));
+    });
+
+    it('reports a mime type the object no longer carries', function (): void {
+        legacyRow('avatars/retyped.txt');
+
+        runImport()->run();
+
+        MediaAsset::query()->sole()->update(['mime_type' => 'image/png']);
+
+        runImport(['--check-drift' => true])->run();
+
+        $drifts = importReport()['drifts'];
+
+        expect($drifts)->toHaveCount(1)
+            ->and($drifts[0]['field'])->toBe(ImportDrift::MimeType->value)
+            ->and($drifts[0]['recorded'])->toBe('image/png')
+            ->and($drifts[0]['reported'])->toBe('text/plain');
+    });
+
+    it('reports an object that has gone as its own case rather than as a difference', function (): void {
+        legacyRow('avatars/vanished.txt');
+
+        runImport()->run();
+
+        Storage::disk('media')->delete('avatars/vanished.txt');
+
+        runImport(['--check-drift' => true])->run();
+
+        $drifts = importReport()['drifts'];
+
+        expect($drifts)->toHaveCount(1)
+            ->and($drifts[0]['field'])->toBe(ImportDrift::MissingObject->value)
+            ->and($drifts[0]['recorded'])->toBeNull()
+            ->and($drifts[0]['reported'])->toBeNull();
+    });
+
+    it('reports nothing on a clean re-run, and repairs nothing on a dirty one', function (): void {
+        legacyRow('avatars/clean.txt');
+
+        runImport()->run();
+
+        runImport(['--check-drift' => true])->run();
+
+        expect(importReport()['drifts'])->toBe([]);
+
+        Storage::disk('media')->put('avatars/clean.txt', 'a longer set of legacy bytes');
+
+        runImport(['--check-drift' => true])->run();
+
+        expect(importReport()['drifts'])->toHaveCount(1)
+            ->and(MediaAsset::query()->sole()->size)->toBe(strlen('the legacy bytes'));
+    });
+
+    it('reads nothing from the disk for an already-present row without the flag', function (): void {
+        legacyRow('avatars/unchecked.txt');
+
+        runImport()->run();
+
+        Storage::disk('media')->put('avatars/unchecked.txt', 'a longer set of legacy bytes');
+
+        runImport()->run();
+
+        $report = importReport();
+
+        expect($report['drifts'])->toBe([])
+            ->and($report['counts']['already-present'])->toBe(1)
+            ->and(MediaAsset::query()->sole()->size)->toBe(strlen('the legacy bytes'));
+
+        // The same disk, the same row, one flag apart: what the default run
+        // did not report is exactly what it did not read.
+        runImport(['--check-drift' => true])->run();
+
+        expect(importReport()['drifts'])->toHaveCount(1);
+    });
+
+    it('reports a type the object itself no longer has, read from the disk', function (): void {
+        $png = (string) base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', true);
+
+        legacyRow('avatars/swapped.png', contents: $png);
+
+        // Sniffed on both runs: a type read off one rung says nothing about a
+        // type read off another, so the object is measured the same way twice.
+        runImport(['--sniff' => true])->run();
+
+        expect(MediaAsset::query()->sole()->mime_type)->toBe('image/png');
+
+        Storage::disk('media')->put('avatars/swapped.png', 'not a picture at all');
+
+        runImport(['--check-drift' => true, '--sniff' => true])->run();
+
+        $drifts = importReport()['drifts'];
+
+        expect($drifts)->toHaveCount(2)
+            ->and(array_column($drifts, 'field'))->toBe([ImportDrift::Size->value, ImportDrift::MimeType->value])
+            ->and($drifts[1]['recorded'])->toBe('image/png')
+            ->and($drifts[1]['reported'])->toBe('text/plain');
+    });
+
+    it('says nothing about a type resolved on a rung this run did not reach', function (): void {
+        legacyRow('avatars/sniffed.txt');
+
+        runImport(['--sniff' => true])->run();
+
+        expect(MediaAsset::query()->sole()->mime_source)->toBe(MimeSource::Sniffed);
+
+        runImport(['--check-drift' => true])->run();
+
+        expect(importReport()['drifts'])->toBe([]);
     });
 });
