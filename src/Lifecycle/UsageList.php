@@ -91,7 +91,7 @@ final readonly class UsageList
     {
         $class = Model::getActualClassNameForMorph((string) $attachment->host_type);
 
-        if (! class_exists($class) || ! is_subclass_of($class, Model::class)) {
+        if (! class_exists($class)) {
             return null;
         }
 

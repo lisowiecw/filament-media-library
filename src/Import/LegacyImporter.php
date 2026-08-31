@@ -396,7 +396,7 @@ class LegacyImporter
     {
         $named = $discovery->model;
 
-        if (! class_exists($named) || ! is_subclass_of($named, Model::class)) {
+        if (! class_exists($named)) {
             throw ImportRefused::unknownModel($named);
         }
 
