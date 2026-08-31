@@ -49,6 +49,14 @@ the `4.*` leg of the CI matrix in `.github/workflows/tests.yml`. A red Filament 
 job blocks a release: no job or step is allowed to continue on error, and a
 single `matrix` job stands behind every leg and fails unless all of them passed,
 which is the one stable name branch protection requires. A test asserts both.
+Tagging is guarded independently: `release-guard.yml` refuses a tag or a
+published release whose commit does not carry a passing `matrix` check, so a red
+leg blocks a release even where branch protection is not configured.
+
+What keeps the two majors honest beyond the matrix running is a test that reads
+every `Filament\` symbol `src/` imports and asserts the installed major declares
+it. On the Filament 4 leg, reaching for something only Filament 5 has is a
+failure there rather than a bug report later.
 
 Support ends in one commit that does both of these, never one without the other:
 

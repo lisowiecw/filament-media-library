@@ -28,7 +28,7 @@ This table is generated from the CI matrix in `.github/workflows/tests.yml` by `
 
 `fileinfo`, `intl`, `mbstring` and `gd`. GD is what generates thumbnails: without it the queued derivative job fails and every card falls back to a glyph tile. No optional binary is required anywhere.
 
-Filament 4 support is best effort, limited to the plugin and field APIs both majors share. It rides the same Composer line as Filament 5 and is guarded by a CI job on every push, gathered behind a single required `matrix` check, so a red Filament 4 job blocks a release. See [ADR 0008](docs/adr/0008-filament-4-support-rides-one-line-guarded-by-ci.md).
+Filament 4 support is best effort, limited to the plugin and field APIs both majors share. It rides the same Composer line as Filament 5 and is guarded by a CI job on every push, gathered behind a single required `matrix` check, so a red Filament 4 job blocks a release; tagging is refused outright when that check did not pass on the commit being released. A test reads every Filament symbol the source imports and asserts the installed major declares it, so the shared-API limit fails on the Filament 4 leg rather than in an application. See [ADR 0008](docs/adr/0008-filament-4-support-rides-one-line-guarded-by-ci.md).
 
 ## Installation
 

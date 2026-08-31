@@ -1,0 +1,57 @@
+name: release guard
+
+# A release is blocked when the compatibility matrix did not pass on the exact
+# commit being released, which is what makes a red Filament 4 leg a release
+# blocker rather than a known failure (ADR 8). Branch protection is the other
+# half of this: require the `matrix` check on main and a red leg never reaches a
+# tag in the first place.
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  guard:
+    name: matrix passed on the released commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Resolve the matrix check for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # The matrix can still be running when a tag is pushed, so wait for it
+          # rather than reading a verdict that has not been reached yet.
+          for attempt in $(seq 1 60); do
+            conclusion="$(gh api "repos/${REPOSITORY}/commits/${SHA}/check-runs" \
+              --jq '[.check_runs[] | select(.name == "matrix")] | last | .conclusion // "pending"')"
+
+            if [ "${conclusion}" = "null" ] || [ "${conclusion}" = "pending" ] || [ -z "${conclusion}" ]; then
+              echo "The matrix check has not reported yet (attempt ${attempt}); waiting."
+              sleep 30
+              continue
+            fi
+
+            if [ "${conclusion}" = "success" ]; then
+              echo "The compatibility matrix passed on ${SHA}."
+              exit 0
+            fi
+
+            echo "The compatibility matrix concluded '${conclusion}' on ${SHA}, so this release is blocked."
+            echo "Delete the tag, fix the failing leg, and tag again."
+            exit 1
+          done
+
+          echo "The matrix check never reported on ${SHA}, so this release is blocked."
+          exit 1
