@@ -10,6 +10,7 @@ use Filament\Notifications\Notification;
 use Illuminate\Http\UploadedFile;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
+use Lisowiecw\MediaLibrary\Filament\Notifications\RefusalNotice;
 use Lisowiecw\MediaLibrary\Ingest\IngestService;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
 
@@ -55,6 +56,8 @@ final readonly class UploadAssets
                 $placement = Placement::resolve();
 
                 $uploaded = 0;
+
+                /** @var list<IngestRefused> $refused */
                 $refused = [];
 
                 foreach ($files as $file) {
@@ -62,13 +65,13 @@ final readonly class UploadAssets
                         $ingest->ingest($file, $placement);
                         $uploaded++;
                     } catch (IngestRefused $refusal) {
-                        $refused[] = $refusal->getMessage();
+                        $refused[] = $refusal;
                     }
                 }
 
                 Notification::make()
                     ->title(__('media-library::messages.management.notifications.uploaded', ['count' => $uploaded]))
-                    ->body($refused === [] ? null : implode(' ', $refused))
+                    ->body($refused === [] ? null : RefusalNotice::text(...$refused))
                     ->status($refused === [] ? 'success' : 'warning')
                     ->send();
             });

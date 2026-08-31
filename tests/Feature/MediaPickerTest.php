@@ -178,6 +178,26 @@ it('uploads through the modal with the field placement and attaches on save', fu
     Storage::disk('media')->assertExists($asset->object_key);
 });
 
+it('says why an upload through the modal was refused, and attaches nothing', function (): void {
+    $host = article();
+
+    // A style block on a public placement: a refusal the modal can actually
+    // reach, because the file is an SVG and passes the field's own type check
+    // first. The floor reads the markup after that and will not have it.
+    pickerForm($host, ['visibility' => 'public'])
+        ->callAction(
+            TestAction::make('library')->schemaComponent('cover_image'),
+            ['file' => [UploadedFile::fake()->createWithContent(
+                'has-a-style-block.svg',
+                '<svg xmlns="http://www.w3.org/2000/svg"><style>rect{fill:red}</style><rect width="1" height="1"/></svg>',
+            )]],
+        )
+        ->assertNotified()
+        ->assertSchemaStateSet(['cover_image' => []]);
+
+    expect(MediaAsset::count())->toBe(0);
+});
+
 it('replaces the selection of a single-selection field on upload, leaving the old asset alone', function (): void {
     $host = article();
     $existing = libraryAsset();

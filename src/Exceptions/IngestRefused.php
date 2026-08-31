@@ -7,12 +7,16 @@ namespace Lisowiecw\MediaLibrary\Exceptions;
 use RuntimeException;
 
 /**
- * An upload the ingest floor refused. Callers surface it as a validation
- * failure on the field rather than as an error, because nothing was stored.
+ * An upload the ingest floor refused. Callers surface it as a warning naming
+ * the file rather than as an error, because nothing was stored and there is
+ * nothing on the field for the person to correct: this file is simply not one
+ * the library takes.
  *
  * Every message names the types involved and the readable name, and never the
  * object key: a refusal happens before a key exists, and a key is not a fact a
- * person filling in a form has any use for.
+ * person filling in a form has any use for. Some of them name an element in
+ * angle brackets, so a message is escaped on its way to a notification, which
+ * is what RefusalNotice is for.
  */
 class IngestRefused extends RuntimeException
 {

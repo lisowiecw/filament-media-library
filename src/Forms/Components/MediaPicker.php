@@ -21,6 +21,8 @@ use Illuminate\Support\Arr;
 use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
+use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
+use Lisowiecw\MediaLibrary\Filament\Notifications\RefusalNotice;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\IngestService;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
@@ -609,11 +611,23 @@ class MediaPicker extends Field
 
     /**
      * Ingest one uploaded file with this field's resolved Placement and select
-     * it.
+     * it, or say why the ingest floor would not have it.
+     *
+     * A refusal is absorbed here rather than left to each caller, because the
+     * drop path and the modal path would otherwise each have to remember, and
+     * a forgotten catch is silent: the file simply never appears. It is
+     * absorbed rather than rethrown for the same reason a half-worked drop is,
+     * that one refused file must not cost the person the rest of the gesture.
      */
-    public function upload(TemporaryUploadedFile $file): MediaAsset
+    public function upload(TemporaryUploadedFile $file): ?MediaAsset
     {
-        $asset = app(IngestService::class)->ingest($file, $this->getPlacement(), $this->getIngestRules());
+        try {
+            $asset = app(IngestService::class)->ingest($file, $this->getPlacement(), $this->getIngestRules());
+        } catch (IngestRefused $refusal) {
+            $this->warn(RefusalNotice::text($refusal));
+
+            return null;
+        }
 
         $this->select([$asset->id]);
 
@@ -631,9 +645,10 @@ class MediaPicker extends Field
     }
 
     /**
-     * Something the person should know about a gesture that half worked. It is
-     * a notification rather than a validation error, because nothing they did
-     * was invalid and there is nothing for them to correct.
+     * Something the person should know about a gesture that half worked, a
+     * refusal included. It is a notification rather than a validation error,
+     * because nothing they did was invalid and there is nothing on the field
+     * for them to correct: the file is simply not one the library takes.
      */
     private function warn(string $message): void
     {

@@ -187,6 +187,24 @@ it('uses the first of several files dropped on a single-selection field, and say
     $component->assertNotified();
 });
 
+it('attaches the rest of a drop the ingest floor refuses one file out of, and says which', function (): void {
+    $component = pickerForm(article(), ['multiple' => true]);
+
+    dropOnPicker(
+        $component,
+        UploadedFile::fake()->image('kept.png'),
+        UploadedFile::fake()->create('refused.php', 1, 'text/x-php'),
+        UploadedFile::fake()->image('also-kept.png'),
+    );
+
+    // A refusal costs the person the one file, not the gesture, and the two
+    // that were fine keep the order they were dropped in.
+    expect(MediaAsset::query()->pluck('display_name')->all())->toBe(['kept', 'also-kept'])
+        ->and($component->get('data.cover_image'))->toBe(MediaAsset::query()->pluck('id')->all());
+
+    $component->assertNotified();
+});
+
 it('offers the Library tab body as a drop surface too', function (): void {
     libraryModal()->assertSeeHtml('data-droppable="true"');
 
