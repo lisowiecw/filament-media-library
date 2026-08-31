@@ -61,3 +61,21 @@ jobs:
 
       - name: Test Suite
         run: composer test:unit
+
+  # One stable name for branch protection to require, since every matrix leg is
+  # named after the versions it ran. A leg that fails, or is cancelled by
+  # fail-fast before it reports, leaves this red, so a red Filament 4 job blocks
+  # a release rather than sitting under a check nobody pinned.
+  matrix-result:
+    name: matrix
+    needs: tests
+    if: always()
+    runs-on: [self-hosted, polka-srv]
+
+    steps:
+      - name: Every leg of the matrix passed
+        run: |
+          if [ "${{ needs.tests.result }}" != "success" ]; then
+            echo "The compatibility matrix did not pass: ${{ needs.tests.result }}."
+            exit 1
+          fi

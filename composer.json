@@ -39,7 +39,8 @@
         "pestphp/pest-plugin-laravel": "^4.1||^5.0",
         "pestphp/pest-plugin-livewire": "^4.0||^5.0",
         "pestphp/pest-plugin-type-coverage": "^4.0||^5.0",
-        "phpstan/extension-installer": "^1.4"
+        "phpstan/extension-installer": "^1.4",
+        "symfony/yaml": "^7.0||^8.0"
     },
     "autoload": {
         "psr-4": {
@@ -93,6 +94,9 @@
         ],
         "clear": [
             "@php vendor/bin/testbench package:purge-skeleton --ansi"
+        ],
+        "compat:sync": [
+            "@php bin/sync-compatibility-table.php"
         ]
     },
     "extra": {

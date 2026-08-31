@@ -42,6 +42,30 @@ named only `media:import`; the four that joined it are `media:resolve-mimes`,
 `media:unattached-assets`. A change to any of their signatures is announced in
 the changelog like any other break in the promised surface.
 
+## Ending Filament 4 support
+
+Filament 4 is carried on the same Composer line as Filament 5 and is proven by
+the `4.*` leg of the CI matrix in `.github/workflows/tests.yml`. A red Filament 4
+job blocks a release: no job or step is allowed to continue on error, and a
+single `matrix` job stands behind every leg and fails unless all of them passed,
+which is the one stable name branch protection requires. A test asserts both.
+
+Support ends in one commit that does both of these, never one without the other:
+
+1. Narrow `filament/filament` in `composer.json` to `^5.0`.
+2. Drop `4.*` from the `filament` matrix in `.github/workflows/tests.yml`, then
+   run `composer compat:sync` so the README compatibility table follows.
+
+No test changes are needed: the suite reads the matrix rather than restating it,
+so it stays green through the narrowing and starts guarding the Filament 5 only
+claim instead.
+
+Narrowing the constraint is a breaking change, so it lands in a minor while the
+package is pre-`1.0.0` and in a major after that. A v4 user is never dropped by a
+patch. Leaving the constraint wide while the job is gone is the one outcome the
+matrix exists to prevent: the promise would have lapsed with only the constraint
+still claiming it. See [ADR 0008](docs/adr/0008-filament-4-support-rides-one-line-guarded-by-ci.md).
+
 ## 0.x
 
 The package is `0.1.0` and pre-release. Until `1.0.0`, a minor version may carry
