@@ -4,28 +4,21 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Import;
 
-use Illuminate\Database\Eloquent\Model;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
 
 /**
  * What one import run was asked to do: where the legacy paths are discovered,
- * how many of them one column holds, the disk they resolve against, and the
- * field context they belong to.
+ * the disk they resolve against, and the field context they belong to.
  *
- * Discovery is declared rather than inferred, because the row that holds the
- * path is the same row that knows who owned it and which field it filled, and
- * a bare key on a bucket knows neither. Traversal is the fallback for a layout
- * that has no such row, and it is the reason the model and column are nullable
- * here rather than the reason they are optional.
+ * Everything that differs between a column run and a traversal run lives on
+ * the Discovery rather than here, so this record holds only what both runs
+ * share and no field on it is nullable for the sake of the other kind. See
+ * ADR 15.
  */
 final readonly class ImportRequest
 {
-    /**
-     * @param  class-string<Model>|null  $model
-     */
     public function __construct(
-        public ?string $model,
-        public ?string $column,
+        public Discovery $discovery,
         public string $disk,
         public ?string $field = null,
         public ?string $uploader = null,
@@ -34,32 +27,25 @@ final readonly class ImportRequest
         public bool $sniff = false,
         public bool $dryRun = false,
         public int $chunk = 500,
-        public DiscoverySource $source = DiscoverySource::Column,
-        public ?string $prefix = null,
-        public Cardinality $cardinality = Cardinality::Single,
     ) {}
 
     /**
-     * Where an adopted asset was discovered, on the `host.column` convention,
-     * or as the prefix that was walked where there was no host to name. This is
-     * the handle a migration-window rollback selects on; it says nothing about
-     * where the asset's bytes are.
+     * Where an adopted asset was discovered. The handle is the discovery's to
+     * name, since it is the half of the run that knows what it read.
      */
     public function importSource(): string
     {
-        return $this->source === DiscoverySource::Disk
-            ? 'disk:'.($this->prefix ?? '')
-            : $this->model.'.'.$this->column;
+        return $this->discovery->importSource();
     }
 
     /**
-     * Whether this run writes attachments at all. Traversal never does, since
-     * there is no host row, and neither does a run that declared no field: an
-     * attachment outside a field context is an External reference, which is a
-     * different thing and not one an import invents.
+     * Whether this run writes attachments at all. A run that declared no field
+     * does not: an attachment outside a field context is an External reference,
+     * which is a different thing and not one an import invents. Neither does a
+     * dry run, which writes nothing anywhere.
      */
     public function attaches(): bool
     {
-        return $this->source === DiscoverySource::Column && $this->field !== null && ! $this->dryRun;
+        return $this->discovery->canAttach() && $this->field !== null && ! $this->dryRun;
     }
 }

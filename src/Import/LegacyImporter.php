@@ -56,25 +56,26 @@ class LegacyImporter
         $rules = IngestRules::resolve();
 
         try {
-            if ($request->source === DiscoverySource::Disk) {
-                $this->traverse($request, $report, $disk, $rules);
+            $discovery = $request->discovery;
+
+            if ($discovery instanceof TraversalDiscovery) {
+                $this->traverse($discovery, $request, $report, $disk, $rules);
 
                 return $report;
             }
 
-            $model = $this->host($request);
+            if ($discovery instanceof ColumnDiscovery) {
+                $model = $this->host($discovery, $request);
 
-            /** @var string $column */
-            $column = $request->column;
+                $rows = $model->newQuery()
+                    ->whereNotNull($discovery->column)
+                    ->lazyById($request->chunk);
 
-            $rows = $model->newQuery()
-                ->whereNotNull($column)
-                ->lazyById($request->chunk);
+                foreach ($rows as $row) {
+                    $report->examined++;
 
-            foreach ($rows as $row) {
-                $report->examined++;
-
-                $this->adoptRow($row, $request, $report, $disk, $rules);
+                    $this->adoptRow($row, $discovery, $request, $report, $disk, $rules);
+                }
             }
         } catch (ImportRefused $refusal) {
             // The run ends here, but what it adopted before the bad row is
@@ -92,12 +93,13 @@ class LegacyImporter
      * than memory is still importable and nothing is attached to anything.
      */
     private function traverse(
+        TraversalDiscovery $discovery,
         ImportRequest $request,
         ImportReport $report,
         FilesystemAdapter $disk,
         IngestRules $rules,
     ): void {
-        foreach (DiskTraversal::keys($disk, $request->prefix ?? '') as $key) {
+        foreach (DiskTraversal::keys($disk, $discovery->prefix) as $key) {
             $report->examined++;
 
             $this->adopt($key, $request, $report, $disk, $rules);
@@ -115,15 +117,13 @@ class LegacyImporter
      */
     private function adoptRow(
         Model $row,
+        ColumnDiscovery $discovery,
         ImportRequest $request,
         ImportReport $report,
         FilesystemAdapter $disk,
         IngestRules $rules,
     ): void {
-        /** @var string $column */
-        $column = $request->column;
-
-        $shape = ColumnShape::read($row->getAttribute($column), $request->cardinality, $this->rowLabel($row));
+        $shape = ColumnShape::read($row->getAttribute($discovery->column), $discovery->cardinality(), $this->rowLabel($row));
 
         if ($shape->isEmpty()) {
             $report->omit($this->rowLabel($row), ImportOmission::EmptyValue);
@@ -140,7 +140,7 @@ class LegacyImporter
         // A single-value column has no elements to number, so its omissions
         // stay row-level: an index of zero would read as one bad element of
         // several, which is exactly what it is not.
-        $numbersElements = $request->cardinality === Cardinality::Many;
+        $numbersElements = $discovery->cardinality() === Cardinality::Many;
 
         foreach ($shape->elements as $index => $key) {
             $asset = $this->adopt($key, $request, $report, $disk, $rules, $row, $numbersElements ? $index : null);
@@ -391,9 +391,9 @@ class LegacyImporter
         return $uploader === null || $uploader === '' ? null : (string) $uploader;
     }
 
-    private function host(ImportRequest $request): Model
+    private function host(ColumnDiscovery $discovery, ImportRequest $request): Model
     {
-        $named = $request->model ?? '';
+        $named = $discovery->model;
 
         if (! class_exists($named) || ! is_subclass_of($named, Model::class)) {
             throw ImportRefused::unknownModel($named);
@@ -403,8 +403,8 @@ class LegacyImporter
 
         $schema = $model->getConnection()->getSchemaBuilder();
 
-        if ($request->column === null || ! $schema->hasColumn($model->getTable(), $request->column)) {
-            throw ImportRefused::unknownColumn($named, $request->column ?? '');
+        if (! $schema->hasColumn($model->getTable(), $discovery->column)) {
+            throw ImportRefused::unknownColumn($named, $discovery->column);
         }
 
         // A mistyped uploader column reads exactly like an object nobody can

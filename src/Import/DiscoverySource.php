@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Lisowiecw\MediaLibrary\Import;
 
 /**
- * Where a run discovers the objects it adopts.
+ * The accepted values of `--source`, and nothing below the command line reads
+ * this.
  *
- * The column is the real one: the row holding the path is the row that knows
- * who owned it and which field it filled, so it is the only source that can
- * produce attachments at all. Traversal is an explicitly degraded fallback for
- * a legacy layout that has no column to read, and everything it cannot know it
- * leaves unrecorded rather than guessing.
+ * It exists to name the strings an operator may type and to refuse the ones
+ * they may not. What each kind of run can actually do is the Discovery's to
+ * say, and asking this enum instead would be branching on a label rather than
+ * on the thing it labels. See ADR 15.
  */
 enum DiscoverySource: string
 {

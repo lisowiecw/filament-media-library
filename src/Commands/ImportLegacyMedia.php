@@ -11,12 +11,14 @@ use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Exceptions\ImportRefused;
 use Lisowiecw\MediaLibrary\Exceptions\PlacementMisconfigured;
 use Lisowiecw\MediaLibrary\Import\Cardinality;
+use Lisowiecw\MediaLibrary\Import\ColumnDiscovery;
 use Lisowiecw\MediaLibrary\Import\DiscoverySource;
 use Lisowiecw\MediaLibrary\Import\DiskTraversal;
 use Lisowiecw\MediaLibrary\Import\ImportOmission;
 use Lisowiecw\MediaLibrary\Import\ImportReport;
 use Lisowiecw\MediaLibrary\Import\ImportRequest;
 use Lisowiecw\MediaLibrary\Import\LegacyImporter;
+use Lisowiecw\MediaLibrary\Import\TraversalDiscovery;
 
 /**
  * Adopts the uploads an application already has, by reading the column that
@@ -121,8 +123,7 @@ class ImportLegacyMedia extends Command implements Isolatable
 
         /** @var class-string<Model> $model */
         return new ImportRequest(
-            model: $model,
-            column: $column,
+            discovery: new ColumnDiscovery($model, $column, $this->cardinality()),
             disk: $disk,
             field: $field,
             uploader: $uploader,
@@ -131,7 +132,6 @@ class ImportLegacyMedia extends Command implements Isolatable
             sniff: (bool) $this->option('sniff'),
             dryRun: (bool) $this->option('dry-run'),
             chunk: max((int) $chunk, 1),
-            cardinality: $this->cardinality(),
         );
     }
 
@@ -162,16 +162,13 @@ class ImportLegacyMedia extends Command implements Isolatable
         }
 
         return new ImportRequest(
-            model: null,
-            column: null,
+            discovery: new TraversalDiscovery(DiskTraversal::normalise($prefix)),
             disk: $disk,
             visibility: $this->visibility(),
             copy: (bool) $this->option('copy'),
             sniff: (bool) $this->option('sniff'),
             dryRun: (bool) $this->option('dry-run'),
             chunk: max((int) $chunk, 1),
-            source: DiscoverySource::Disk,
-            prefix: DiskTraversal::normalise($prefix),
         );
     }
 

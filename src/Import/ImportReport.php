@@ -65,7 +65,7 @@ final class ImportReport
             'source' => $this->request->importSource(),
             'disk' => $this->request->disk,
             'field' => $this->request->field,
-            'cardinality' => $this->request->cardinality->value,
+            'cardinality' => $this->request->discovery->cardinality()->value,
             'mode' => $this->request->copy ? 'copy' : 'register',
             'dry_run' => $this->request->dryRun,
             'ran_at' => now()->toIso8601String(),
