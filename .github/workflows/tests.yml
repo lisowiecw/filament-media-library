@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   tests:
-    runs-on: [self-hosted, polka-srv]
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: true
@@ -24,10 +24,17 @@ jobs:
         php: [8.3, 8.4, 8.5]
         laravel: [13.*]
         filament: [4.*, 5.*]
-        stability: [prefer-lowest, prefer-stable]
+        stability: [prefer-stable]
         include:
           - laravel: 13.*
             testbench: 11.*
+          # One leg installs the floor of every declared constraint, so an
+          # under-declared lower bound fails here rather than in an install.
+          - php: 8.3
+            laravel: 13.*
+            testbench: 11.*
+            filament: 5.*
+            stability: prefer-lowest
 
     name: P${{ matrix.php }} - L${{ matrix.laravel }} - F${{ matrix.filament }} - ${{ matrix.stability }}
 
@@ -70,7 +77,7 @@ jobs:
     name: matrix
     needs: tests
     if: always()
-    runs-on: [self-hosted, polka-srv]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Every leg of the matrix passed
