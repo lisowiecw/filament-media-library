@@ -73,7 +73,49 @@ php artisan vendor:publish --tag="media-library-translations"
 
 ## Usage
 
-<!-- Add a basic usage example here. -->
+A media field is a `MediaPicker` on a Filament form, and a host model reads its
+own attachments back through the `HasMedia` trait. Nothing else is wired:
+
+```php
+use Lisowiecw\MediaLibrary\Concerns\HasMedia;
+
+class Article extends Model
+{
+    use HasMedia;
+}
+```
+
+```php
+use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
+
+MediaPicker::make('cover_image')
+    ->visibility('public')
+    ->acceptedFileTypes(['image/*']);
+
+MediaPicker::make('gallery')
+    ->visibility('public')
+    ->multiple()
+    ->reorderable()
+    ->droppable();
+```
+
+The host table carries no media column: `cover_image` is a virtual field whose
+state is an ordered list of asset identifiers, reconciled against the attachment
+rows on save. See [ADR 0010](docs/adr/0010-the-picker-field-is-virtual.md).
+
+Reading it back:
+
+```php
+$article->firstMedia('cover_image')?->url();
+
+foreach ($article->media('gallery') as $asset) {
+    echo $asset->url();
+}
+```
+
+`$asset->url()` is the supported way to get a URL for an asset. It resolves a
+public asset to its disk's own URL and a private one to the Delivery route,
+which is why nothing in your templates should ever build that route by hand.
 
 ### Authorization
 
@@ -215,8 +257,11 @@ survives the hop. Those overrides are standard on AWS S3. On R2 they are
 **observed to work rather than documented**: Cloudflare's S3 compatibility page
 says nothing about them either way, and they were observed working on 2026-08-27
 against a live R2 bucket, over both an `r2.dev` development URL and a custom
-domain. A disk that ignores them serves the object's stored headers instead,
-which is why they are written to say the same thing at upload (see below).
+domain. That observation is a dated manual check against a live bucket, and CI
+does not re-run it: no test in this repository talks to R2, so the note ages
+rather than being re-proven on every push. A disk that ignores them serves the
+object's stored headers instead, which is why they are written to say the same
+thing at upload (see below).
 
 **The route's URL, name and parameters are internal.** They may change in any
 release. Do not build them by hand or hardcode them in a template.
@@ -601,6 +646,156 @@ exists to avoid.
 Jobs and commands are neither scoped nor policy-checked. An operator on the
 server is not a request inside a panel, and a claim that could only be made from
 inside the tenant it was claiming for could never be made at all.
+
+## Migrating an existing library
+
+Adopting an application's existing uploads is two commands, in this order, and
+they are deliberately never chained.
+
+```bash
+php artisan media:import --model="App\Models\Post" --column=cover_path --disk=media --tenant=none
+php artisan media:resolve-mimes --from=extension --sniff
+```
+
+1. `media:import` adopts the objects in place. It does not read them, so most
+   rows land on the `extension` rung of the mime ladder: the type is inferred
+   from the filename and nothing has confirmed it.
+2. `media:resolve-mimes --from=extension --sniff` pays for one full read per
+   object and rewrites `mime_type` and `mime_source` together. A run only ever
+   raises a row's rung, never lowers it.
+
+`media:resolve-mimes` takes `--from=` (the rung to re-resolve: `header`,
+`sniffed`, `extension` or `unknown`, defaulting to `extension`), `--sniff`,
+which reads the bytes and is never implicit, and `--dry-run`, which reports what
+would be rewritten and writes nothing.
+
+The second step is not optional cleanup. A Disposition is earned
+([ADR 0004](docs/adr/0004-disposition-is-earned-not-assumed.md)), so an asset
+whose type came from its filename is always served for saving. A freshly
+imported library is therefore served for saving until the sniff pass has run.
+
+The two stay separate because `media:import --sniff` and
+`media:resolve-mimes --sniff` are the same bill presented twice, and each is its
+own decision about when to pay it. The window between them is visible as the
+`mime_source` facet on the management page rather than as a banner, so an
+operator finds the un-sniffed population by filtering for it.
+
+## Operator obligations
+
+Two things this package depends on are properties of your deployment, which it
+assumes and never verifies.
+
+### A public media host must be a foreign origin
+
+Active content is refused on public placement and a public SVG gets the Strict
+pass, both because a public asset resolves to the disk's own URL and never
+reaches the Delivery route, where the content policy and the Disposition rule
+live. That reasoning holds only if the disk's URL is a *foreign* origin.
+
+**Serve public media from a host that is not the panel's origin and shares no
+cookie scope with it.** A public bucket fronted by a CDN on your own domain, or
+on a sibling subdomain under a shared parent cookie domain, is same-origin with
+the panel session, which makes public placement more dangerous than private
+rather than less. The plugin does not detect this: a reverse proxy, a CNAME and
+an `APP_URL` that need not match the panel's real host all defeat a host
+comparison in both directions, so the assumption is stated here rather than
+half-enforced in code. See
+[ADR 0009](docs/adr/0009-public-media-is-a-foreign-origin-by-deployment.md).
+
+A Sanitized SVG is the only Active content that can reach public placement at
+all, so it is the whole exposure. Cover it at the edge as well as at the origin:
+on Cloudflare R2, bind the public bucket to a **custom domain** (an `r2.dev`
+development URL takes no rules and is not a deployment surface) and add a
+response header transform on that hostname:
+
+```
+Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox
+X-Content-Type-Options: nosniff
+```
+
+That is the same policy the Delivery route sets on every response, applied where
+the Delivery route cannot reach. The custom domain is what makes it possible.
+
+### The GPL-2.0-or-later dependency
+
+The package hard-requires [`enshrined/svg-sanitize`](https://github.com/darylldoyle/svg-sanitizer),
+which is GPL-2.0-or-later. It is a Composer runtime dependency rather than
+vendored code, so this package stays MIT, but your installation pulls it in and
+is GPL-relevant through it. There is no build without the sanitizer: SVG
+sanitizing is not optional and not switchable.
+
+## The promised surface
+
+This is the part of the package a host application may depend on and expect to
+survive an upgrade.
+
+- **The plugin class** `Lisowiecw\MediaLibrary\MediaLibraryPlugin` and its fluent
+  configuration: `make()`, `withLibraryManagement()`, `tenantUsing()` and
+  `downloadFilenameUsing()`.
+- **The field** `Lisowiecw\MediaLibrary\Forms\Components\MediaPicker` and its
+  configuration: `acceptedFileTypes()`, `disk()`, `directory()`,
+  `visibility()`, `maxSize()`, `multiple()`, `reorderable()`, `droppable()`,
+  `scopeLibrary()`, `thumbnailUsing()`, `modalWidth()` and `defaultTab()`.
+- **The host trait** `Lisowiecw\MediaLibrary\Concerns\HasMedia`, with
+  `media()`, `firstMedia()` and `detachMedia()`, and the optional
+  `mediaUsageLabel()` a host model may define.
+- **The model** `Lisowiecw\MediaLibrary\Models\MediaAsset` as something to read
+  and query, with `url()`, `previewUrl()` and `downloadUrl()`, and the columns
+  named below.
+- **Its `attachments()` relation**, which is a
+  `Lisowiecw\MediaLibrary\Attachments\Attachments`, a `HasMany` subclass
+  carrying three public writes of its own: `createExternal()`,
+  `revokeExternal()` and `revokeExternalRow()`.
+- **Its `derivatives()` relation**, as something to read.
+- **The ingest entry point** `Lisowiecw\MediaLibrary\Ingest\IngestService::ingest()`
+  with `Lisowiecw\MediaLibrary\Ingest\Placement::resolve()`, plus
+  `Lisowiecw\MediaLibrary\Delivery\DownloadFilename` and
+  `Lisowiecw\MediaLibrary\Authorization\MediaAuthorization`.
+- **The ability and gate names**: the policy abilities `viewAny`, `view`,
+  `update`, `delete`, `forceDelete`, `restore`, `detach`, `deleteAny`,
+  `restoreAny` and `viewAllTenants`, and the gates `uploadMedia` and
+  `attachMedia`.
+- **The config keys** in `config/media-library.php` and their environment
+  variables: `disk`, `public_disk`, `private_disk`, `directory`, `visibility`,
+  `enforce_disk_visibility`, `max_upload_size`, `blocked_types`,
+  `signed_url_ttl`, `derivative_url_bucket`, `derivatives` (its `prefix`,
+  `quality`, `variants`, `small_original` and `lazy_dispatch`),
+  `search_debounce`, `facet_count_threshold` and `unattached_grace_days`. The
+  published file is the reference: every key in it is promised.
+- **The command signatures** `media:import`, `media:resolve-mimes`,
+  `media:regenerate-derivatives`, `media:assign-tenant` and
+  `media:unattached-assets`.
+
+The asset columns you may read: `id`, `ulid`, `display_name`,
+`original_client_filename`, `extension`, `alt`, `mime_type`, `mime_source`,
+`size`, `disk`, `object_key`, `visibility`, `source`, `import_source`,
+`uploaded_by`, `tenant_id`, `blurhash`, and the timestamps.
+
+### The internal surface
+
+Everything else the package registers may change in any release, however visible
+it looks. In particular:
+
+- **The Delivery route**: its URL (`media/{asset}` inside the panel), its name
+  (`media-library.asset`, generated per panel) and its parameters. Do not build
+  it by hand, hardcode it in a template, or sign or wrap it. `$asset->url()` is
+  the supported way to reach an asset's content; keep your own route where you
+  need rules of your own.
+- **Livewire components and view names**, including
+  `media-library::forms.components.media-picker` and
+  `media-library::forms.components.library-grid`. Publishing the views to edit
+  them is supported; depending on their names from your own code is not.
+- **The derivative key layout**, currently
+  `{derivatives.prefix}/{asset ulid}/{variant}.webp`. Derivative objects are
+  the package's to place and to move.
+- **Jobs and their queue payloads**: `GenerateDerivative` and
+  `PurgeStoredObjects`, their constructor arguments and their serialized shape.
+  Do not dispatch them yourself or persist them across an upgrade.
+- **The schema beyond the columns listed above**: the `media_attachments` and
+  `media_derivatives` tables, their columns and their indexes, and any column
+  added to `media_assets` that is not in that list.
+- **Every other class in `src/`**, public methods included. The list above is
+  the promise; "public" in PHP is not.
 
 ## Changelog
 
