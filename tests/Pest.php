@@ -56,7 +56,7 @@ function tenantIs(?string $tenant): void
 
 function ingest(UploadedFile $file, ?Placement $placement = null, ?IngestRules $rules = null): MediaAsset
 {
-    return app(IngestService::class)->ingest($file, $placement ?? Placement::resolve(), $rules);
+    return app(IngestService::class)->ingest($file, $placement, $rules);
 }
 
 function pngUpload(string $name = 'photo.png'): UploadedFile

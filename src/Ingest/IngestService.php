@@ -26,6 +26,12 @@ use Symfony\Component\Mime\MimeTypes;
  * Media Asset row. Both the picker's upload path and the management page's
  * upload action call it; the importer deliberately does not, because it adopts
  * existing objects rather than ingesting new ones.
+ *
+ * `ingest()` is promised surface, so an application with an upload of its own,
+ * a rich text editor's inline attachments above all, files it through here
+ * rather than writing to a disk the library has never heard of. Everything the
+ * floor enforces applies on that path unchanged, because there is only one
+ * path.
  */
 class IngestService
 {
@@ -39,8 +45,19 @@ class IngestService
      */
     public const string CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
-    public function ingest(UploadedFile $file, Placement $placement, ?IngestRules $rules = null): MediaAsset
+    /**
+     * Ingest an uploaded file and return the Media Asset it became.
+     *
+     * A caller that names no Placement gets the configured one, which is what
+     * an application uploading outside any field wants: the package's own disk
+     * pair and default visibility rather than a second set of settings.
+     *
+     * @throws IngestRefused when the floor turns the file away, before a key
+     *                       exists or a byte is written
+     */
+    public function ingest(UploadedFile $file, ?Placement $placement = null, ?IngestRules $rules = null): MediaAsset
     {
+        $placement ??= Placement::resolve();
         $rules ??= IngestRules::resolve();
 
         $name = ReadableName::from($file->getClientOriginalName());

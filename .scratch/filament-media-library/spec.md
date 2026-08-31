@@ -289,7 +289,7 @@ From each actor's point of view:
 210. As an application developer, I want a red Filament 4 job to block a release, so that support cannot lapse silently under an unchanged constraint.
 211. As an application developer, I want a README compatibility table generated from the CI matrix, so that drift is visible.
 212. As an application developer, I want the plugin to declare only its three real constraints and to reach storage through Laravel's contracts, so that no Flysystem or AWS SDK version is pinned by the plugin.
-213. As an application developer, I want a clear promised surface (plugin class and fluent config, `MediaPicker`, `HasMedia`, the `MediaAsset` model, ability and gate names, config keys, command signatures), so that I know what will survive an upgrade.
+213. As an application developer, I want a clear promised surface (plugin class and fluent config, `MediaPicker`, `HasMedia`, the `MediaAsset` model, ability and gate names, config keys, command signatures, the ingest entry point), so that I know what will survive an upgrade.
 214. As an application developer, I want the Delivery route, view names, queue payloads, derivative key layout and the rest of the schema documented as internal, so that I do not build on sand.
 215. As an application developer, I want `$asset->url()` as the supported way to get a URL, so that no template hardcodes the internal route.
 216. As an application developer, I want an `UPGRADING.md` defining breaking by behaviour rather than by signature, so that a "harmless" denylist addition is treated as what it is.
@@ -389,6 +389,7 @@ Two behaviours are explicitly not covered by automated tests, and both are recor
 
 ## Out of Scope
 
+- A second picker surface or an editor plugin for rich text. Inline editor attachments are supported through the ingest seam and an External reference, wired by the consuming application in `saveUploadedFileAttachmentsUsing()`, and nothing more is shipped for them. The package never parses saved HTML to detect that an attachment was removed.
 - Resource-specific consumer implementation. The blog-post example exists only as a fixture and a README sample.
 - Automatic renaming, re-keying or migration of existing hashed objects without an explicit command invocation. There is no move mode anywhere.
 - Provider-specific storage APIs outside the Laravel filesystem contract. No R2 ACL calls, no AWS SDK usage, no CDN base URL setting.

@@ -415,6 +415,85 @@ asset detached yesterday keeps its full grace period however old it is; an asset
 nothing ever referenced counts from its upload instead. Being unattached is evidence rather than proof:
 a URL can live in a sent email or an export the plugin cannot see.
 
+### Rich text attachments
+
+Filament's `RichEditor` uploads its own inline files straight to a disk, which
+leaves the library knowing about every picked image and nothing about anything
+an author dragged into a post body. Point it at the ingest seam instead and an
+inline image becomes an ordinary Media Asset:
+
+```php
+use Filament\Forms\Components\RichEditor;
+use Illuminate\Http\UploadedFile;
+use Lisowiecw\MediaLibrary\Enums\Visibility;
+use Lisowiecw\MediaLibrary\Ingest\IngestService;
+use Lisowiecw\MediaLibrary\Ingest\Placement;
+use Lisowiecw\MediaLibrary\Models\MediaAsset;
+
+function editorReference(MediaAsset $asset): string
+{
+    return 'editor:'.$asset->ulid;
+}
+
+RichEditor::make('body')
+    ->saveUploadedFileAttachmentsUsing(function (UploadedFile $file): string {
+        $asset = app(IngestService::class)->ingest($file, Placement::resolve(
+            directory: 'editor',
+            visibility: Visibility::Public,
+        ));
+
+        $asset->attachments()->createExternal(editorReference($asset), 'Post body');
+
+        return $asset->url();
+    });
+```
+
+`IngestService::ingest()` is the promised entry point, and it is the same one
+the picker and the management page use, so the whole floor applies here without
+being restated: the blocked-type list, the configured accepted types, the family
+mismatch refusal, SVG sanitization and its strict pass, the refusal of active
+content on public placement, the stored headers, and the tenant and uploader
+stamps. A refused file throws `IngestRefused`, which Filament surfaces to the
+author. The `Placement` argument is optional; leave it off entirely and the
+configured disk pair and default visibility apply. Resolve it rather than
+constructing one, so the disk comes from your configured pair and the invariant
+that a public placement needs a disk with a URL to give is checked here rather
+than at the first upload.
+
+The External reference is what makes the asset count as used. Without it nothing
+records the image as used at all, so it blocks no delete and the unattached
+sweep reports it for review however live the post is. The identifier names the
+upload rather than the post, because the callback runs while the file is being
+dropped in, which on a create form is before the post has a key; one body holds
+many images and each is its own reference. Keep the identifier derivable, as
+here from the asset's own `ulid`, so the revoking half can rebuild it.
+
+Placement must be public here. A private asset resolves to a signed Delivery
+URL, and that URL goes into the saved HTML, where it rots on its own expiry: the
+body renders fine for whoever saved it and shows broken images to everyone
+reading it an hour later. A public asset resolves to the disk's own URL, which
+has no expiry to outlive. Editor uploads are therefore a public-placement
+feature, and an author dragging in Active content is refused rather than
+silently stored privately.
+
+Revoking is yours to trigger. When an image is removed from the body, or the
+post is deleted, withdraw the reference so the asset can be reviewed and deleted:
+
+```php
+$asset->attachments()->revokeExternal(editorReference($asset));
+```
+
+Which assets those are is a question only your application can answer, from the
+saved HTML or from a table of your own that records each upload against the post
+it went into. The package does not parse your saved HTML to work out that an
+image is gone. It never reads the body, so an asset stays referenced until your
+code says otherwise, which is the safe direction to fail in: a stale reference
+blocks a delete, while a missed one would sweep an image a live page still
+points at.
+
+There is no second picker surface and no editor plugin. The seam is the whole
+integration: ingest the file, record the reference, return the URL.
+
 ### The management page
 
 The picker is what an editor uses. The library itself is a separate page, off by
