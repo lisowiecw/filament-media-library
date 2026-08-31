@@ -115,10 +115,12 @@ abstract class TestCase extends Orchestra
         });
 
         // The legacy schema the importer reads: a column holding a path the
-        // application stored years before the plugin existed.
+        // application stored years before the plugin existed, and one holding
+        // a JSON array of them, since both shapes are out there.
         Schema::create('legacy_records', function (Blueprint $table): void {
             $table->id();
             $table->string('cover_path')->nullable();
+            $table->text('gallery_paths')->nullable();
             $table->string('author_id')->nullable();
         });
     }

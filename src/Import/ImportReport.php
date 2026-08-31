@@ -21,14 +21,39 @@ final class ImportReport
 
     public int $alreadyPresent = 0;
 
-    /** @var list<array{path: string, reason: string, detail: string|null}> */
+    public int $attached = 0;
+
+    /**
+     * Omissions and skips share one list, because both are things the run
+     * declined and a reader wants them in the order they happened. The element
+     * index is what tells them apart: null is a whole row the run passed over,
+     * and a number is one element of a multi-value column, which says nothing
+     * about the rest of that row.
+     *
+     * @var list<array{path: string, reason: string, detail: string|null, element: int|null}>
+     */
     public array $omissions = [];
 
     public function __construct(public readonly ImportRequest $request) {}
 
-    public function omit(string $path, ImportOmission $reason, ?string $detail = null): void
+    public function omit(string $path, ImportOmission $reason, ?string $detail = null, ?int $element = null): void
     {
-        $this->omissions[] = ['path' => $path, 'reason' => $reason->value, 'detail' => $detail];
+        $this->omissions[] = ['path' => $path, 'reason' => $reason->value, 'detail' => $detail, 'element' => $element];
+    }
+
+    /**
+     * How many elements of a multi-value column were passed over, as against
+     * how many rows were. A row that lost one element of four is not a row the
+     * run declined, and counting the two together would read as though it were.
+     */
+    public function skippedElements(): int
+    {
+        return count(array_filter($this->omissions, fn (array $omission): bool => $omission['element'] !== null));
+    }
+
+    public function omittedRows(): int
+    {
+        return count($this->omissions) - $this->skippedElements();
     }
 
     /**
@@ -40,6 +65,7 @@ final class ImportReport
             'source' => $this->request->importSource(),
             'disk' => $this->request->disk,
             'field' => $this->request->field,
+            'cardinality' => $this->request->cardinality->value,
             'mode' => $this->request->copy ? 'copy' : 'register',
             'dry_run' => $this->request->dryRun,
             'ran_at' => now()->toIso8601String(),
@@ -48,7 +74,9 @@ final class ImportReport
                 'registered' => $this->registered,
                 'copied' => $this->copied,
                 'already-present' => $this->alreadyPresent,
-                'omitted' => count($this->omissions),
+                'attached' => $this->attached,
+                'omitted-rows' => $this->omittedRows(),
+                'skipped-elements' => $this->skippedElements(),
             ],
             'omissions' => $this->omissions,
         ];
