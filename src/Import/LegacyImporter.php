@@ -194,6 +194,9 @@ class LegacyImporter
      * by a digest of the pair it came from rather than by a fresh identifier,
      * so a second run resolves to the same key and adopts nothing twice. The
      * key stays opaque and carries no readable name.
+     *
+     * Deliberately not the ingest service's ULID generation, which would mint a
+     * new key per run and copy every object again. See ADR 14.
      */
     private function copyKey(ImportRequest $request, string $sourceKey, ?string $extension): string
     {
