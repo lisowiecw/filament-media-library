@@ -1,7 +1,14 @@
 laravel: '@testbench'
 
 providers:
-  # - Workbench\App\Providers\WorkbenchServiceProvider
+  # The package itself, which the workbench app does not discover: a package is
+  # found in `vendor`, and this one is the root of the repository instead.
+  - Lisowiecw\MediaLibrary\MediaLibraryServiceProvider
+  # The authorization a host application writes, then the panel that registers
+  # the plugin. Both are enabled: `composer serve` is meant to boot something
+  # worth looking at, and a commented-out panel boots the stock welcome page.
+  - Workbench\App\Providers\WorkbenchServiceProvider
+  - Workbench\App\Providers\WorkbenchPanelProvider
 
 migrations:
   - workbench/database/migrations
@@ -10,7 +17,7 @@ seeders:
   - Workbench\Database\Seeders\DatabaseSeeder
 
 workbench:
-  start: '/'
+  start: '/admin'
   install: true
   health: false
   discovers:
@@ -25,6 +32,12 @@ workbench:
     - create-sqlite-db
     - db-wipe
     - migrate-fresh
+    # The public half of the disk pair is served by the disk's own URL, so the
+    # symlink is what makes a public asset actually fetchable. Forced, because
+    # a rebuild finds the link from the build before it and a build should not
+    # greet an evaluator with an error it caused itself.
+    - storage-link:
+        --force: true
   assets:
     - laravel-assets
   sync:

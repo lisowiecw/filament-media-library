@@ -12,8 +12,8 @@ use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Library\OfferScope;
 use Lisowiecw\MediaLibrary\MediaLibraryPlugin;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
-use Lisowiecw\MediaLibrary\Tests\Fixtures\Article;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\HostPolicy;
+use Workbench\App\Models\Article;
 
 beforeEach(function (): void {
     Gate::policy(MediaAsset::class, HostPolicy::class);

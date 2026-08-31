@@ -6,7 +6,7 @@ use Filament\Support\Enums\Width;
 use Illuminate\Http\UploadedFile;
 use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
-use Lisowiecw\MediaLibrary\Tests\Fixtures\Article;
+use Workbench\App\Models\Article;
 
 /**
  * The configured picker itself, for the settings that are answered by the field

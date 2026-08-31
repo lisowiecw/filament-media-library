@@ -25,6 +25,8 @@ use Lisowiecw\MediaLibrary\Tests\Fixtures\TestPanelProvider;
 use Livewire\LivewireServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
+use function Orchestra\Testbench\workbench_path;
+
 abstract class TestCase extends Orchestra
 {
     use RefreshDatabase;
@@ -89,24 +91,39 @@ abstract class TestCase extends Orchestra
             'url' => '/storage/'.$this->disk,
         ]);
 
+        // The workbench's `.env` is copied into the Testbench skeleton by
+        // `composer build`, so on a machine that has run it the package's own
+        // environment variables are set. The suite states its own placement
+        // rather than inheriting whichever disks the example happens to use.
+        $app['config']->set('media-library.disk', null);
+        $app['config']->set('media-library.public_disk', null);
+        $app['config']->set('media-library.private_disk', null);
+        $app['config']->set('media-library.directory', 'media');
+        $app['config']->set('media-library.visibility', 'private');
+
         $app['view']->addNamespace('media-library-tests', __DIR__.'/Fixtures/views');
     }
 
     /**
-     * The host model tickets attach media to, and the authenticated user the
-     * policy and the gates are asked about.
+     * The articles table, from the workbench's own migration rather than
+     * restated here: the suite and the example attach media to one Article, so
+     * its schema is stated in one place too.
+     */
+    protected function defineDatabaseMigrations(): void
+    {
+        $this->loadMigrationsFrom(workbench_path('database/migrations'));
+    }
+
+    /**
+     * The rest of the host schema, which is schema no application would have:
+     * the authenticated user the policy and the gates are asked about, and the
+     * legacy tables the importer reads.
      */
     protected function createFixtureTables(): void
     {
-        if (Schema::hasTable('articles')) {
+        if (Schema::hasTable('users')) {
             return;
         }
-
-        Schema::create('articles', function (Blueprint $table): void {
-            $table->id();
-            $table->string('title');
-            $table->timestamps();
-        });
 
         Schema::create('users', function (Blueprint $table): void {
             $table->id();

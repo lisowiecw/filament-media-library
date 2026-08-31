@@ -2,17 +2,25 @@
 
 declare(strict_types=1);
 
-namespace Lisowiecw\MediaLibrary\Tests\Fixtures;
+namespace Workbench\App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Lisowiecw\MediaLibrary\Concerns\HasMedia;
+use Workbench\Database\Factories\ArticleFactory;
 
 /**
- * A stand-in host model, so the tests have something with a real table and a
- * real morph type to attach media to.
+ * The host model the example attaches media to, and the one the test suite
+ * attaches media to as well. There is one Article, here, rather than a
+ * workbench copy of a fixture that would drift from it.
+ *
+ * @property string $title
  */
 class Article extends Model
 {
+    /** @use HasFactory<ArticleFactory> */
+    use HasFactory;
+
     use HasMedia;
 
     protected $guarded = [];

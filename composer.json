@@ -63,7 +63,11 @@
         "prepare": [
             "@php vendor/bin/testbench package:discover --ansi"
         ],
+        "workbench:env": [
+            "@php -r \"file_exists('workbench/.env') or copy('workbench/.env.example', 'workbench/.env');\""
+        ],
         "build": [
+            "@workbench:env",
             "@php vendor/bin/testbench workbench:build --ansi"
         ],
         "serve": [

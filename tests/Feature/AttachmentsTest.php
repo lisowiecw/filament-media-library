@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
-use Lisowiecw\MediaLibrary\Tests\Fixtures\Article;
+use Workbench\App\Models\Article;
 
 /**
  * @param  list<int|string>  $ids

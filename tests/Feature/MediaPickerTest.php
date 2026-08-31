@@ -9,7 +9,7 @@ use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
-use Lisowiecw\MediaLibrary\Tests\Fixtures\Article;
+use Workbench\App\Models\Article;
 
 it('starts a create form with an empty ordered list', function (): void {
     pickerForm()->assertSchemaStateSet(['cover_image' => []]);

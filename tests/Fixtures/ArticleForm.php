@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Livewire\Component;
+use Workbench\App\Models\Article;
 
 /**
  * A host form the picker is mounted in, so its behaviour is exercised the way

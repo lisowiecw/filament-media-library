@@ -803,6 +803,67 @@ it looks. In particular:
 - **Every other class in `src/`**, public methods included. The list above is
   the promise; "public" in PHP is not.
 
+## Running the workbench
+
+The repository ships a small Filament application you can boot, so the surface
+described above can be clicked rather than only read about. It lives in
+`workbench/` and is a development surface: nothing in it is installed into a
+host application.
+
+```bash
+composer install
+composer build   # copies workbench/.env, migrates, seeds, links the public disk
+composer serve   # http://127.0.0.1:8000/admin, then sign in as
+                 # test@example.com with the password "password"
+```
+
+`composer serve` runs `composer build` itself, so the two lines above are one
+command on a first run. Run `composer build` on its own when you want the seed
+back the way it started.
+
+What is in it, and why:
+
+- **Articles** is a host resource with two `MediaPicker` fields. `cover_image`
+  is single, public, droppable and limited with `acceptedFileTypes()`. `gallery`
+  is `multiple()`, private, `reorderable()`, has dropping turned off, and
+  narrows the modal with `scopeLibrary()`. Between them they exercise the config
+  methods this README promises.
+- **Media Library** is the management page, enabled by
+  `MediaLibraryPlugin::make()->withLibraryManagement()`.
+- The seed is built entirely through `IngestService`, so the rows are the rows
+  an upload through the panel would have written, derivatives and the
+  placeholder painting included. It leaves both visibilities, images and
+  documents, two uploaders, four uploaded spans and both attached and
+  unattached assets, which is what gives the facet sidebar and the usage list
+  something to say.
+- The disk pair is `public` and `local`, set in `workbench/.env.example`. The
+  queue runs synchronously, so derivatives and the placeholder painting appear
+  without a worker running.
+
+### Authorization in the workbench
+
+`workbench/app/Policies/MediaAssetPolicy.php` and the two gates in
+`WorkbenchServiceProvider` are permissive: any signed-in user may do anything.
+That file is the piece a host application replaces. The packaged default denies
+everything, which is correct for a package and would make the example look
+broken, so the workbench writes the authorization a host would write. Do not
+copy it into a real application.
+
+### Tenancy in the workbench
+
+The workbench panel is deliberately untenanted. Tenancy is a property of the
+host application's panel rather than of the plugin, and a tenant switcher would
+add a login flow and a second model to an example whose job is to show the media
+surface. What tenancy does to the library is covered by the test suite instead,
+and described under [Tenancy](#tenancy) above.
+
+### Fixtures
+
+The suite reads the workbench, not the other way round. `Article` lives at
+`Workbench\App\Models\Article` and its table is created by the workbench
+migration, which `tests/TestCase.php` loads. The example and the tests attach
+media to one Article, so its schema is stated in one place.
+
 ## Changelog
 
 Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.

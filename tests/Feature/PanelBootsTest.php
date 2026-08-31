@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\MediaLibraryPlugin;
 use Lisowiecw\MediaLibrary\MediaLibraryServiceProvider;
-use Lisowiecw\MediaLibrary\Tests\Fixtures\Article;
+use Workbench\App\Models\Article;
 
 it('boots a panel with the plugin registered', function (): void {
     $panel = Filament::getPanel('admin');

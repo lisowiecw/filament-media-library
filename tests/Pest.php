@@ -20,7 +20,6 @@ use Lisowiecw\MediaLibrary\MediaLibraryPlugin;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Lisowiecw\MediaLibrary\Models\MediaDerivative;
-use Lisowiecw\MediaLibrary\Tests\Fixtures\Article;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\ArticleForm;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\HostPolicy;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\ManagementPolicy;
@@ -28,6 +27,7 @@ use Lisowiecw\MediaLibrary\Tests\Fixtures\User;
 use Lisowiecw\MediaLibrary\Tests\TestCase;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Workbench\App\Models\Article;
 
 uses(TestCase::class)->in(__DIR__);
 
