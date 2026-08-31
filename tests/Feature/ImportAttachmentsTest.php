@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\PendingCommand;
+use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
 use Lisowiecw\MediaLibrary\Import\ImportOmission;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
@@ -271,4 +272,24 @@ describe('a refused run', function (): void {
             ->expectsOutputToContain('does not parse as one')
             ->run();
     });
+});
+
+it('leaves an order the picker can renumber where an element was skipped', function (): void {
+    $row = galleryRow(['gallery/gone.txt', 'gallery/a.txt', 'gallery/b.txt'], stored: ['gallery/a.txt', 'gallery/b.txt']);
+
+    runGalleryImport()->run();
+
+    // The import numbers verbatim, so the gap the skip left is real.
+    expect(MediaAttachment::query()->orderBy('order')->pluck('order')->all())->toBe([1, 2])
+        ->and(attachedKeys($row))->toBe(['gallery/a.txt', 'gallery/b.txt']);
+
+    // What a save from the picker does with it, order preserved and closed up.
+    app(AttachmentReconciler::class)->reconcile(
+        $row,
+        'gallery',
+        MediaAsset::query()->orderBy('object_key')->pluck('id')->all(),
+    );
+
+    expect(MediaAttachment::query()->orderBy('order')->pluck('order')->all())->toBe([0, 1])
+        ->and(attachedKeys($row))->toBe(['gallery/a.txt', 'gallery/b.txt']);
 });

@@ -147,6 +147,9 @@ final readonly class ColumnShape
      * One value as an object key. A URL is refused rather than stripped down to
      * a path: the host it names may not be this disk at all, and a run that
      * guessed would adopt somebody else's bytes under a key that looks right.
+     * A protocol-relative `//host/path` is refused on the same ground: it is a
+     * URL missing only the scheme, and a key on a disk never opens with two
+     * slashes, so nothing legitimate is lost by refusing it.
      */
     private static function key(string $value, string $rowLabel): string
     {

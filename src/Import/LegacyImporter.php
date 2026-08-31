@@ -163,6 +163,11 @@ class LegacyImporter
      * and, crucially, never touches the order of a row that already exists:
      * that order may be one a person set in the picker after the last run.
      *
+     * A skipped element therefore leaves a gap in the sequence, which is safe:
+     * every reader sorts on the column rather than counting through it, and
+     * the reconciler renumbers the field from zero the first time a person
+     * saves it.
+     *
      * @param  array<int, MediaAsset>  $assets
      */
     private function attach(Model $row, ImportRequest $request, ImportReport $report, array $assets): void
