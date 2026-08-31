@@ -11,12 +11,13 @@ it('uploads through the Upload tab and attaches what it made', function (): void
     $article = $this->article('Uploading');
     $path = $this->file('through-the-tab.jpg');
 
-    visit("/admin/articles/{$article->id}/edit")
+    $page = visit("/admin/articles/{$article->id}/edit")
         ->click('[data-field="cover_image"] .fi-ml-picker-trigger button')
         ->waitForText('Upload')
         ->click('Upload')
-        ->attach('input[type="file"]', $path)
-        ->assertPresent($this->staged())
+        ->attach('input[type="file"]', $path);
+
+    $this->staged($page)
         ->click('Attach')
         ->waitForText('through-the-tab')
         ->click('Save changes')

@@ -54,11 +54,12 @@ it('refuses a blocked type', function (): void {
 
     $path = $this->file('sneaky.php', "<?php echo 'hello';");
 
-    visit('/admin/media-assets')
+    $page = visit('/admin/media-assets')
         ->click('button:has-text("Upload")')
         ->waitForText('Files')
-        ->attach('input[type="file"]', $path)
-        ->assertPresent($this->staged())
+        ->attach('input[type="file"]', $path);
+
+    $this->staged($page)
         ->click($this->confirm())
         ->waitForText('is of a blocked type');
 
@@ -84,8 +85,9 @@ it('refuses an SVG the Strict pass takes an element out of', function (): void {
     $page = visit('/admin/media-assets')
         ->click('button:has-text("Upload")')
         ->waitForText('Files')
-        ->attach('input[type="file"]', $path)
-        ->assertPresent($this->staged())
+        ->attach('input[type="file"]', $path);
+
+    $this->staged($page)
         ->click($this->confirm())
         ->waitForText('Uploaded 0 file(s).');
 

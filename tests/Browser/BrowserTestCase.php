@@ -250,6 +250,48 @@ abstract class BrowserTestCase extends Orchestra
     }
 
     /**
+     * Wait for a selector to be in the DOM, and answer with the page.
+     *
+     * The poll is a timer rather than a frame callback: a headless page is not
+     * obliged to paint, and a wait that only advances on a repaint can sit
+     * still for its whole deadline.
+     *
+     * The suite's assertions read the page once and do not wait, which is the
+     * right default: a test that waits on everything cannot say when something
+     * took too long. What does need waiting on is work the page starts on its
+     * own, a tab rendering or Filepond finishing a send, and waiting on the
+     * element that settles is the ADR 16 answer to a flaky test rather than a
+     * sleep or a retry.
+     */
+    protected function present(AwaitableWebpage|PendingAwaitablePage $page, string $selector, int $seconds = 10): AwaitableWebpage|PendingAwaitablePage
+    {
+        $milliseconds = $seconds * 1000;
+
+        $appeared = $page->script(<<<JS
+            new Promise((resolve) => {
+                const deadline = Date.now() + {$milliseconds};
+                const look = () => {
+                    if (document.querySelector({$this->js($selector)})) {
+                        return resolve(true);
+                    }
+
+                    if (Date.now() > deadline) {
+                        return resolve(false);
+                    }
+
+                    setTimeout(look, 50);
+                };
+
+                look();
+            })
+        JS);
+
+        expect($appeared)->toBeTrue("Expected element [{$selector}] to appear within {$seconds} seconds, and it never did.");
+
+        return $page;
+    }
+
+    /**
      * Drop a file onto a surface the way a person does, by dispatching a real
      * drop event carrying a DataTransfer. Playwright can fill a file input but
      * cannot drag from the desktop, so the file is carried into the page as
@@ -258,6 +300,11 @@ abstract class BrowserTestCase extends Orchestra
     protected function drop(AwaitableWebpage|PendingAwaitablePage $page, string $selector, string $name, ?string $contents = null): AwaitableWebpage|PendingAwaitablePage
     {
         $payload = base64_encode($contents ?? $this->image());
+
+        // The target has to be there before the event is aimed at it: a drop
+        // dispatched at nothing throws inside the page and the test then fails
+        // on the absence of everything that drop was supposed to cause.
+        $this->present($page, $selector);
 
         $page->script(<<<JS
             (() => {
@@ -299,15 +346,18 @@ abstract class BrowserTestCase extends Orchestra
     }
 
     /**
-     * The selector for a file the Upload tab has finished sending, which is
-     * the state Filepond leaves the item in. The pond's own "Upload complete"
-     * label is a passing one: a small file can be sent and the label gone
-     * again before a test looks for it, and a test that waits on a label that
-     * fades is a test that fails on a fast machine.
+     * Wait until the Upload tab has finished sending what it was given, and
+     * answer with the page.
+     *
+     * The state is read off the pond's item rather than its "Upload complete"
+     * label, which is a passing one: a small file can be sent and the label
+     * gone again before a test looks for it. The send is asynchronous however
+     * the file arrived, by an attach or by a drop, so this waits rather than
+     * reading once.
      */
-    protected function staged(): string
+    protected function staged(AwaitableWebpage|PendingAwaitablePage $page): AwaitableWebpage|PendingAwaitablePage
     {
-        return '.filepond--item[data-filepond-item-state="processing-complete"]';
+        return $this->present($page, '.filepond--item[data-filepond-item-state="processing-complete"]');
     }
 
     /**

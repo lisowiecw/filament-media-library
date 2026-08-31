@@ -118,8 +118,12 @@ jobs:
           composer build
           vendor/bin/testbench filament:assets
 
+      # pipefail, because the log is teed: without it the pipeline reports
+      # tee's exit code and a suite with failures in it goes green.
       - name: Browser Suite
-        run: composer test:browser 2>&1 | tee browser-tests.log
+        run: |
+          set -o pipefail
+          composer test:browser 2>&1 | tee browser-tests.log
 
       # What a failure leaves behind: the screenshot the runner saves for the
       # test that failed, and the run's own output, which carries the console

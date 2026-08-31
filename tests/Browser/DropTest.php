@@ -59,8 +59,7 @@ it('stages a drop on the Upload tab, which commits on the confirm', function ():
         ->waitForText('Upload')
         ->click('Upload');
 
-    $this->drop($page, '.filepond--root', 'on-the-upload-tab.jpg')
-        ->assertPresent($this->staged());
+    $this->staged($this->drop($page, '.filepond--root', 'on-the-upload-tab.jpg'));
 
     // The Upload tab holds what it is given: unlike the other two surfaces,
     // nothing is ingested until the modal is confirmed.
