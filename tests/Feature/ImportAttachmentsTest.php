@@ -45,6 +45,7 @@ function runGalleryImport(array $options = []): PendingCommand
         '--model' => LegacyRecord::class,
         '--column' => 'gallery_paths',
         '--disk' => 'media',
+        '--tenant' => 'none',
         '--field' => 'gallery',
         '--cardinality' => 'many',
         '--report' => storage_path('logs/import-attachments-test.json'),

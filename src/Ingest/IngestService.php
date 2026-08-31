@@ -17,6 +17,7 @@ use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
+use Lisowiecw\MediaLibrary\Tenancy\Tenancy;
 use RuntimeException;
 use Symfony\Component\Mime\MimeTypes;
 
@@ -70,6 +71,10 @@ class IngestService
             'visibility' => $placement->visibility,
             'source' => MediaSource::Upload,
             'uploaded_by' => $this->uploader(),
+            // Stamped here and nowhere else. An asset is owned from the moment
+            // it exists, and an upload made outside a tenanted panel is
+            // untenanted rather than everyone's.
+            'tenant_id' => Tenancy::stamp(),
         ]);
 
         $asset->size = $this->write($path, $asset, $placement, $sanitized);

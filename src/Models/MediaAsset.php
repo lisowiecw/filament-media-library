@@ -19,6 +19,7 @@ use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
+use Lisowiecw\MediaLibrary\Exceptions\AttachRefused;
 use Lisowiecw\MediaLibrary\Ingest\ActiveContent;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Lifecycle\AssetLifecycle;
@@ -93,6 +94,23 @@ class MediaAsset extends Model
     {
         static::creating(function (self $asset): void {
             $asset->ulid ??= (string) Str::ulid();
+        });
+
+        // A tenant is stamped once and never moves. Claiming an unowned asset
+        // is the one write allowed here, so the guard is on the original value
+        // rather than on the new one: an asset that has an owner keeps it, and
+        // a usage list stays honest about who could ever reach the bytes.
+        static::updating(function (self $asset): void {
+            if (! $asset->isDirty('tenant_id')) {
+                return;
+            }
+
+            /** @var string|null $was */
+            $was = $asset->getOriginal('tenant_id');
+
+            if ($was !== null) {
+                throw AttachRefused::tenantIsNotReassignable();
+            }
         });
 
         // Cleanup hangs off the model's own events rather than off the

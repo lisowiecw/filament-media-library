@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
+use Lisowiecw\MediaLibrary\Filament\Actions\ClaimAssetsForTenant;
 use Lisowiecw\MediaLibrary\Filament\Actions\DeleteAsset;
 use Lisowiecw\MediaLibrary\Filament\Actions\DeleteAssetsInBulk;
 use Lisowiecw\MediaLibrary\Filament\Actions\DeleteUnattachedAssetsInBulk;
@@ -33,9 +34,12 @@ use Lisowiecw\MediaLibrary\Filament\Actions\UploadAssets;
 use Lisowiecw\MediaLibrary\Filament\Resources\MediaAssets\Pages\ListMediaAssets;
 use Lisowiecw\MediaLibrary\Filament\Resources\MediaAssets\Pages\ViewMediaAsset;
 use Lisowiecw\MediaLibrary\Filament\Schemas\UsageReadout;
+use Lisowiecw\MediaLibrary\Filament\Tables\TenantFilter;
 use Lisowiecw\MediaLibrary\Filament\Tables\UnattachedFilter;
 use Lisowiecw\MediaLibrary\Library\LibrarySearch;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
+use Lisowiecw\MediaLibrary\Tenancy\Tenancy;
+use Livewire\Component;
 
 /**
  * The librarian's view of the library, which is a different job from the
@@ -105,6 +109,18 @@ class MediaAssetResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // Scoped by default, and unscoped only where the page says it is
+            // and the ability still agrees. It sits on the query rather than
+            // on `getEloquentQuery()` so that the toggle can lift it: a scope
+            // applied to the base query is one a filter could never undo.
+            ->modifyQueryUsing(function (Builder $query, Component $livewire): void {
+                if ($livewire instanceof ListMediaAssets && $livewire->isShowingAllTenants()) {
+                    return;
+                }
+
+                /** @var Builder<MediaAsset> $query */
+                Tenancy::scope($query);
+            })
             ->columns([
                 TextColumn::make('display_name')
                     ->label(__('media-library::messages.management.fields.display_name'))
@@ -137,6 +153,14 @@ class MediaAssetResource extends Resource
                     ->badge()
                     ->color(fn (int $state): string => $state === 0 ? 'warning' : 'success')
                     ->sortable(),
+                // Only beside the unscoped listing: on a scoped one it is a
+                // column of one repeated value.
+                TextColumn::make('tenant_id')
+                    ->label(__('media-library::messages.management.fields.tenant'))
+                    ->placeholder(__('media-library::messages.management.filters.tenant_untenanted'))
+                    ->badge()
+                    ->color('gray')
+                    ->visible(fn (): bool => TenantFilter::isAvailable()),
                 TextColumn::make('created_at')
                     ->label(__('media-library::messages.management.fields.created_at'))
                     ->dateTime()
@@ -153,6 +177,7 @@ class MediaAssetResource extends Resource
                     ->label(__('media-library::messages.management.fields.mime_source'))
                     ->options(static::enumOptions(MimeSource::cases())),
                 UnattachedFilter::make(),
+                TenantFilter::make(),
             ])
             ->headerActions([
                 UploadAssets::make(),
@@ -170,6 +195,7 @@ class MediaAssetResource extends Resource
                 DeleteAssetsInBulk::make(),
                 RestoreAssetsInBulk::make(),
                 DeleteUnattachedAssetsInBulk::make(),
+                ClaimAssetsForTenant::make(),
             ]);
     }
 

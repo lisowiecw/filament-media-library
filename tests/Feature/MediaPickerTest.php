@@ -6,6 +6,7 @@ use Filament\Actions\Testing\TestAction;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
+use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\Article;
@@ -193,4 +194,54 @@ it('replaces the selection of a single-selection field on upload, leaving the ol
 
     expect($host->media('cover_image')->pluck('id')->all())->toBe([$uploaded->id])
         ->and(MediaAsset::query()->whereKey($existing->id)->exists())->toBeTrue();
+});
+
+it('rejects a save that reaches for an asset in another tenant, naming the field alone', function (): void {
+    $host = article();
+    $theirs = libraryAsset();
+    $theirs->tenant_id = 'other';
+    $theirs->save();
+
+    tenantIs('acme');
+
+    $component = pickerForm($host)
+        ->set('data.cover_image', [$theirs->id])
+        ->call('save')
+        ->assertHasErrors('data.cover_image');
+
+    $errors = $component->errors()->get('data.cover_image');
+
+    expect($errors[0])->not->toContain((string) $theirs->id)
+        ->and(MediaAttachment::query()->count())->toBe(0);
+});
+
+it('leaves a save alone that only keeps an attachment made before the tenant existed', function (): void {
+    $host = article();
+    $theirs = libraryAsset();
+    $theirs->tenant_id = 'other';
+    $theirs->save();
+    attach($host, $theirs);
+
+    tenantIs('acme');
+
+    pickerForm($host)
+        ->set('data.cover_image', [$theirs->id])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(MediaAttachment::query()->count())->toBe(1);
+});
+
+it('paints no thumbnail for an attachment outside the current tenant, leaving a glyph tile', function (): void {
+    $host = article();
+    $theirs = libraryAsset();
+    $theirs->tenant_id = 'other';
+    $theirs->save();
+    attach($host, $theirs);
+
+    tenantIs('acme');
+
+    $picker = MediaPicker::make('cover_image');
+
+    expect($picker->getThumbnailUrl($theirs))->toBeNull();
 });

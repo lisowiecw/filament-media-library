@@ -452,6 +452,65 @@ regenerate action beside them. It queues a bounded batch, since it runs in a
 request, and names `media:regenerate-derivatives` for whatever is left. The
 importer stays a command and is never exposed here.
 
+### Tenancy
+
+The library knows nothing about tenants until a panel tells it who the current
+one is:
+
+```php
+->plugin(MediaLibraryPlugin::make()->tenantUsing(fn () => Filament::getTenant()))
+```
+
+A panel that already has Filament tenancy gets that resolver by default, so the
+call above is only needed where the tenant the library sorts by is not the
+panel's own. Leave the resolver unset and nothing in this section applies: a
+single-tenant application is untouched, byte for byte.
+
+The tenant is stamped onto `media_assets.tenant_id` once, at upload, from
+whoever was current. It is never reassigned, and an attempt to move an asset
+from one tenant to another throws rather than writing.
+
+Scope decides what is offered and the policy decides what is delivered, which
+are two different questions. The picker and the management page query within
+the current tenant, so nothing outside it is ever shown; separately, `view` is
+refused for an asset outside the current tenant, so a route-model binding or a
+guessed Delivery URL cannot sail past a boundary the query merely narrowed. A
+cross-tenant Delivery request answers 404 rather than 403, because 403 would
+confirm the asset exists.
+
+An asset with no tenant belongs to no one rather than to everyone. No tenant
+sees it, and no tenant is delivered it. That is what makes upgrading an existing
+single-tenant library safe: the day a resolver is configured, the whole library
+goes quiet instead of appearing in every tenant at once.
+
+Claiming is how it comes back, one way and allowed once:
+
+```bash
+php artisan media:assign-tenant acme
+php artisan media:assign-tenant acme --asset=01J... --dry-run
+```
+
+The same claim is available as a bulk action on the management page, for a
+person the host application has unlocked with the `viewAllTenants` ability. That
+ability is refused by the packaged policy and unlocks an "All tenants" toggle, a
+tenant column and a tenant facet on the listing, which is the only place the
+library is ever shown unscoped.
+
+An attachment made before tenancy existed is left alone rather than broken: it
+still counts as usage and still blocks deletion, and its tile degrades to a
+dimmed glyph, since the viewer may not look at the bytes. Attaching anything new
+across a tenant boundary is refused.
+
+Imports say who the adopted objects belong to, and `none` is a valid answer:
+
+```bash
+php artisan media:import --disk=media --prefix=legacy --source=disk --tenant=none
+```
+
+Jobs and commands are neither scoped nor policy-checked. An operator on the
+server is not a request inside a panel, and a claim that could only be made from
+inside the tenant it was claiming for could never be made at all.
+
 ## Changelog
 
 Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.

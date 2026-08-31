@@ -14,12 +14,17 @@ use Lisowiecw\MediaLibrary\Enums\Visibility;
  * the Discovery rather than here, so this record holds only what both runs
  * share and no field on it is nullable for the sake of the other kind. See
  * ADR 15.
+ *
+ * The tenant is null when the run was told `none`, which is the operator
+ * saying these bytes belong to no one rather than saying nothing. The command
+ * makes them say one or the other.
  */
 final readonly class ImportRequest
 {
     public function __construct(
         public Discovery $discovery,
         public string $disk,
+        public ?string $tenant = null,
         public ?string $field = null,
         public ?string $uploader = null,
         public ?Visibility $visibility = null,

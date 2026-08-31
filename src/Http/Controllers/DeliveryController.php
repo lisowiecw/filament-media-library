@@ -40,6 +40,11 @@ class DeliveryController
     {
         $asset = MediaAsset::where('ulid', $asset)->firstOrFail();
 
+        // A cross-tenant request is answered as though the row were not there
+        // at all. A refusal would confirm the id, and an id that can be probed
+        // is a library another tenant can enumerate.
+        abort_if($this->authorization->excludedByTenant($asset), 404);
+
         $variant = $request->string('variant')->toString();
 
         if ($variant !== '') {

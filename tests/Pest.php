@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Filament\Actions\Testing\TestAction;
+use Filament\Facades\Filament;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -15,6 +16,7 @@ use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\IngestService;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
+use Lisowiecw\MediaLibrary\MediaLibraryPlugin;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Lisowiecw\MediaLibrary\Models\MediaDerivative;
@@ -35,8 +37,23 @@ uses()->beforeEach(function (): void {
     HostPolicy::$allows = true;
     HostPolicy::$evaluations = 0;
     ManagementPolicy::reset();
+    tenantIs(null);
     DownloadFilename::forget();
 })->in(__DIR__);
+/**
+ * Tenants this panel for the rest of the test, the way a host application
+ * does: on the plugin instance the panel already holds.
+ */
+function tenantIs(?string $tenant): void
+{
+    $panel = Filament::getCurrentOrDefaultPanel();
+
+    /** @var MediaLibraryPlugin $plugin */
+    $plugin = $panel->getPlugin('media-library');
+
+    $plugin->tenantUsing($tenant === null ? null : fn () => $tenant);
+}
+
 function ingest(UploadedFile $file, ?Placement $placement = null, ?IngestRules $rules = null): MediaAsset
 {
     return app(IngestService::class)->ingest($file, $placement ?? Placement::resolve(), $rules);

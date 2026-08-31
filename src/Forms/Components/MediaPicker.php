@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
+use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\IngestService;
@@ -26,6 +27,7 @@ use Lisowiecw\MediaLibrary\Ingest\Placement;
 use Lisowiecw\MediaLibrary\Library\OfferScope;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
+use Lisowiecw\MediaLibrary\Tenancy\Tenancy;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 /**
@@ -267,6 +269,14 @@ class MediaPicker extends Field
      */
     public function getThumbnailUrl(MediaAsset $asset): ?string
     {
+        // An asset the viewer may not be delivered paints no thumbnail here
+        // either, so an attachment made before the tenant existed degrades to
+        // a glyph tile rather than to a broken image. The row stays in the
+        // list, because it is still usage and still blocks deletion.
+        if (! app(MediaAuthorization::class)->allowsView($asset)) {
+            return null;
+        }
+
         if ($this->thumbnailUsing === null) {
             return Derivatives::thumbnailUrl($asset);
         }
@@ -748,7 +758,16 @@ class MediaPicker extends Field
 
             $available = MediaAsset::query()->whereIn('id', $ids)->count();
 
-            if ($available !== count($ids)) {
+            // What is arriving has to be inside the tenant boundary; what is
+            // already attached is left alone, so an attachment made before
+            // tenancy was configured degrades rather than blocking every save
+            // of the host record it sits on.
+            $arriving = array_values(array_diff($ids, $this->getAttachedIds()));
+            $reachable = MediaAsset::query()->whereIn('id', $arriving);
+
+            Tenancy::scope($reachable);
+
+            if ($available !== count($ids) || ($arriving !== [] && $reachable->count() !== count($arriving))) {
                 $label = $this->getLabel();
 
                 $fail(__('media-library::messages.picker.unavailable', [

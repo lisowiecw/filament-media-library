@@ -73,6 +73,17 @@ class MediaAssetPolicy
         return false;
     }
 
+    /**
+     * Reading past the tenant boundary: the unscoped listing, its tenant
+     * column and facet, and delivery of an asset stamped with somebody else's
+     * tenant. It takes no asset, because it is authority over the boundary
+     * rather than over a row.
+     */
+    public function viewAllTenants(?Authenticatable $user): bool
+    {
+        return false;
+    }
+
     public function detach(?Authenticatable $user, MediaAsset $asset): bool
     {
         return false;

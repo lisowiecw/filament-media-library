@@ -18,6 +18,7 @@ function runTraversal(array $options = []): PendingCommand
     $command = test()->artisan('media:import', array_merge([
         '--source' => 'disk',
         '--disk' => 'media',
+        '--tenant' => 'none',
         '--prefix' => 'legacy',
         '--report' => storage_path('logs/import-traversal-test.json'),
     ], $options));

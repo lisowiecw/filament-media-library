@@ -76,6 +76,16 @@ class ManagementPolicy
         return static::allowed('restoreAny');
     }
 
+    /**
+     * Unlike every other ability here, this one starts refused, because that
+     * is what it is: the fail-closed answer a host has to say yes to before a
+     * person sees anything outside their own tenant.
+     */
+    public function viewAllTenants(?Authenticatable $user): bool
+    {
+        return static::$allows['viewAllTenants'] ?? false;
+    }
+
     public function detach(?Authenticatable $user, MediaAsset $asset): bool
     {
         return static::allowed('detach', $asset);

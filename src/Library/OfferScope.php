@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
+use Lisowiecw\MediaLibrary\Tenancy\Tenancy;
 
 /**
  * The query that decides what a picker grid lists: an accepted-type match,
@@ -48,6 +49,10 @@ final readonly class OfferScope
         if ($this->uploadVisibility->isPublic()) {
             $query->where('visibility', Visibility::Public->value);
         }
+
+        // The tenant boundary is not the field's to widen or to narrow, so it
+        // is applied before the field's own callback ever sees the query.
+        Tenancy::scope($query);
 
         $this->constrainToAcceptedTypes($query);
         $this->applyNarrowing($query);

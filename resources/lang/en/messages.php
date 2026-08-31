@@ -110,6 +110,7 @@ return [
             'visibility' => 'Visibility',
             'source' => 'Source',
             'import_source' => 'Imported from',
+            'tenant' => 'Tenant',
             'disk' => 'Disk',
             'object_key' => 'Object key',
             'usage' => 'Uses',
@@ -132,6 +133,9 @@ return [
             'unattached_any' => 'Any',
             'unattached_now' => 'Not attached anywhere',
             'unattached_past_grace' => 'Unattached for more than :days day(s)',
+            'tenant' => 'Tenant',
+            'tenant_any' => 'Any',
+            'tenant_untenanted' => 'Belongs to no one',
         ],
 
         'actions' => [
@@ -145,12 +149,16 @@ return [
             'health' => 'Derivative health',
             'revoke' => 'Revoke',
             'regenerate' => 'Regenerate',
+            'all_tenants' => 'All tenants',
+            'this_tenant' => 'This tenant only',
+            'claim' => 'Claim for this tenant',
         ],
 
         'modals' => [
             'force_delete' => 'Force delete',
             'delete_unattached' => 'Only the selected assets that nothing has referenced for more than :days day(s) will be deleted. Everything else is left alone.',
             'health' => 'Derivative health',
+            'claim' => 'The selected assets that belong to no one will be claimed for :tenant. Claiming is one way, and an asset that already has a tenant is left alone.',
         ],
 
         'health' => [
@@ -171,6 +179,8 @@ return [
             'uploaded' => 'Uploaded :count file(s).',
             'bulk_deleted' => 'Deleted :count asset(s).',
             'bulk_restored' => 'Restored :count asset(s).',
+            'bulk_claimed' => 'Claimed :count asset(s).',
+            'skipped_owned' => 'Skipped :count that already belong to a tenant: :names.',
             'regenerating' => 'Queued :count rendering(s).',
             'regenerate_remaining' => ':count more are waiting. Run media:regenerate-derivatives to finish them.',
             'skipped_in_use' => 'Skipped :count still in use: :names.',

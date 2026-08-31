@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Policies\MediaAssetPolicy;
+use Lisowiecw\MediaLibrary\Tenancy\Tenancy;
 
 /**
  * The one place the package asks whether something is allowed, and the entry
@@ -37,6 +38,14 @@ class MediaAuthorization
     public const string UPLOAD_MEDIA = 'uploadMedia';
 
     public const string ATTACH_MEDIA = 'attachMedia';
+
+    /**
+     * The ability that reaches past the tenant boundary, on the policy rather
+     * than as a gate because it is a question about the model. It fails closed
+     * like everything else, so opting a panel into tenancy never produces a
+     * cross-tenant reader by accident.
+     */
+    public const string VIEW_ALL_TENANTS = 'viewAllTenants';
 
     /** @var array<string, bool> */
     private array $viewed = [];
@@ -66,6 +75,13 @@ class MediaAuthorization
      */
     public function allowsView(MediaAsset $asset): bool
     {
+        // Before the public shortcut, not after it. Public says the bytes are
+        // already addressable to anyone who holds the disk's URL; it does not
+        // say this panel should hand another tenant's asset over.
+        if ($this->excludedByTenant($asset)) {
+            return false;
+        }
+
         if ($asset->visibility->isPublic()) {
             return true;
         }
@@ -75,6 +91,30 @@ class MediaAuthorization
         $key = $asset->ulid.'|'.(Auth::id() ?? 'guest');
 
         return $this->viewed[$key] ??= Gate::allows('view', $asset);
+    }
+
+    /**
+     * Whether the tenant boundary puts this asset out of reach. It is the
+     * comparison plus the one ability that crosses it, stated here so the
+     * scope, the policy and the Delivery route cannot answer it differently.
+     */
+    public function excludedByTenant(MediaAsset $asset): bool
+    {
+        return Tenancy::excludes($asset) && ! $this->allowsAllTenants();
+    }
+
+    /**
+     * Whether this request may read across tenants at all, which is what the
+     * management page's unscoped listing is unlocked by.
+     */
+    public function allowsAllTenants(): bool
+    {
+        $this->forgetStaleAnswers();
+
+        return $this->viewed['all-tenants|'.(Auth::id() ?? 'guest')] ??= Gate::allows(
+            self::VIEW_ALL_TENANTS,
+            MediaAsset::class,
+        );
     }
 
     /**

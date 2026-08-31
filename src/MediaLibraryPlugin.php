@@ -6,11 +6,13 @@ namespace Lisowiecw\MediaLibrary;
 
 use Closure;
 use Filament\Contracts\Plugin;
+use Filament\Facades\Filament;
 use Filament\Panel;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
 use Lisowiecw\MediaLibrary\Delivery\DownloadFilename;
 use Lisowiecw\MediaLibrary\Filament\Resources\MediaAssetResource;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
+use Lisowiecw\MediaLibrary\Tenancy\Tenancy;
 
 class MediaLibraryPlugin implements Plugin
 {
@@ -23,6 +25,18 @@ class MediaLibraryPlugin implements Plugin
      * whole library out of its navigation.
      */
     protected bool $hasLibraryManagement = false;
+
+    /**
+     * How this panel names the tenant an asset is stamped with and scoped to.
+     *
+     * Null is not "no tenancy": a panel with tenancy of its own defaults to
+     * its own tenant, which is the whole configuration a common case needs.
+     * A panel with neither is not tenanted at all, and nothing in the package
+     * changes for it.
+     *
+     * @var (Closure(): mixed) | null
+     */
+    protected ?Closure $tenantResolver = null;
 
     public static function make(): static
     {
@@ -51,6 +65,55 @@ class MediaLibraryPlugin implements Plugin
     public function hasLibraryManagement(): bool
     {
         return $this->hasLibraryManagement;
+    }
+
+    /**
+     * Name the tenant this panel's library belongs to.
+     *
+     * It lives on the panel instance rather than in config because tenancy is
+     * a property of the panel a request arrives at: a tenanted panel and an
+     * untenanted one can be registered side by side, and package config has no
+     * way to say so. Leaving it unset on a panel that has tenancy of its own
+     * resolves the panel's tenant; leaving it unset on a panel that does not
+     * means the plugin is not tenanted, and a single-tenant application is
+     * untouched.
+     *
+     * The resolver's answer is the tenant's key, taken from a model where it
+     * returns one. The plugin never inspects a host model's tenancy, so this
+     * value is the whole of what it knows.
+     *
+     * @param  (Closure(): mixed) | null  $resolver
+     */
+    public function tenantUsing(?Closure $resolver): static
+    {
+        $this->tenantResolver = $resolver;
+
+        return $this;
+    }
+
+    /**
+     * Whether this panel knows about tenants at all.
+     */
+    public function isTenanted(Panel $panel): bool
+    {
+        return $this->tenantResolver !== null || $panel->hasTenancy();
+    }
+
+    /**
+     * The tenant of the request being served, as a key, or null where the
+     * panel is not tenanted or the resolver had no answer.
+     */
+    public function resolveTenant(Panel $panel): ?string
+    {
+        if ($this->tenantResolver !== null) {
+            return Tenancy::key(($this->tenantResolver)());
+        }
+
+        if (! $panel->hasTenancy()) {
+            return null;
+        }
+
+        return Tenancy::key(Filament::getTenant());
     }
 
     /**

@@ -17,6 +17,7 @@ use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Filament\Resources\MediaAssetResource;
 use Lisowiecw\MediaLibrary\Filament\Resources\MediaAssets\Pages\ListMediaAssets;
 use Lisowiecw\MediaLibrary\Filament\Resources\MediaAssets\Pages\ViewMediaAsset;
+use Lisowiecw\MediaLibrary\Filament\Tables\TenantFilter;
 use Lisowiecw\MediaLibrary\Filament\Tables\UnattachedFilter;
 use Lisowiecw\MediaLibrary\Jobs\GenerateDerivative;
 use Lisowiecw\MediaLibrary\MediaLibraryPlugin;
@@ -331,5 +332,71 @@ describe('the usage panel', function (): void {
         viewPage($asset)->assertDontSee(__('media-library::messages.management.actions.revoke'));
 
         expect($asset->attachments()->count())->toBe(1);
+    });
+});
+
+describe('tenancy on the listing', function (): void {
+    beforeEach(function (): void {
+        tenantIs('acme');
+    });
+
+    it('shows only the current tenant by default', function (): void {
+        $ours = makeAsset(['tenant_id' => 'acme']);
+        $theirs = libraryAsset();
+        $theirs->tenant_id = 'other';
+        $theirs->save();
+
+        listPage()->assertCanSeeTableRecords([$ours])->assertCanNotSeeTableRecords([$theirs]);
+    });
+
+    it('keeps the all tenants toggle away from a person the host has not unlocked', function (): void {
+        listPage()->assertActionHidden(TestAction::make('allTenants'));
+    });
+
+    it('shows every tenant once the toggle is on', function (): void {
+        ManagementPolicy::$allows['viewAllTenants'] = true;
+
+        $ours = makeAsset(['tenant_id' => 'acme']);
+        $theirs = libraryAsset();
+        $theirs->tenant_id = 'other';
+        $theirs->save();
+
+        listPage()
+            ->callAction(TestAction::make('allTenants'))
+            ->assertCanSeeTableRecords([$ours, $theirs]);
+    });
+
+    it('facets the unscoped listing by tenant, including what belongs to no one', function (): void {
+        ManagementPolicy::$allows['viewAllTenants'] = true;
+
+        $ours = makeAsset(['tenant_id' => 'acme']);
+        $nobody = libraryAsset();
+
+        listPage()
+            ->callAction(TestAction::make('allTenants'))
+            ->filterTable('tenant', ['tenant' => TenantFilter::UNTENANTED])
+            ->assertCanSeeTableRecords([$nobody])
+            ->assertCanNotSeeTableRecords([$ours]);
+    });
+
+    it('claims untenanted assets in bulk and leaves owned ones alone', function (): void {
+        ManagementPolicy::$allows['viewAllTenants'] = true;
+
+        $nobody = makeAsset();
+        $theirs = libraryAsset();
+        $theirs->tenant_id = 'other';
+        $theirs->save();
+
+        listPage()
+            ->callAction(TestAction::make('allTenants'))
+            ->selectTableRecords([$nobody->getKey(), $theirs->getKey()])
+            ->callAction(TestAction::make('claim')->table()->bulk());
+
+        expect($nobody->refresh()->tenant_id)->toBe('acme')
+            ->and($theirs->refresh()->tenant_id)->toBe('other');
+    });
+
+    it('offers no claim where nothing is unscoped', function (): void {
+        listPage()->assertActionHidden(TestAction::make('claim')->table()->bulk());
     });
 });

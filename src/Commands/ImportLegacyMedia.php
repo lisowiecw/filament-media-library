@@ -19,6 +19,7 @@ use Lisowiecw\MediaLibrary\Import\ImportReport;
 use Lisowiecw\MediaLibrary\Import\ImportRequest;
 use Lisowiecw\MediaLibrary\Import\LegacyImporter;
 use Lisowiecw\MediaLibrary\Import\TraversalDiscovery;
+use Lisowiecw\MediaLibrary\Tenancy\Tenancy;
 
 /**
  * Adopts the uploads an application already has, by reading the column that
@@ -37,6 +38,7 @@ class ImportLegacyMedia extends Command implements Isolatable
         {--cardinality=single : Whether that column holds one path or a list of them. Never inferred}
         {--prefix= : The prefix to walk under --source=disk. Required there, and meaningless elsewhere}
         {--disk= : The disk those paths resolve against. Required: an import never guesses one}
+        {--tenant= : The tenant the adopted assets belong to, or the literal none. Required}
         {--field= : The field context the paths are attached in}
         {--uploader= : A column on the host row to record as the uploader, else none is recorded}
         {--visibility= : Record every adopted object as public or private, rather than resolving it}
@@ -96,6 +98,17 @@ class ImportLegacyMedia extends Command implements Isolatable
             return null;
         }
 
+        /** @var string|null $tenant */
+        $tenant = $this->option('tenant');
+
+        if ($tenant === null || trim($tenant) === '') {
+            $this->components->error('Say who the adopted assets belong to: --tenant is required, and none is a valid answer.');
+
+            return null;
+        }
+
+        $tenant = $tenant === Tenancy::NONE ? null : $tenant;
+
         /** @var string|null $field */
         $field = $this->option('field');
 
@@ -106,7 +119,7 @@ class ImportLegacyMedia extends Command implements Isolatable
         $chunk = $this->option('chunk');
 
         if ($source === DiscoverySource::Disk) {
-            return $this->traversalRequest($disk, $field, $uploader);
+            return $this->traversalRequest($disk, $tenant, $field, $uploader);
         }
 
         /** @var string|null $model */
@@ -125,6 +138,7 @@ class ImportLegacyMedia extends Command implements Isolatable
         return new ImportRequest(
             discovery: new ColumnDiscovery($model, $column, $this->cardinality()),
             disk: $disk,
+            tenant: $tenant,
             field: $field,
             uploader: $uploader,
             visibility: $this->visibility(),
@@ -141,7 +155,7 @@ class ImportLegacyMedia extends Command implements Isolatable
      * accepted `--field` and then attached nothing would be the option going
      * back to being a label, which is the thing it is not.
      */
-    private function traversalRequest(string $disk, ?string $field, ?string $uploader): ImportRequest
+    private function traversalRequest(string $disk, ?string $tenant, ?string $field, ?string $uploader): ImportRequest
     {
         /** @var string $chunk */
         $chunk = $this->option('chunk');
@@ -164,6 +178,7 @@ class ImportLegacyMedia extends Command implements Isolatable
         return new ImportRequest(
             discovery: new TraversalDiscovery(DiskTraversal::normalise($prefix)),
             disk: $disk,
+            tenant: $tenant,
             visibility: $this->visibility(),
             copy: (bool) $this->option('copy'),
             sniff: (bool) $this->option('sniff'),

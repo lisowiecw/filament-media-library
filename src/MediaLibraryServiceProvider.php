@@ -6,6 +6,7 @@ namespace Lisowiecw\MediaLibrary;
 
 use Illuminate\Support\Facades\Log;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
+use Lisowiecw\MediaLibrary\Commands\AssignTenant;
 use Lisowiecw\MediaLibrary\Commands\ImportLegacyMedia;
 use Lisowiecw\MediaLibrary\Commands\RegenerateDerivatives;
 use Lisowiecw\MediaLibrary\Commands\ReportUnattachedAssets;
@@ -27,6 +28,7 @@ class MediaLibraryServiceProvider extends PackageServiceProvider
             ->hasConfigFile()
             ->hasViews(static::$name)
             ->hasTranslations()
+            ->hasCommand(AssignTenant::class)
             ->hasCommand(ImportLegacyMedia::class)
             ->hasCommand(RegenerateDerivatives::class)
             ->hasCommand(ResolveMimeTypes::class)

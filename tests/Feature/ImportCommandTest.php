@@ -34,6 +34,7 @@ function runImport(array $options = []): PendingCommand
         '--model' => LegacyRecord::class,
         '--column' => 'cover_path',
         '--disk' => 'media',
+        '--tenant' => 'none',
         '--field' => 'cover_image',
         '--report' => storage_path('logs/import-test.json'),
     ], $options));

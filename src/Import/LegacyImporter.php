@@ -300,6 +300,7 @@ class LegacyImporter
             'source' => MediaSource::Import,
             'import_source' => $request->importSource(),
             'uploaded_by' => $row === null ? null : $this->uploader($row, $request),
+            'tenant_id' => $request->tenant,
         ]);
 
         $report->registered++;
