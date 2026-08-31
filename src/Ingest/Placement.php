@@ -70,6 +70,17 @@ final readonly class Placement
     }
 
     /**
+     * The same invariant, for a disk and visibility that were resolved
+     * somewhere other than a field: an import names both on the command line
+     * and needs the identical answer, so the rule stays owned here rather than
+     * being restated per caller.
+     */
+    public static function assertDeliverable(string $disk, Visibility $visibility, ?string $field = null): void
+    {
+        self::guard($disk, $visibility, $field);
+    }
+
+    /**
      * The disk-to-visibility invariant, checked against the declaration alone.
      *
      * A public asset is addressed by the disk's own URL, so a disk with no URL

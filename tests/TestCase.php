@@ -113,5 +113,13 @@ abstract class TestCase extends Orchestra
             $table->string('name');
             $table->timestamps();
         });
+
+        // The legacy schema the importer reads: a column holding a path the
+        // application stored years before the plugin existed.
+        Schema::create('legacy_records', function (Blueprint $table): void {
+            $table->id();
+            $table->string('cover_path')->nullable();
+            $table->string('author_id')->nullable();
+        });
     }
 }
