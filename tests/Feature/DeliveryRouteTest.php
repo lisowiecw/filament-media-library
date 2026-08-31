@@ -130,6 +130,21 @@ it('serves for saving what the mime type was only guessed for', function (): voi
     expect($response->headers->get('content-disposition'))->toStartWith('attachment');
 });
 
+it('never resolves a mime type on the way out', function (): void {
+    withoutTemporaryUrls();
+
+    $asset = storedAsset(['mime_type' => null, 'mime_source' => MimeSource::Unknown]);
+    $updated = $asset->updated_at;
+
+    $this->get(DeliveryRoute::signedUrl($asset))->assertSuccessful();
+
+    // Resolution is a write and, with a sniff, a fetch. The read path performs
+    // neither: the row is only ever rewritten by `media:resolve-mimes`.
+    expect($asset->fresh()->mime_source)->toBe(MimeSource::Unknown)
+        ->and($asset->fresh()->mime_type)->toBeNull()
+        ->and($asset->fresh()->updated_at->equalTo($updated))->toBeTrue();
+});
+
 it('redirects a download to the disk temporary URL where the disk has one', function (): void {
     $asked = [];
 

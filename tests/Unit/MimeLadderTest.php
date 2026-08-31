@@ -53,6 +53,16 @@ it('sniffs the bytes only when asked, and before the extension', function (): vo
         ->and($ladder->source)->toBe(MimeSource::Sniffed);
 });
 
+it('prefers what it measured over what the object claims', function (): void {
+    // The case a bucket makes the common one: nearly every object carries a
+    // stored Content-Type, so a header-first ladder would make a paid-for
+    // sniff buy nothing at all.
+    $ladder = MimeLadder::resolve(ladderDisk('image/png'), 'avatars/a.png', 'png', sniff: true);
+
+    expect($ladder->mimeType)->toBe('text/plain')
+        ->and($ladder->source)->toBe(MimeSource::Sniffed);
+});
+
 it('records unknown rather than guessing a type', function (): void {
     $ladder = MimeLadder::resolve(ladderDisk(false), 'avatars/nameless', null);
 

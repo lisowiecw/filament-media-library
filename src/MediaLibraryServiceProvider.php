@@ -9,6 +9,7 @@ use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Commands\ImportLegacyMedia;
 use Lisowiecw\MediaLibrary\Commands\RegenerateDerivatives;
 use Lisowiecw\MediaLibrary\Commands\ReportUnattachedAssets;
+use Lisowiecw\MediaLibrary\Commands\ResolveMimeTypes;
 use Lisowiecw\MediaLibrary\Derivatives\LazyDispatch;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\UploadCeiling;
@@ -28,6 +29,7 @@ class MediaLibraryServiceProvider extends PackageServiceProvider
             ->hasTranslations()
             ->hasCommand(ImportLegacyMedia::class)
             ->hasCommand(RegenerateDerivatives::class)
+            ->hasCommand(ResolveMimeTypes::class)
             // Registered, never scheduled: installing the package schedules
             // nothing, and the sweep only ever reports.
             ->hasCommand(ReportUnattachedAssets::class)

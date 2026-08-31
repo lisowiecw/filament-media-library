@@ -14,8 +14,12 @@ use Throwable;
  * How far an adopted object's type can be trusted, resolved by asking cheaper
  * questions before expensive ones and recording which one answered.
  *
- * The rungs, in order: the type stored on the object, a sniff of its bytes
- * where the operator has paid for one, the filename extension, then nothing.
+ * The rungs, in order: a sniff of the bytes where the operator has paid for
+ * one, the type stored on the object, the filename extension, then nothing.
+ * A sniff goes first because it measures the file while a stored header only
+ * repeats what whoever wrote the object claimed, and a run that has already
+ * paid for the read should not be overruled by a claim. Without `--sniff` the
+ * ladder starts at the stored header and no object is ever read.
  * The type and the rung are always produced together, so a row can never claim
  * a rung it did not come from.
  */
@@ -32,12 +36,6 @@ final readonly class MimeLadder
         ?string $extension,
         bool $sniff = false,
     ): self {
-        $stored = self::stored($disk, $key);
-
-        if ($stored !== null) {
-            return new self($stored, MimeSource::Header);
-        }
-
         // One full read of the object, which is why it is never implicit.
         if ($sniff) {
             $sniffed = self::sniffed($disk, $key);
@@ -45,6 +43,12 @@ final readonly class MimeLadder
             if ($sniffed !== null) {
                 return new self($sniffed, MimeSource::Sniffed);
             }
+        }
+
+        $stored = self::stored($disk, $key);
+
+        if ($stored !== null) {
+            return new self($stored, MimeSource::Header);
         }
 
         $named = $extension === null
