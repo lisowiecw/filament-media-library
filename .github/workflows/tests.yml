@@ -63,7 +63,14 @@ jobs:
       - name: Linter
         run: composer lint:check
 
+      # Serially, because the type coverage plugin forks a worker per file and
+      # they all write one cache file: two writes landing together leave it
+      # half written, and the next run dies parsing it. Pinning the fork pool
+      # to one process (the plugin's memory budget is what sizes it) is the
+      # only lever the plugin gives, and this tree is small enough to afford.
       - name: Type Coverage
+        env:
+          FORK_MEM_PER_PROC: 1099511627776
         run: composer test:types
 
       - name: Test Suite
