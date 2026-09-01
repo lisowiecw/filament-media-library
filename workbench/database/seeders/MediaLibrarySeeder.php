@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Workbench\Database\Seeders;
 
 use Closure;
+use GdImage;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Http\UploadedFile;
@@ -135,10 +136,11 @@ class MediaLibrarySeeder extends Seeder
     }
 
     /**
-     * A soft two-axis gradient, which is enough for a thumbnail to look like
-     * something and for the BlurHash to be more than one flat colour, and large
-     * enough in both bytes and pixels that the small-original shortcut does not
-     * skip its derivatives.
+     * A gradient with a scatter of shapes over it. The gradient alone made every
+     * card look like every other card, which reads as a broken thumbnail rather
+     * than a picture of nothing, so each image also gets its own handful of
+     * circles and bars in contrasting colours. Still large enough in bytes and
+     * pixels that the small-original shortcut does not skip its derivatives.
      *
      * @param  positive-int  $width
      * @param  positive-int  $height
@@ -164,6 +166,8 @@ class MediaLibrarySeeder extends Seeder
             }
         }
 
+        $this->scatter($canvas, $width, $height, $hue);
+
         ob_start();
 
         $format === 'png' ? imagepng($canvas) : imagejpeg($canvas, null, 90);
@@ -173,6 +177,49 @@ class MediaLibrarySeeder extends Seeder
         imagedestroy($canvas);
 
         return $bytes;
+    }
+
+    /**
+     * The shapes that tell one seeded image from the next: a few translucent
+     * discs and bars, placed and sized at random, in colours taken from across
+     * the wheel from the gradient underneath so they stay visible at thumbnail
+     * size.
+     *
+     * @param  positive-int  $width
+     * @param  positive-int  $height
+     */
+    private function scatter(GdImage $canvas, int $width, int $height, int $hue): void
+    {
+        $short = min($width, $height);
+
+        foreach (range(1, random_int(5, 9)) as $shape) {
+            $colour = imagecolorallocatealpha(
+                $canvas,
+                $this->channel(255 - $hue + random_int(-40, 40)),
+                $this->channel(random_int(0, 255)),
+                $this->channel($hue + random_int(-40, 40)),
+                random_int(20, 70),
+            );
+
+            if ($colour === false) {
+                continue;
+            }
+
+            $x = random_int(0, $width);
+            $y = random_int(0, $height);
+
+            if ($shape % 3 === 0) {
+                $bar = intdiv($short, random_int(8, 20));
+
+                imagefilledrectangle($canvas, $x, $y, $x + random_int($bar, $short), $y + $bar, $colour);
+
+                continue;
+            }
+
+            $size = random_int(intdiv($short, 8), intdiv($short, 2));
+
+            imagefilledellipse($canvas, $x, $y, $size, $size, $colour);
+        }
     }
 
     /**
