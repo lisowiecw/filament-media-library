@@ -292,6 +292,49 @@ abstract class BrowserTestCase extends Orchestra
     }
 
     /**
+     * Wait for a selector to be in the DOM *and* to have had its Alpine
+     * handlers bound, and answer with the page.
+     *
+     * Presence is not readiness. A drop surface is an element carrying
+     * `x-data`, and Alpine walks the tree after the markup lands, so an event
+     * dispatched in that gap is delivered to an element with nothing listening
+     * on it: no request, no notification, no change of any kind, which is
+     * indistinguishable from the feature being broken. An initialised element
+     * carries `_x_dataStack`, so that is what is waited on. An element that
+     * declares no `x-data` (Filepond's own root) is ready as soon as it is
+     * present.
+     */
+    protected function bound(AwaitableWebpage|PendingAwaitablePage $page, string $selector, int $seconds = 10): AwaitableWebpage|PendingAwaitablePage
+    {
+        $milliseconds = $seconds * 1000;
+
+        $ready = $page->script(<<<JS
+            new Promise((resolve) => {
+                const deadline = Date.now() + {$milliseconds};
+                const look = () => {
+                    const target = document.querySelector({$this->js($selector)});
+
+                    if (target && (! target.hasAttribute('x-data') || target._x_dataStack)) {
+                        return resolve(true);
+                    }
+
+                    if (Date.now() > deadline) {
+                        return resolve(false);
+                    }
+
+                    setTimeout(look, 50);
+                };
+
+                look();
+            })
+        JS);
+
+        expect($ready)->toBeTrue("Expected element [{$selector}] to appear and bind its handlers within {$seconds} seconds, and it never did.");
+
+        return $page;
+    }
+
+    /**
      * Drop a file onto a surface the way a person does, by dispatching a real
      * drop event carrying a DataTransfer. Playwright can fill a file input but
      * cannot drag from the desktop, so the file is carried into the page as
@@ -301,10 +344,12 @@ abstract class BrowserTestCase extends Orchestra
     {
         $payload = base64_encode($contents ?? $this->image());
 
-        // The target has to be there before the event is aimed at it: a drop
-        // dispatched at nothing throws inside the page and the test then fails
-        // on the absence of everything that drop was supposed to cause.
-        $this->present($page, $selector);
+        // The target has to be there, and listening, before the event is aimed
+        // at it: a drop dispatched at nothing throws inside the page, and one
+        // dispatched between the element arriving and Alpine binding its
+        // handler is swallowed in silence. Either way the test then fails on
+        // the absence of everything that drop was supposed to cause.
+        $this->bound($page, $selector);
 
         $page->script(<<<JS
             (() => {
