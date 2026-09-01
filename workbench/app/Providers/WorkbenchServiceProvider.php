@@ -13,9 +13,16 @@ use Workbench\App\Policies\MediaAssetPolicy;
 
 class WorkbenchServiceProvider extends ServiceProvider
 {
+    /**
+     * The public disk addresses its files relatively, so a thumbnail loads
+     * whichever host the workbench is reached on. Laravel's default builds the
+     * URL from `APP_URL`, which is `http://localhost` here, so serving on
+     * `0.0.0.0:8000` to reach the panel from another machine left every public
+     * thumbnail pointing at port 80 of the browser's own machine.
+     */
     public function register(): void
     {
-        //
+        config(['filesystems.disks.public.url' => '/storage']);
     }
 
     /**
