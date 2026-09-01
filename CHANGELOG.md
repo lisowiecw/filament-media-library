@@ -1,6 +1,10 @@
 # Release Notes
 
-## [Unreleased](https://github.com/lisowiecw/filament-media-library/compare/v0.1.0...1.x)
+## [Unreleased](https://github.com/lisowiecw/filament-media-library/compare/v0.1.0...main)
+
+## [v0.1.0](https://github.com/lisowiecw/filament-media-library/compare/...v0.1.0) - 2026-09-01
+
+Initial pre-release.
 
 - Refusals that reach the person: a file the ingest floor turns away now says so in words wherever it was offered, and says the whole of it. Both the title and the body of a Filament notification go through an HTML sanitizer, which parsed the `<style>` a refusal names as a tag and swallowed the rest of the sentence, so a person read half a reason; refusal text is escaped in one place on its way to a notification and arrives intact. The picker absorbs a refusal on both of its ways in, the drop on the field trigger and the upload through the Library modal, where it previously threw past the field and the file simply never appeared. A refusal costs the one file and not the gesture: the rest of a multi-file drop is still ingested, in the order it was dropped, and the notification names what was refused beside the count of what was not.
 
@@ -39,8 +43,3 @@
 - Public placement: `$asset->url()` is the supported way to address an asset, resolving a public one to the disk's own URL so CDN and browser caching survive, and a private one to the signed Delivery route. `$asset->downloadUrl()` always resolves to the route, since a link cannot tell the browser to save a foreign origin's response.
 - Authorization and delivery: a fail-closed `MediaAssetPolicy`, the `uploadMedia` and `attachMedia` gates, and one signed Delivery route per panel that re-checks `view` on every request, earns its disposition, and carries a restrictive content policy on every response.
 - Package skeleton: service provider, `MediaLibraryPlugin`, `config/media-library.php`, and a Testbench harness hosting a real Filament panel.
-
-
-## [v0.1.0](https://github.com/lisowiecw/filament-media-library/compare/...v0.1.0) - 202x-xx-xx
-
-Initial pre-release.
