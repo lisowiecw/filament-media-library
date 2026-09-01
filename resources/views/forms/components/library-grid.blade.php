@@ -70,23 +70,23 @@
         <label class="fi-ml-library-sort">
             {{ __('media-library::messages.picker.grid.sort') }}
 
-            <select
-                class="fi-input"
-                wire:model.live="{{ $statePath }}.sort"
-            >
-                @foreach ($getSortOptions() as $sort)
-                    <option value="{{ $sort->value }}" @selected($getSort() === $sort)>{{ $sortLabel($sort) }}</option>
-                @endforeach
-            </select>
+            <x-filament::input.wrapper>
+                <x-filament::input.select wire:model.live="{{ $statePath }}.sort">
+                    @foreach ($getSortOptions() as $sort)
+                        <option value="{{ $sort->value }}" @selected($getSort() === $sort)>{{ $sortLabel($sort) }}</option>
+                    @endforeach
+                </x-filament::input.select>
+            </x-filament::input.wrapper>
         </label>
 
-        <input
-            type="search"
-            class="fi-input fi-ml-library-search"
-            wire:model.live.debounce.{{ $getSearchDebounce() }}ms="{{ $statePath }}.search"
-            aria-label="{{ __('media-library::messages.picker.grid.search') }}"
-            placeholder="{{ __('media-library::messages.picker.grid.search_placeholder') }}"
-        >
+        <x-filament::input.wrapper class="fi-ml-library-search" prefix-icon="heroicon-m-magnifying-glass">
+            <x-filament::input
+                type="search"
+                wire:model.live.debounce.{{ $getSearchDebounce() }}ms="{{ $statePath }}.search"
+                aria-label="{{ __('media-library::messages.picker.grid.search') }}"
+                placeholder="{{ __('media-library::messages.picker.grid.search_placeholder') }}"
+            />
+        </x-filament::input.wrapper>
 
         {{-- A reset the person did not ask for is stated rather than left to be noticed. --}}
         <p class="fi-ml-library-announcement" role="status" aria-live="polite">

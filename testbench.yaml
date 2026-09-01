@@ -29,6 +29,10 @@ workbench:
     views: false
   build:
     - asset-publish
+    # The package's stylesheet only exists under public/ once Filament has
+    # published it, so the workbench publishes it on every build rather than
+    # leaving an unstyled picker to be explained.
+    - filament:assets
     - create-sqlite-db
     - db-wipe
     - migrate-fresh

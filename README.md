@@ -359,9 +359,9 @@ allowed, not told to spend something.
 ### Card placeholders
 
 A grid card whose thumbnail is not generated yet paints the asset's own BlurHash
-rather than a flat tile. The package ships no JavaScript and no stylesheet, so the
+rather than a flat tile. The package ships no JavaScript, so the
 hash is decoded in PHP and painted as a handful of CSS gradients in a `style`
-attribute. Nothing to install, and nothing to build.
+attribute. Nothing to build, and no decoder to download before a card can paint.
 
 That painting is coarse on purpose. The card also carries the hash verbatim as
 `data-blurhash` on the same element, so an application that already has a decoder

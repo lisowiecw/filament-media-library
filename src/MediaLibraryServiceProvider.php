@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary;
 
+use Filament\Support\Assets\Css;
+use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Support\Facades\Log;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Commands\AssignTenant;
@@ -59,6 +61,13 @@ class MediaLibraryServiceProvider extends PackageServiceProvider
     public function packageBooted(): void
     {
         MediaAuthorization::registerDefaults();
+
+        // The picker's own markup, styled by the package rather than left to
+        // the application: an unstyled grid is not a contract anyone accepts.
+        // Published by the application's `filament:assets`. See ADR 17.
+        FilamentAsset::register([
+            Css::make('media-library', __DIR__.'/../resources/dist/media-library.css'),
+        ], 'lisowiecw/filament-media-library');
 
         /** @var int $maxUploadSize */
         $maxUploadSize = config('media-library.max_upload_size', IngestRules::DEFAULT_MAX_UPLOAD_SIZE);

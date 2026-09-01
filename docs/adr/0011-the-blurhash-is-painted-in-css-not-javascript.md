@@ -24,7 +24,9 @@ The hash itself stays on the same element as `data-blurhash`, documented, so an 
 
 ## Consequences
 
-Installing the package stays a Composer install. There is no asset to build, publish, version or cache-bust, and no decoder to download before a card can paint.
+There is no asset to build, and no decoder to download before a card can paint.
+
+At the time this was written that also meant installing the package stayed a Composer install. ADR 17 has since given the package a stylesheet, so an application now runs `filament:assets` as well. That does not disturb this decision: the painting is still emitted inline in a `style` attribute, and a BlurHash decoder would still be JavaScript, which the package still does not ship.
 
 The painting is coarser than a real decode: a 3 by 3 sample of gradients reads as the picture's composition and colour, not as the picture. It costs a few hundred bytes of inline style on each pending card, which is bounded by the page size the grid already loads.
 

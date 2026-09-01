@@ -5,6 +5,12 @@
     $key = $getKey();
     $dropStatePath = $getDropStatePath();
     $last = $assets->count() - 1;
+
+    // Filament's Blade components escape their attributes a second time, so the
+    // call is handed over as an Htmlable that `e()` leaves alone.
+    $call = fn (string $method, array $arguments): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString(
+        'callSchemaComponentMethod(' . \Illuminate\Support\Js::from($key) . ', ' . \Illuminate\Support\Js::from($method) . ', ' . \Illuminate\Support\Js::from($arguments) . ')',
+    );
 @endphp
 
 <x-dynamic-component :component="$getFieldWrapperView()" :field="$field">
@@ -59,30 +65,36 @@
                         {{-- The arrows are the same rearrangement as the drag, so
                              the order is reachable without a pointer. --}}
                         @if ($reorderable)
-                            <button
-                                type="button"
+                            <x-filament::icon-button
                                 class="fi-ml-picker-item-up"
-                                @disabled($index === 0)
-                                aria-label="{{ __('media-library::messages.picker.move_up', ['name' => $asset->display_name]) }}"
-                                wire:click="callSchemaComponentMethod(@js($key), 'moveItem', { id: {{ $asset->id }}, step: -1 })"
-                            >&uarr;</button>
+                                color="gray"
+                                icon="heroicon-m-arrow-up"
+                                size="sm"
+                                :disabled="$index === 0"
+                                :label="__('media-library::messages.picker.move_up', ['name' => $asset->display_name])"
+                                :wire:click="$call('moveItem', ['id' => $asset->id, 'step' => -1])"
+                            />
 
-                            <button
-                                type="button"
+                            <x-filament::icon-button
                                 class="fi-ml-picker-item-down"
-                                @disabled($index === $last)
-                                aria-label="{{ __('media-library::messages.picker.move_down', ['name' => $asset->display_name]) }}"
-                                wire:click="callSchemaComponentMethod(@js($key), 'moveItem', { id: {{ $asset->id }}, step: 1 })"
-                            >&darr;</button>
+                                color="gray"
+                                icon="heroicon-m-arrow-down"
+                                size="sm"
+                                :disabled="$index === $last"
+                                :label="__('media-library::messages.picker.move_down', ['name' => $asset->display_name])"
+                                :wire:click="$call('moveItem', ['id' => $asset->id, 'step' => 1])"
+                            />
                         @endif
 
                         {{-- Detach, never delete: the asset outlives the field. --}}
-                        <button
-                            type="button"
+                        <x-filament::icon-button
                             class="fi-ml-picker-item-remove"
-                            aria-label="{{ __('media-library::messages.picker.detach', ['name' => $asset->display_name]) }}"
-                            wire:click="callSchemaComponentMethod(@js($key), 'removeItem', { id: {{ $asset->id }} })"
-                        >&times;</button>
+                            color="gray"
+                            icon="heroicon-m-x-mark"
+                            size="sm"
+                            :label="__('media-library::messages.picker.detach', ['name' => $asset->display_name])"
+                            :wire:click="$call('removeItem', ['id' => $asset->id])"
+                        />
                     </li>
                 @endforeach
             </ol>

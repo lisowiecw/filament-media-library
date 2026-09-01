@@ -1,0 +1,554 @@
+/*
+ * Media library styling.
+ *
+ * Hand-written, shipped as-is: there is no build step in this package. It
+ * carries no palette of its own, only Filament's theme variables, so a panel
+ * with its own colours and dark mode gets both without configuring anything.
+ * See ADR 17.
+ *
+ * Every rule is a single class, and this sheet is emitted before the panel
+ * theme, so an application's own theme overrides any of it without !important.
+ * The geometry comes from the prototypes the shape was decided on:
+ * prototype/09-library-grid (variant B) and prototype/06-picker-workflow.
+ */
+
+.fi-ml-picker {
+    --fi-ml-card-min-width: 9.25rem;
+    --fi-ml-grid-gap: 0.75rem;
+    --fi-ml-facets-width: 13.5rem;
+
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Field: the attached items */
+
+.fi-ml-picker-banner {
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    color: var(--gray-500);
+}
+
+.dark .fi-ml-picker-banner {
+    color: var(--gray-400);
+}
+
+.fi-ml-picker-empty {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    color: var(--gray-500);
+}
+
+.dark .fi-ml-picker-empty {
+    color: var(--gray-400);
+}
+
+.fi-ml-picker-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.fi-ml-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-white);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.dark .fi-ml-picker-item {
+    border-color: var(--gray-700);
+    background-color: var(--gray-900);
+}
+
+/* Grabbing the row is the same rearrangement as the arrows, so the row says so. */
+.fi-ml-picker-items-reorderable .fi-ml-picker-item {
+    cursor: grab;
+}
+
+.fi-ml-picker-item-thumb {
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: none;
+    object-fit: cover;
+    border-radius: var(--radius-md);
+    background-color: var(--gray-100);
+}
+
+.dark .fi-ml-picker-item-thumb {
+    background-color: var(--gray-800);
+}
+
+.fi-ml-picker-item-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--gray-950);
+}
+
+.dark .fi-ml-picker-item-name {
+    color: var(--color-white);
+}
+
+.fi-ml-picker-item-visibility {
+    flex: none;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    color: var(--gray-500);
+}
+
+.dark .fi-ml-picker-item-visibility {
+    color: var(--gray-400);
+}
+
+/* Field: the trigger, which is also a drop surface */
+
+.fi-ml-picker-trigger {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.375rem;
+    border-radius: var(--radius-lg);
+}
+
+.fi-ml-picker-trigger[data-droppable] {
+    padding: 0.75rem;
+    border: 1px dashed var(--gray-300);
+}
+
+.dark .fi-ml-picker-trigger[data-droppable] {
+    border-color: var(--gray-700);
+}
+
+.fi-ml-picker-trigger-hot {
+    border-color: var(--primary-500);
+    background-color: var(--primary-50);
+}
+
+.dark .fi-ml-picker-trigger-hot {
+    border-color: var(--primary-500);
+    background-color: var(--gray-800);
+}
+
+.fi-ml-picker-drop-hint {
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    color: var(--gray-500);
+}
+
+.dark .fi-ml-picker-drop-hint {
+    color: var(--gray-400);
+}
+
+/*
+ * Library: sidebar beside everything else. Three columns rather than two, so the
+ * sort and the search share the first row without a wrapper element between them.
+ * Nothing here scrolls on its own: the sentinel that loads the next page has to
+ * leave the viewport to mean anything, and an inner scroller would keep it in.
+ */
+
+.fi-ml-library {
+    --fi-ml-card-min-width: 9.25rem;
+    --fi-ml-grid-gap: 0.75rem;
+    --fi-ml-facets-width: 13.5rem;
+
+    display: grid;
+    grid-template-columns: var(--fi-ml-facets-width) max-content 1fr;
+    grid-template-rows: auto auto auto auto auto auto;
+    align-content: start;
+    gap: 0.75rem 1rem;
+    border-radius: var(--radius-lg);
+}
+
+.fi-ml-library-hot {
+    outline: 2px dashed var(--primary-500);
+    outline-offset: 0.25rem;
+}
+
+.fi-ml-library > *:not(.fi-ml-library-facets):not(.fi-ml-library-sort):not(.fi-ml-library-search) {
+    grid-column: 2 / -1;
+}
+
+.fi-ml-library-facets {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: start;
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding-inline-end: 1rem;
+    border-inline-end: 1px solid var(--gray-200);
+}
+
+.dark .fi-ml-library-facets {
+    border-color: var(--gray-700);
+}
+
+.fi-ml-facet {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.fi-ml-facet legend {
+    padding: 0;
+    margin-bottom: 0.375rem;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-500);
+}
+
+.dark .fi-ml-facet legend {
+    color: var(--gray-400);
+}
+
+.fi-ml-facet ul {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.fi-ml-facet-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    color: var(--gray-700);
+    text-align: start;
+}
+
+.dark .fi-ml-facet-option {
+    color: var(--gray-300);
+}
+
+.fi-ml-facet-option:hover {
+    background-color: var(--gray-100);
+}
+
+.dark .fi-ml-facet-option:hover {
+    background-color: var(--gray-800);
+}
+
+.fi-ml-facet-option-selected {
+    background-color: var(--primary-50);
+    font-weight: var(--font-weight-semibold);
+    color: var(--primary-700);
+}
+
+.dark .fi-ml-facet-option-selected {
+    background-color: var(--gray-800);
+    color: var(--primary-400);
+}
+
+.fi-ml-facet-option-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fi-ml-facet-option-count {
+    margin-inline-start: auto;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    font-variant-numeric: tabular-nums;
+    color: var(--gray-500);
+}
+
+.dark .fi-ml-facet-option-count {
+    color: var(--gray-400);
+}
+
+.fi-ml-library-sort {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    color: var(--gray-700);
+    white-space: nowrap;
+}
+
+.dark .fi-ml-library-sort {
+    color: var(--gray-300);
+}
+
+.fi-ml-library-search {
+    grid-column: 3;
+    grid-row: 1;
+}
+
+.fi-ml-library-announcement:empty {
+    display: none;
+}
+
+.fi-ml-library-announcement {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    color: var(--gray-500);
+}
+
+.dark .fi-ml-library-announcement {
+    color: var(--gray-400);
+}
+
+/* Library: the card grid */
+
+.fi-ml-library-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--fi-ml-card-min-width), 1fr));
+    gap: var(--fi-ml-grid-gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.fi-ml-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0 0.5rem;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-white);
+    text-align: start;
+    transition: box-shadow var(--default-transition-duration, 75ms) var(--default-transition-timing-function, ease);
+}
+
+.dark .fi-ml-card {
+    border-color: var(--gray-700);
+    background-color: var(--gray-900);
+}
+
+.fi-ml-card:hover {
+    box-shadow: 0 4px 10px rgb(0 0 0 / 0.07);
+}
+
+.fi-ml-card-selected {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 1px var(--primary-500);
+}
+
+/*
+ * The selection tick, drawn rather than emitted: the card already says it is
+ * selected in its class and its aria-pressed, so nothing needs adding to the
+ * markup for a corner to appear.
+ */
+.fi-ml-card-selected::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 0.375rem;
+    inset-inline-end: 0.375rem;
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: var(--radius-full, 9999px);
+    background-color: var(--primary-600);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3E%3Cpath fill-rule='evenodd' d='M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.79 6.8-6.79a1 1 0 0 1 1.4 0Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-size: 0.875rem;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.fi-ml-card-thumb,
+.fi-ml-card-glyph {
+    grid-column: 1 / -1;
+    aspect-ratio: 4 / 3;
+    width: 100%;
+    object-fit: cover;
+    background-color: var(--gray-100);
+}
+
+.dark .fi-ml-card-thumb,
+.dark .fi-ml-card-glyph {
+    background-color: var(--gray-800);
+}
+
+.fi-ml-card-glyph {
+    display: grid;
+    place-items: center;
+    font-size: 1.5rem;
+}
+
+.fi-ml-card-play {
+    position: absolute;
+    inset-block-start: 0.375rem;
+    inset-inline-start: 0.375rem;
+    padding: 0.0625rem 0.3125rem;
+    border-radius: var(--radius-sm);
+    background-color: rgb(0 0 0 / 0.65);
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    color: var(--color-white);
+}
+
+.fi-ml-card-name {
+    padding: 0.375rem 0 0.5rem 0.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--gray-950);
+}
+
+.dark .fi-ml-card-name {
+    color: var(--color-white);
+}
+
+.fi-ml-card-name mark {
+    padding: 0 0.0625rem;
+    border-radius: var(--radius-xs, 0.125rem);
+    background-color: var(--warning-100);
+    color: inherit;
+}
+
+.dark .fi-ml-card-name mark {
+    background-color: var(--warning-400);
+    color: var(--gray-950);
+}
+
+.fi-ml-card-visibility {
+    align-self: center;
+    margin-inline-end: 0.5rem;
+    margin-block-end: 0.125rem;
+    padding: 0.0625rem 0.3125rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.625rem;
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.02em;
+}
+
+.fi-ml-card-visibility-public {
+    background-color: var(--success-50);
+    color: var(--success-700);
+}
+
+.dark .fi-ml-card-visibility-public {
+    background-color: var(--gray-800);
+    color: var(--success-400);
+}
+
+.fi-ml-card-visibility-private {
+    background-color: var(--info-50);
+    color: var(--info-700);
+}
+
+.dark .fi-ml-card-visibility-private {
+    background-color: var(--gray-800);
+    color: var(--info-400);
+}
+
+/* Library: paging and the running selection */
+
+.fi-ml-library-empty,
+.fi-ml-library-end {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    color: var(--gray-500);
+}
+
+.dark .fi-ml-library-empty,
+.dark .fi-ml-library-end {
+    color: var(--gray-400);
+}
+
+.fi-ml-library-empty {
+    padding: 3rem 0;
+    text-align: center;
+}
+
+.fi-ml-library-sentinel {
+    height: 1px;
+}
+
+.fi-ml-library-selection {
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--gray-200);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    color: var(--gray-500);
+}
+
+.dark .fi-ml-library-selection {
+    border-color: var(--gray-700);
+    color: var(--gray-400);
+}
+
+.fi-ml-library-selection-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.fi-ml-library-selection-items li {
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md);
+    background-color: var(--gray-50);
+    color: var(--gray-700);
+}
+
+.dark .fi-ml-library-selection-items li {
+    border-color: var(--gray-700);
+    background-color: var(--gray-800);
+    color: var(--gray-300);
+}
+
+/* One column once the sidebar no longer fits beside the grid. */
+@media (max-width: 48rem) {
+    .fi-ml-library {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: none;
+    }
+
+    .fi-ml-library > *,
+    .fi-ml-library-facets,
+    .fi-ml-library-sort,
+    .fi-ml-library-search {
+        grid-column: 1;
+        grid-row: auto;
+    }
+
+    .fi-ml-library-facets {
+        position: static;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 1rem 1.5rem;
+        padding-inline-end: 0;
+        padding-block-end: 0.75rem;
+        border-inline-end: 0;
+        border-block-end: 1px solid var(--gray-200);
+    }
+}
