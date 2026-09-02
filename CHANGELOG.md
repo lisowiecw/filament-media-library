@@ -1,6 +1,8 @@
 # Release Notes
 
-## [Unreleased](https://github.com/lisowiecw/filament-media-library/compare/v0.1.0...main)
+## [Unreleased](https://github.com/lisowiecw/filament-media-library/compare/v0.2.0...main)
+
+## [v0.2.0](https://github.com/lisowiecw/filament-media-library/compare/v0.1.0...v0.2.0) - 2026-09-02
 
 - BlurHash at upload: an uploaded image carries its hash before its card is ever drawn, so a fresh upload paints colour rather than a grey tile while its thumbnail is still being generated. The hash is computed inline in the ingest request, from bytes already on local disk, and written in the insert that was happening anyway: nothing is scaled, encoded or written to the object store, and no job is queued to produce it. A file whose bytes will not decode still uploads; the failure is recorded so nothing asks again. The hash now carries a status of its own, `pending`, `ready` or `failed`, on the new nullable `media_assets.blurhash_status`, where an absent status means nobody has ever asked and is a different thing from a recorded failure. Existing rows that already hold a hash are backfilled as ready, so the migration asks the operator for no data decision. An SVG or a small original is neither hashed nor asked about, since it paints itself, and a non-image is never hashed at all. The thumb job keeps writing the hash, now strictly as a top-up: it fills in an asset that has none, never overwrites a ready one, and never turns a recorded failure ready by the side door. See [ADR 18](docs/adr/0018-the-blurhash-is-computed-apart-from-the-derivative.md).
 
