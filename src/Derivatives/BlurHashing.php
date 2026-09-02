@@ -114,6 +114,9 @@ final readonly class BlurHashing
      * at all. A worker killed outright settles nothing, so a pending status
      * old enough to have outlived the computation it stood for is treated as
      * abandoned and may be taken again.
+     *
+     * This is the model-in-hand half of `MediaAsset::scopeUnclaimedHash()`,
+     * which asks the same thing of a row the reader has not loaded.
      */
     private static function claimable(MediaAsset $asset): bool
     {
@@ -140,32 +143,6 @@ final readonly class BlurHashing
     }
 
     /**
-     * Narrow a query to the assets a hash may be asked for: owed one, with
-     * nobody computing it that is still anybody.
-     *
-     * This is the SQL half of `claimable()`, and the two are kept beside each
-     * other because they answer the same question of a row and of a model in
-     * hand. The claim carries it into an update, where it is what settles the
-     * race; a backfill's selector carries it into a read, so a dry run reports
-     * the set a real run would queue.
-     *
-     * @param  Builder<MediaAsset>  $query
-     * @return Builder<MediaAsset>
-     */
-    public static function unclaimed(Builder $query): Builder
-    {
-        return $query
-            ->whereNull('blurhash')
-            ->where(fn (Builder $status) => $status
-                ->whereNull('blurhash_status')
-                ->orWhere(fn (Builder $pending) => $pending
-                    ->where('blurhash_status', BlurHashStatus::Pending->value)
-                    ->where(fn (Builder $stale) => $stale
-                        ->whereNull('blurhash_pending_since')
-                        ->orWhere('blurhash_pending_since', '<', AbandonedWindow::hash()->before()))));
-    }
-
-    /**
      * Take the pending status in the database and queue the read where the
      * claim was won, which is the half both ways in share.
      *
@@ -179,7 +156,7 @@ final readonly class BlurHashing
     {
         $now = CarbonImmutable::now();
 
-        $claimed = self::unclaimed(MediaAsset::withTrashed()->whereKey($asset->getKey()))
+        $claimed = MediaAsset::withTrashed()->whereKey($asset->getKey())->unclaimedHash()
             ->update([
                 'blurhash_status' => BlurHashStatus::Pending->value,
                 'blurhash_pending_since' => $now,

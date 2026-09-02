@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Attachments\Attachments;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
+use Lisowiecw\MediaLibrary\Derivatives\AbandonedWindow;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
@@ -213,6 +214,38 @@ class MediaAsset extends Model
             ->where(fn (Builder $query) => $query
                 ->whereNull('mime_type')
                 ->orWhereNotIn(DB::raw('lower(mime_type)'), $rules->blockedMimeTypes()));
+    }
+
+    /**
+     * Assets a BlurHash may be asked for: owed one, with nobody computing it
+     * that is still anybody.
+     *
+     * This is the SQL half of the question `BlurHashing::claimable()` asks of
+     * a model in hand, and the two are kept in step because they decide the
+     * same thing for the same asset. The claim carries this into an update,
+     * where it is what settles the race between two renders; a backfill's
+     * selector carries it into a read, so a dry run reports the set a real run
+     * would queue rather than a larger one.
+     *
+     * A pending row is somebody else's claim while that claim is young enough
+     * to be anybody's. Held longer than the window, it is a computation whose
+     * worker died and may be taken again, and a pending row with no time at
+     * all is abandoned rather than fresh: those are the rows written before the
+     * column existed, stranded by exactly the crash this releases.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeUnclaimedHash(Builder $query): void
+    {
+        $query
+            ->whereNull('blurhash')
+            ->where(fn (Builder $status) => $status
+                ->whereNull('blurhash_status')
+                ->orWhere(fn (Builder $pending) => $pending
+                    ->where('blurhash_status', BlurHashStatus::Pending->value)
+                    ->where(fn (Builder $stale) => $stale
+                        ->whereNull('blurhash_pending_since')
+                        ->orWhere('blurhash_pending_since', '<', AbandonedWindow::hash()->before()))));
     }
 
     /**
