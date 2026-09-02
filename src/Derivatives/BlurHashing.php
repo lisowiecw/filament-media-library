@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Derivatives;
 
+use Illuminate\Database\Eloquent\Builder;
 use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 
@@ -21,25 +22,19 @@ use Lisowiecw\MediaLibrary\Models\MediaAsset;
 final readonly class BlurHashing
 {
     /**
-     * Whether this asset is one a hash can be computed for at all: a picture
-     * the package can decode, and not one that already paints itself.
+     * Whether anything is still owed a hash for this asset: one `Derivatives`
+     * says is hashable at all, with nothing settled recorded against it. A
+     * ready or failed status closes the question, and so does a hash already
+     * on the row, which is what a library predating the status column looks
+     * like.
      *
-     * The question is answered by `Derivatives` rather than restated here, so
-     * a card, the hash and a derivative cannot disagree about what an asset is.
-     */
-    public static function applies(MediaAsset $asset): bool
-    {
-        return Derivatives::generatable($asset) && ! Derivatives::paintsItself($asset);
-    }
-
-    /**
-     * Whether anything is still owed a hash for this asset. A settled status,
-     * ready or failed, closes the question; so does a hash already on the row,
-     * which is what a library predating the status column looks like.
+     * Read from the model in hand, so it answers for the render that asked.
+     * It is not the guard that makes the write safe: two workers can both read
+     * true here, which is what `write()` settles in the database.
      */
     public static function wanted(MediaAsset $asset): bool
     {
-        return self::applies($asset)
+        return Derivatives::hashable($asset)
             && $asset->blurhash === null
             && $asset->blurhash_status?->isSettled() !== true;
     }
@@ -81,21 +76,42 @@ final readonly class BlurHashing
     }
 
     /**
-     * Written on the model in hand rather than through a query, so a caller
-     * that goes on to use the asset sees what was recorded. It is a forced
-     * fill because the status is the package's own bookkeeping and never
-     * something a request body fills in.
+     * Where first-writer-wins is actually decided.
      *
-     * An unsaved asset is left for its own save to persist, which is what lets
-     * ingest write the hash in the insert it was already making rather than in
-     * a second write.
+     * The condition is carried into the update rather than asked beforehand,
+     * because the model in hand was read before the decode and a decode takes
+     * long enough for the other path to have finished in the meantime. Left to
+     * a read and then a save, the slower of two workers would overwrite a
+     * ready hash with its own, which is the one thing the two paths must never
+     * do to each other. Here the database refuses the second writer, and the
+     * model is only moved where the row was.
+     *
+     * An unsaved asset has no row to race for, so it is filled and left for
+     * its own save: that is what lets ingest write the hash in the insert it
+     * was already making rather than in a second write. The fill is forced
+     * because this is bookkeeping the package writes about its own work, and
+     * it should not depend on the column staying mass-assignable.
      */
     private static function write(MediaAsset $asset, ?string $hash, BlurHashStatus $status): void
     {
-        $asset->forceFill(['blurhash' => $hash, 'blurhash_status' => $status]);
+        $written = ['blurhash' => $hash, 'blurhash_status' => $status];
 
-        if ($asset->exists) {
-            $asset->save();
+        if (! $asset->exists) {
+            $asset->forceFill($written);
+
+            return;
+        }
+
+        $claimed = MediaAsset::withTrashed()
+            ->whereKey($asset->getKey())
+            ->whereNull('blurhash')
+            ->where(fn (Builder $query) => $query
+                ->whereNull('blurhash_status')
+                ->orWhere('blurhash_status', BlurHashStatus::Pending->value))
+            ->update(['blurhash' => $hash, 'blurhash_status' => $status->value]);
+
+        if ($claimed > 0) {
+            $asset->forceFill($written)->syncOriginal();
         }
     }
 }

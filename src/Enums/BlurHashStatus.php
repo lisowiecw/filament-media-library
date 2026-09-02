@@ -24,11 +24,6 @@ enum BlurHashStatus: string
     case Ready = 'ready';
     case Failed = 'failed';
 
-    public function isReady(): bool
-    {
-        return $this === self::Ready;
-    }
-
     /**
      * Whether this status settles the question for good. A settled hash is
      * never recomputed, whichever path arrives next: a ready one is never

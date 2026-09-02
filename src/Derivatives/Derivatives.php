@@ -166,6 +166,21 @@ final readonly class Derivatives
     }
 
     /**
+     * Whether a BlurHash is a coherent thing to ask for: a picture the package
+     * can decode, and not one that is already its own.
+     *
+     * The question lives here for the same reason `wanted()` does. An asset
+     * that paints itself never reaches a placeholder, so hashing it would be
+     * work for a card that will never ask, and an answer that drifted from the
+     * one `resolve()` uses would have the two disagreeing about what an asset
+     * even is.
+     */
+    public static function hashable(MediaAsset $asset): bool
+    {
+        return self::generatable($asset) && ! self::paintsItself($asset);
+    }
+
+    /**
      * Whether a rendering of this asset is even a coherent thing to ask for.
      * A video is a glyph tile plus a play badge and always was, because the
      * alternative is a poster frame, and that means a binary.
@@ -183,13 +198,8 @@ final readonly class Derivatives
      * of the pipeline; and a raster under the small-original ceiling earns no
      * derivative rows at all, so it is painted directly rather than rendered a
      * second time.
-     *
-     * Public because the BlurHash path asks the same question: an asset that
-     * is already its picture is never hashed either, and an answer that drifted
-     * between the two would have a card painting a placeholder over something
-     * it could have shown outright.
      */
-    public static function paintsItself(MediaAsset $asset): bool
+    private static function paintsItself(MediaAsset $asset): bool
     {
         return self::isSvg($asset) || SmallOriginal::paintsOriginal($asset);
     }

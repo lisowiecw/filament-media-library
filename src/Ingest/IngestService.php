@@ -123,7 +123,9 @@ class IngestService
      */
     private function blurhash(MediaAsset $asset, string $path): void
     {
-        if (! BlurHashing::applies($asset)) {
+        // Asked before the file is read, so an asset that is never going to be
+        // hashed does not pay for a read to find that out.
+        if (! BlurHashing::wanted($asset)) {
             return;
         }
 

@@ -6,7 +6,9 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
+use Lisowiecw\MediaLibrary\Derivatives\Raster;
 use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
@@ -128,6 +130,28 @@ describe('the generation job', function (): void {
         (new GenerateDerivative($asset->id, DerivativeVariant::Thumb))->handle();
 
         expect($asset->fresh()->blurhash)->toBe('LEHV6nWB2yk8');
+    });
+
+    it('leaves a hash that landed while it was decoding exactly where it was', function (): void {
+        $asset = makeAsset(['size' => 900_000]);
+        storeImage($asset);
+
+        Derivatives::dispatchEagerly($asset, DerivativeVariant::Thumb);
+
+        // The other path finishes after this job read its row and before the
+        // job writes, which a guard read off the model in hand would miss.
+        $stale = MediaAsset::query()->find($asset->id);
+        MediaAsset::query()->whereKey($asset->id)->update([
+            'blurhash' => 'LEHV6nWB2yk8',
+            'blurhash_status' => BlurHashStatus::Ready->value,
+        ]);
+
+        BlurHashing::fromRaster($stale, Raster::decode(
+            (string) Storage::disk($asset->disk)->get($asset->object_key),
+        ));
+
+        expect($asset->fresh()->blurhash)->toBe('LEHV6nWB2yk8')
+            ->and($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Ready);
     });
 
     it('never turns a recorded failure ready by the side door', function (): void {
