@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * A relationship between a Media Asset and a host model. An attachment belongs
@@ -77,7 +77,7 @@ class MediaAttachment extends Model
      * asset itself being touched: nothing about the asset changed, only what
      * references it.
      */
-    private function stampAsset(?Carbon $at): void
+    private function stampAsset(?CarbonInterface $at): void
     {
         MediaAsset::withTrashed()
             ->whereKey($this->media_asset_id)
