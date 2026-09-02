@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
 use Lisowiecw\MediaLibrary\Library\FacetSidebar;
 
 return [
@@ -137,6 +138,13 @@ return [
     | loosely than derivative generation: a hash is a read and a decode, and
     | writes nothing back to the object store.
     |
+    | An asset that has been pending longer than the abandoned window, in
+    | seconds, is treated as nobody's work and asked for again by the next
+    | render. It covers a worker killed outright, an OOM or a deploy that
+    | stopped the queue mid-job, which settles nothing and would otherwise
+    | leave the card grey for good. Size it comfortably longer than a read plus
+    | a decode, so a hash still running is never asked for twice.
+    |
     */
 
     'blurhash' => [
@@ -145,6 +153,8 @@ return [
             'per_minute' => 300,
             'per_request' => 48,
         ],
+
+        'abandoned_after' => (int) env('MEDIA_LIBRARY_BLURHASH_ABANDONED_AFTER', BlurHashing::DEFAULT_ABANDONED_AFTER),
 
     ],
 

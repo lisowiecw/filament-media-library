@@ -47,6 +47,7 @@ use Lisowiecw\MediaLibrary\Lifecycle\AssetLifecycle;
  * @property string|null $tenant_id
  * @property string|null $blurhash
  * @property BlurHashStatus|null $blurhash_status
+ * @property Carbon|null $blurhash_pending_since
  * @property Carbon|null $unattached_since
  * @property Carbon|null $created_at
  */
@@ -311,6 +312,7 @@ class MediaAsset extends Model
             'source' => MediaSource::class,
             'blurhash_status' => BlurHashStatus::class,
             'size' => 'integer',
+            'blurhash_pending_since' => 'datetime',
             'unattached_since' => 'datetime',
         ];
     }

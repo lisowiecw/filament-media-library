@@ -409,6 +409,14 @@ dry run, which queues nothing, says that estimate in minutes before you start.
 Assets that already have a hash, that failed to decode, that are already being
 hashed, and that paint themselves or are not images, are all left alone.
 
+Being hashed lapses. A worker killed outright, by an OOM or by a deploy that
+stops the queue mid-job, settles nothing and would otherwise leave its assets
+pending for good, so an asset pending longer than
+`media-library.blurhash.abandoned_after` seconds is read as nobody's work and
+asked for again by the next view or backfill. The default is 15 minutes, far
+longer than a read and a decode; inside the window a hash in flight is still
+never asked for twice.
+
 ### Lifecycle and cleanup
 
 Removing a picture from a record detaches it, which touches the attachment row and

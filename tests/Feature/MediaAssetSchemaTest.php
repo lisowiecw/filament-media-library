@@ -153,3 +153,13 @@ it('reads a hash that predates the status column as ready', function (): void {
     expect(MediaAsset::whereNotNull('blurhash')->first()->blurhash_status)->toBe(BlurHashStatus::Ready)
         ->and(MediaAsset::whereNull('blurhash')->first()->blurhash_status)->toBeNull();
 });
+
+it('leaves the pending time of an existing row alone', function (): void {
+    insertAssetRow(['blurhash_status' => BlurHashStatus::Pending->value]);
+
+    // A pending row written before the column existed has no time to read, and
+    // the migration invents none for it: null is what makes it reclaimable.
+    (require __DIR__.'/../../database/migrations/record_blurhash_pending_since_on_media_assets.php')->up();
+
+    expect(MediaAsset::first()->blurhash_pending_since)->toBeNull();
+});

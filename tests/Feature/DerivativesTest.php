@@ -562,3 +562,119 @@ describe('hashing an imported asset at render time', function (): void {
         Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
     });
 });
+
+describe('a hash left pending by a worker that died', function (): void {
+    /**
+     * An asset sitting at pending since the given time, which is what a worker
+     * killed outright leaves behind: the status was taken and nothing ever
+     * settled it.
+     */
+    function pendingAsset(?string $since): MediaAsset
+    {
+        $asset = libraryAsset()->forceFill(['size' => 900_000]);
+        $asset->save();
+
+        MediaAsset::withTrashed()->whereKey($asset->getKey())->update([
+            'blurhash_status' => BlurHashStatus::Pending->value,
+            'blurhash_pending_since' => $since,
+        ]);
+
+        return $asset->fresh();
+    }
+
+    it('asks again once the asset has been pending longer than the window', function (): void {
+        Bus::fake();
+
+        $asset = pendingAsset(now()->subHours(2)->toDateTimeString());
+
+        BlurHashing::hashFor($asset);
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
+
+        // The retaken status carries a time of its own, so the next render
+        // meets a fresh pending rather than the abandoned one.
+        expect($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Pending)
+            ->and($asset->fresh()->blurhash_pending_since->isAfter(now()->subMinute()))->toBeTrue();
+    });
+
+    it('leaves a pending asset inside the window alone', function (): void {
+        Bus::fake();
+
+        BlurHashing::hashFor(pendingAsset(now()->subSeconds(30)->toDateTimeString()));
+
+        Bus::assertNotDispatched(ComputeBlurHash::class);
+    });
+
+    it('reads a pending row that predates the column as nobody\'s work', function (): void {
+        Bus::fake();
+
+        // Precisely the rows this stranded: pending with no recorded time.
+        BlurHashing::hashFor(pendingAsset(null));
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
+    });
+
+    it('takes the window from configuration', function (): void {
+        Bus::fake();
+        config()->set('media-library.blurhash.abandoned_after', 10);
+
+        BlurHashing::hashFor(pendingAsset(now()->subSeconds(30)->toDateTimeString()));
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
+    });
+
+    it('queues one job between two renders meeting the same abandoned asset', function (): void {
+        Bus::fake();
+
+        $asset = pendingAsset(now()->subHours(2)->toDateTimeString());
+
+        BlurHashing::hashFor($asset);
+        BlurHashing::hashFor($asset->fresh());
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
+    });
+
+    it('reopens neither a ready hash nor a recorded failure', function (): void {
+        Bus::fake();
+
+        $ready = libraryAsset()->forceFill([
+            'size' => 900_000,
+            'blurhash' => 'LEHV6nWB2yk8',
+            'blurhash_status' => BlurHashStatus::Ready,
+        ]);
+        $ready->save();
+
+        $failed = libraryAsset()->forceFill(['size' => 900_000, 'blurhash_status' => BlurHashStatus::Failed]);
+        $failed->save();
+
+        MediaAsset::withTrashed()->update(['blurhash_pending_since' => now()->subHours(2)]);
+
+        BlurHashing::hashFor($ready->fresh());
+        BlurHashing::hashFor($failed->fresh());
+
+        Bus::assertNotDispatched(ComputeBlurHash::class);
+
+        expect($ready->fresh()->blurhash)->toBe('LEHV6nWB2yk8')
+            ->and($failed->fresh()->blurhash_status)->toBe(BlurHashStatus::Failed);
+    });
+
+    it('clears the pending time wherever the status settles', function (): void {
+        $asset = makeAsset(['size' => 900_000]);
+        storeImage($asset);
+
+        BlurHashing::dispatchLazily($asset);
+
+        expect($asset->fresh()->blurhash_pending_since)->not->toBeNull();
+
+        (new ComputeBlurHash($asset->id))->handle();
+
+        expect($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Ready)
+            ->and($asset->fresh()->blurhash_pending_since)->toBeNull();
+
+        $failed = pendingAsset(now()->subHours(2)->toDateTimeString());
+        BlurHashing::settleAsFailed($failed);
+
+        expect($failed->fresh()->blurhash_status)->toBe(BlurHashStatus::Failed)
+            ->and($failed->fresh()->blurhash_pending_since)->toBeNull();
+    });
+});

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Derivatives;
 
+use Carbon\CarbonImmutable;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Jobs\ComputeBlurHash;
@@ -23,6 +25,18 @@ use Lisowiecw\MediaLibrary\Models\MediaAsset;
  */
 final readonly class BlurHashing
 {
+    /**
+     * How long an asset may sit at pending before the next render treats the
+     * computation as nobody's and asks again, in seconds.
+     *
+     * Fifteen minutes is far longer than a read plus a decode, which is the
+     * direction this has to err in: taking a hash still being computed costs a
+     * second read of the same object, while waiting too long only leaves a
+     * card grey a while longer after a crash that was going to leave it grey
+     * for good.
+     */
+    public const int DEFAULT_ABANDONED_AFTER = 900;
+
     /**
      * The hash a card paints from, or null while there is none, asking for one
      * where the asset is owed it.
@@ -95,29 +109,81 @@ final readonly class BlurHashing
      * with nobody already computing it. A pending row is somebody else's claim
      * and is left alone, which is what keeps a backfill off the assets a
      * render has already asked for.
+     *
+     * Somebody else's, that is, while the claim is young enough to be anybody
+     * at all. A worker killed outright settles nothing, so a pending status
+     * old enough to have outlived the computation it stood for is treated as
+     * abandoned and may be taken again.
      */
     private static function claimable(MediaAsset $asset): bool
     {
-        return self::wanted($asset) && $asset->blurhash_status === null;
+        if (! self::wanted($asset)) {
+            return false;
+        }
+
+        return $asset->blurhash_status === null || self::abandoned($asset->blurhash_pending_since);
+    }
+
+    /**
+     * Whether a pending status has been held longer than a computation could
+     * honestly take.
+     *
+     * A pending row with no time at all is abandoned, not fresh: those are the
+     * rows written before the column existed, stranded by exactly the crash
+     * this releases, and reading them as fresh would strand them for good.
+     */
+    private static function abandoned(?DateTimeInterface $pendingSince): bool
+    {
+        return $pendingSince === null || $pendingSince < self::abandonedBefore();
+    }
+
+    /**
+     * The instant a pending status has to predate to count as abandoned.
+     */
+    private static function abandonedBefore(): CarbonImmutable
+    {
+        $window = (int) config('media-library.blurhash.abandoned_after', self::DEFAULT_ABANDONED_AFTER);
+
+        return CarbonImmutable::now()->subSeconds($window);
     }
 
     /**
      * Take the pending status in the database and queue the read where the
      * claim was won, which is the half both ways in share.
+     *
+     * The condition matches a status nobody has taken, or one taken so long
+     * ago that whoever took it is gone. Both are settled in the update rather
+     * than beforehand, so two renders meeting the same abandoned asset still
+     * queue one job between them: the second finds a pending status stamped a
+     * moment ago and matches nothing.
      */
     private static function claimAndDispatch(MediaAsset $asset): bool
     {
+        $now = CarbonImmutable::now();
+
         $claimed = MediaAsset::withTrashed()
             ->whereKey($asset->getKey())
             ->whereNull('blurhash')
-            ->whereNull('blurhash_status')
-            ->update(['blurhash_status' => BlurHashStatus::Pending->value]);
+            ->where(fn (Builder $query) => $query
+                ->whereNull('blurhash_status')
+                ->orWhere(fn (Builder $pending) => $pending
+                    ->where('blurhash_status', BlurHashStatus::Pending->value)
+                    ->where(fn (Builder $stale) => $stale
+                        ->whereNull('blurhash_pending_since')
+                        ->orWhere('blurhash_pending_since', '<', self::abandonedBefore()))))
+            ->update([
+                'blurhash_status' => BlurHashStatus::Pending->value,
+                'blurhash_pending_since' => $now,
+            ]);
 
         if ($claimed === 0) {
             return false;
         }
 
-        $asset->forceFill(['blurhash_status' => BlurHashStatus::Pending])->syncOriginal();
+        $asset->forceFill([
+            'blurhash_status' => BlurHashStatus::Pending,
+            'blurhash_pending_since' => $now,
+        ])->syncOriginal();
 
         ComputeBlurHash::dispatch($asset->getKey());
 
@@ -200,6 +266,10 @@ final readonly class BlurHashing
      * do to each other. Here the database refuses the second writer, and the
      * model is only moved where the row was.
      *
+     * A settling status clears the pending time with it, so the column never
+     * describes a hash that is ready or failed and a settled row can never be
+     * read as an abandoned computation.
+     *
      * An unsaved asset has no row to race for, so it is filled and left for
      * its own save: that is what lets ingest write the hash in the insert it
      * was already making rather than in a second write. The fill is forced
@@ -208,7 +278,7 @@ final readonly class BlurHashing
      */
     private static function write(MediaAsset $asset, ?string $hash, BlurHashStatus $status): void
     {
-        $written = ['blurhash' => $hash, 'blurhash_status' => $status];
+        $written = ['blurhash' => $hash, 'blurhash_status' => $status, 'blurhash_pending_since' => null];
 
         if (! $asset->exists) {
             $asset->forceFill($written);
@@ -226,7 +296,11 @@ final readonly class BlurHashing
             ->where(fn (Builder $query) => $query
                 ->whereNull('blurhash_status')
                 ->orWhere('blurhash_status', BlurHashStatus::Pending->value))
-            ->update(['blurhash' => $hash, 'blurhash_status' => $status->value]);
+            ->update([
+                'blurhash' => $hash,
+                'blurhash_status' => $status->value,
+                'blurhash_pending_since' => null,
+            ]);
 
         if ($claimed > 0) {
             $asset->forceFill($written)->syncOriginal();
