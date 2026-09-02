@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Lisowiecw\MediaLibrary\Models;
 
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
 use Lisowiecw\MediaLibrary\Derivatives\AbandonedWindow;
@@ -35,7 +35,7 @@ use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
  * @property DerivativeStatus $status
  * @property string|null $failure_reason
  * @property string|null $config_digest
- * @property Carbon|null $updated_at
+ * @property CarbonInterface|null $updated_at
  * @property-read MediaAsset|null $asset
  */
 class MediaDerivative extends Model

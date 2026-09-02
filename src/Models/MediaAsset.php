@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -48,9 +48,9 @@ use Lisowiecw\MediaLibrary\Lifecycle\AssetLifecycle;
  * @property string|null $tenant_id
  * @property string|null $blurhash
  * @property BlurHashStatus|null $blurhash_status
- * @property Carbon|null $blurhash_pending_since
- * @property Carbon|null $unattached_since
- * @property Carbon|null $created_at
+ * @property CarbonInterface|null $blurhash_pending_since
+ * @property CarbonInterface|null $unattached_since
+ * @property CarbonInterface|null $created_at
  */
 class MediaAsset extends Model
 {
@@ -286,7 +286,7 @@ class MediaAsset extends Model
      * the same fallback `unattachedFor` filters on, so what a report prints
      * beside an asset is the date it was selected by.
      */
-    public function unattachedSince(): ?Carbon
+    public function unattachedSince(): ?CarbonInterface
     {
         return $this->unattached_since ?? $this->created_at;
     }
