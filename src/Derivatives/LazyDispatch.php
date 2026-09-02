@@ -88,7 +88,7 @@ class LazyDispatch
      */
     private function spendMinuteAllowance(): bool
     {
-        $key = 'media-library:lazy-dispatch:'.now()->format('YmdHi');
+        $key = 'media-library:lazy-dispatch:'.$this->allowance().':'.now()->format('YmdHi');
 
         /** @var int $spent */
         $spent = Cache::get($key, 0);
@@ -109,18 +109,29 @@ class LazyDispatch
         return max(1, 60 - (int) now()->format('s'));
     }
 
-    private function perMinute(): int
+    /**
+     * Which allowance this is: the name its counter is kept under and the
+     * config block it reads. A subclass answering differently gets a budget of
+     * its own out of the same mechanism, which is the whole of what separates
+     * hashing from generation here.
+     */
+    protected function allowance(): string
+    {
+        return 'derivatives';
+    }
+
+    protected function perMinute(): int
     {
         /** @var int $limit */
-        $limit = config('media-library.derivatives.lazy_dispatch.per_minute', self::DEFAULT_PER_MINUTE);
+        $limit = config('media-library.'.$this->allowance().'.lazy_dispatch.per_minute', static::DEFAULT_PER_MINUTE);
 
         return $limit;
     }
 
-    private function perRequest(): int
+    protected function perRequest(): int
     {
         /** @var int $limit */
-        $limit = config('media-library.derivatives.lazy_dispatch.per_request', self::DEFAULT_PER_REQUEST);
+        $limit = config('media-library.'.$this->allowance().'.lazy_dispatch.per_request', static::DEFAULT_PER_REQUEST);
 
         return $limit;
     }

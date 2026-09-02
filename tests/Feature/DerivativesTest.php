@@ -14,6 +14,7 @@ use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Forms\Components\LibraryGrid;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
+use Lisowiecw\MediaLibrary\Jobs\ComputeBlurHash;
 use Lisowiecw\MediaLibrary\Jobs\GenerateDerivative;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaDerivative;
@@ -372,5 +373,158 @@ describe('resolving a preview on demand', function (): void {
         $asset = makeAsset(['size' => 900_000]);
 
         expect($asset->previewUrl())->toBe(Derivatives::previewUrl($asset));
+    });
+});
+
+describe('hashing an imported asset at render time', function (): void {
+    it('asks for a hash the first time a card finds none, and never twice', function (): void {
+        Bus::fake();
+
+        $asset = makeAsset(['size' => 900_000]);
+
+        expect(BlurHashing::hashFor($asset))->toBeNull();
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
+
+        // The pending status it left behind is what a second render meets.
+        BlurHashing::hashFor($asset->fresh());
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
+        expect($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Pending);
+    });
+
+    it('never asks again once a failure is recorded, however often the card is drawn', function (): void {
+        Bus::fake();
+
+        $asset = makeAsset(['size' => 900_000, 'blurhash_status' => BlurHashStatus::Failed]);
+
+        foreach (range(1, 3) as $i) {
+            expect(BlurHashing::hashFor($asset->fresh()))->toBeNull();
+        }
+
+        Bus::assertNotDispatched(ComputeBlurHash::class);
+    });
+
+    it('hands back a ready hash without asking for anything', function (): void {
+        Bus::fake();
+
+        $asset = makeAsset([
+            'size' => 900_000,
+            'blurhash' => 'LEHV6nWB2yk8',
+            'blurhash_status' => BlurHashStatus::Ready,
+        ]);
+
+        expect(BlurHashing::hashFor($asset))->toBe('LEHV6nWB2yk8');
+
+        Bus::assertNothingDispatched();
+    });
+
+    it('asks nothing of an asset that paints itself, or of a file that is not a picture', function (): void {
+        Bus::fake();
+
+        BlurHashing::hashFor(libraryAsset()->forceFill(['size' => 512]));
+        BlurHashing::hashFor(libraryAsset()->forceFill(['mime_type' => 'image/svg+xml']));
+        BlurHashing::hashFor(libraryAsset()->forceFill(['mime_type' => 'video/mp4', 'size' => 900_000]));
+
+        Bus::assertNothingDispatched();
+    });
+
+    it('computes the hash from the stored object when the job runs', function (): void {
+        $asset = makeAsset(['size' => 900_000]);
+        storeImage($asset);
+
+        BlurHashing::dispatchLazily($asset);
+        (new ComputeBlurHash($asset->id))->handle();
+
+        expect($asset->fresh()->blurhash)->toBeString()->not->toBeEmpty()
+            ->and($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Ready);
+    });
+
+    it('records a failure for an object that will not decode, and stops', function (): void {
+        Bus::fake();
+
+        $asset = makeAsset(['size' => 900_000]);
+        Storage::disk('media')->put($asset->object_key, 'not an image');
+
+        BlurHashing::dispatchLazily($asset);
+        (new ComputeBlurHash($asset->id))->handle();
+
+        expect($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Failed);
+
+        BlurHashing::hashFor($asset->fresh());
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
+    });
+
+    it('does nothing where the asset is gone by the time the job runs', function (): void {
+        $asset = makeAsset(['size' => 900_000]);
+        $id = $asset->id;
+        $asset->forceDelete();
+
+        (new ComputeBlurHash($id))->handle();
+    })->throwsNoExceptions();
+
+    it('spends its own allowance rather than the derivative one', function (): void {
+        Bus::fake();
+        config()->set('media-library.blurhash.lazy_dispatch.per_minute', 1);
+        config()->set('media-library.derivatives.lazy_dispatch.per_minute', 1000);
+
+        $assets = collect(range(1, 3))->map(fn (): MediaAsset => libraryAsset()->forceFill(['size' => 900_000]));
+
+        $assets->each(function (MediaAsset $asset): void {
+            BlurHashing::hashFor($asset);
+            Derivatives::thumbnailUrl($asset);
+        });
+
+        // The hash cap is spent after one; the derivative cap is untouched by
+        // it, so every card still gets the picture it asked for.
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
+        Bus::assertDispatchedTimes(GenerateDerivative::class, 3);
+    });
+
+    it('spends no hash allowance on derivative work', function (): void {
+        Bus::fake();
+        config()->set('media-library.derivatives.lazy_dispatch.per_minute', 1);
+
+        $first = libraryAsset()->forceFill(['size' => 900_000]);
+        $second = libraryAsset()->forceFill(['size' => 900_000]);
+
+        Derivatives::thumbnailUrl($first);
+        Derivatives::thumbnailUrl($second);
+
+        BlurHashing::hashFor($first);
+        BlurHashing::hashFor($second);
+
+        Bus::assertDispatchedTimes(GenerateDerivative::class, 1);
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 2);
+    });
+
+    it('ships a hash allowance looser than the derivative one', function (): void {
+        expect(config('media-library.blurhash.lazy_dispatch.per_minute'))
+            ->toBeGreaterThan(config('media-library.derivatives.lazy_dispatch.per_minute'))
+            ->and(config('media-library.blurhash.lazy_dispatch.per_request'))
+            ->toBeGreaterThanOrEqual(LibraryGrid::BATCH);
+    });
+
+    it('caps how much hashing one minute may queue', function (): void {
+        Bus::fake();
+        config()->set('media-library.blurhash.lazy_dispatch.per_minute', 2);
+
+        foreach (range(1, 4) as $i) {
+            BlurHashing::hashFor(libraryAsset()->forceFill(['size' => 900_000]));
+        }
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 2);
+    });
+
+    it('is what a card painting a placeholder asks', function (): void {
+        Bus::fake();
+
+        $asset = makeAsset(['size' => 900_000, 'visibility' => 'public']);
+
+        $grid = LibraryGrid::make('gallery');
+        $grid->blurhash($asset);
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
     });
 });

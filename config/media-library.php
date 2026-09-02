@@ -129,6 +129,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | BlurHash
+    |--------------------------------------------------------------------------
+    |
+    | An asset that arrived by import has no hash until the first card that
+    | wants one asks for it. That work is capped on its own terms, and far more
+    | loosely than derivative generation: a hash is a read and a decode, and
+    | writes nothing back to the object store.
+    |
+    */
+
+    'blurhash' => [
+
+        'lazy_dispatch' => [
+            'per_minute' => 300,
+            'per_request' => 48,
+        ],
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Library grid
     |--------------------------------------------------------------------------
     |

@@ -13,6 +13,7 @@ use Lisowiecw\MediaLibrary\Commands\ImportLegacyMedia;
 use Lisowiecw\MediaLibrary\Commands\RegenerateDerivatives;
 use Lisowiecw\MediaLibrary\Commands\ReportUnattachedAssets;
 use Lisowiecw\MediaLibrary\Commands\ResolveMimeTypes;
+use Lisowiecw\MediaLibrary\Derivatives\HashDispatch;
 use Lisowiecw\MediaLibrary\Derivatives\LazyDispatch;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Ingest\UploadCeiling;
@@ -51,6 +52,7 @@ class MediaLibraryServiceProvider extends PackageServiceProvider
         // per-render budget, and a singleton would hand one page's leftovers
         // to the next.
         $this->app->scoped(LazyDispatch::class);
+        $this->app->scoped(HashDispatch::class);
     }
 
     /**

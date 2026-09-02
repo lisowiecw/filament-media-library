@@ -765,8 +765,8 @@ survive an upgrade.
   variables: `disk`, `public_disk`, `private_disk`, `directory`, `visibility`,
   `enforce_disk_visibility`, `max_upload_size`, `blocked_types`,
   `signed_url_ttl`, `derivative_url_bucket`, `derivatives` (its `prefix`,
-  `quality`, `variants`, `small_original` and `lazy_dispatch`),
-  `search_debounce`, `facet_count_threshold` and `unattached_grace_days`. The
+  `quality`, `variants`, `small_original` and `lazy_dispatch`), `blurhash`
+  (its `lazy_dispatch`), `search_debounce`, `facet_count_threshold` and `unattached_grace_days`. The
   published file is the reference: every key in it is promised.
 - **The command signatures** `media:import`, `media:resolve-mimes`,
   `media:regenerate-derivatives`, `media:assign-tenant` and

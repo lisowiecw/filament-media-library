@@ -9,6 +9,7 @@ use Filament\Forms\Components\Field;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\HtmlString;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
+use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
 use Lisowiecw\MediaLibrary\Derivatives\BlurHashPaint;
 use Lisowiecw\MediaLibrary\Ingest\TypeFamily;
 use Lisowiecw\MediaLibrary\Library\Facets\Facet;
@@ -492,10 +493,15 @@ class LibraryGrid extends Field
      * The BlurHash the card paints under an in-flight thumbnail, handed to the
      * view as part of the grid payload and decoded by the consumer. Null where
      * there is none, and the dimmed tile stands alone.
+     *
+     * Asking is what queues the hash of an asset that arrived by import, in
+     * the same way asking for a thumbnail queues a missing one, so a library
+     * nothing has ever generated for paints colour on the second look rather
+     * than never.
      */
     public function blurhash(MediaAsset $asset): ?string
     {
-        return $this->canPreview($asset) ? $asset->blurhash : null;
+        return $this->canPreview($asset) ? BlurHashing::hashFor($asset) : null;
     }
 
     /**

@@ -6,6 +6,7 @@ namespace Lisowiecw\MediaLibrary\Derivatives;
 
 use Illuminate\Database\Eloquent\Builder;
 use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
+use Lisowiecw\MediaLibrary\Jobs\ComputeBlurHash;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 
 /**
@@ -21,6 +22,70 @@ use Lisowiecw\MediaLibrary\Models\MediaAsset;
  */
 final readonly class BlurHashing
 {
+    /**
+     * The hash a card paints from, or null while there is none, asking for one
+     * where the asset is owed it.
+     *
+     * This is the import path's way in, and the mirror of what
+     * `Derivatives::thumbnailUrl()` does for a picture: the first render that
+     * finds nothing to paint is what queues the work, so nothing sweeps and an
+     * adopted object costs its one extra read only once somebody looks at it.
+     */
+    public static function hashFor(MediaAsset $asset): ?string
+    {
+        if ($asset->blurhash !== null) {
+            return $asset->blurhash;
+        }
+
+        self::dispatchLazily($asset);
+
+        return null;
+    }
+
+    /**
+     * Ask for a hash, behind the hash allowance, marking the asset pending
+     * first.
+     *
+     * The status is claimed in the database rather than on the model, and the
+     * job is queued only where the claim was won, because that claim is the
+     * whole of what stops two renders of the same card queueing the same read
+     * twice. A render that loses it paints the quiet tile and asks nothing.
+     */
+    public static function dispatchLazily(MediaAsset $asset): void
+    {
+        if (! self::wanted($asset) || $asset->blurhash_status !== null) {
+            return;
+        }
+
+        if (! app(HashDispatch::class)->allows()) {
+            return;
+        }
+
+        $claimed = MediaAsset::withTrashed()
+            ->whereKey($asset->getKey())
+            ->whereNull('blurhash')
+            ->whereNull('blurhash_status')
+            ->update(['blurhash_status' => BlurHashStatus::Pending->value]);
+
+        if ($claimed === 0) {
+            return;
+        }
+
+        $asset->forceFill(['blurhash_status' => BlurHashStatus::Pending])->syncOriginal();
+
+        ComputeBlurHash::dispatch($asset->getKey());
+    }
+
+    /**
+     * Give up on an asset whose object could not even be read, so no later
+     * render asks for it again. A hash that landed by another path in the
+     * meantime keeps the row, as everywhere else here.
+     */
+    public static function settleAsFailed(MediaAsset $asset): void
+    {
+        self::write($asset, null, BlurHashStatus::Failed);
+    }
+
     /**
      * Whether anything is still owed a hash for this asset: one `Derivatives`
      * says is hashable at all, with nothing settled recorded against it. A
