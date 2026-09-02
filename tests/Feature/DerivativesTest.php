@@ -630,9 +630,15 @@ describe('a hash left pending by a worker that died', function (): void {
         $asset = pendingAsset(now()->subHours(2)->toDateTimeString());
 
         BlurHashing::hashFor($asset);
+        $taken = $asset->fresh()->blurhash_pending_since;
+
         BlurHashing::hashFor($asset->fresh());
 
         Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
+
+        // The time the first render stamped is untouched, which is the
+        // conditional update refusing the second: a match would restamp it.
+        expect($asset->fresh()->blurhash_pending_since->equalTo($taken))->toBeTrue();
     });
 
     it('reopens neither a ready hash nor a recorded failure', function (): void {
