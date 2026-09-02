@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Lisowiecw\MediaLibrary\Derivatives\SmallOriginal;
+use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
+use Lisowiecw\MediaLibrary\Jobs\GenerateDerivative;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Tests\Fixtures\User;
 
@@ -149,4 +153,64 @@ it('folds case beyond ASCII when comparing names', function (): void {
     ingest(pngUpload('ОТЧЁТ.png'));
 
     expect(ingest(pngUpload('отчёт.png'))->nameCollided)->toBeTrue();
+});
+
+describe('the blurhash an upload arrives with', function (): void {
+    // A fake upload is a flat colour and compresses to almost nothing, so the
+    // small-original ceiling is taken out of the way here: these are about an
+    // ordinary photograph, which is the asset a placeholder is painted for.
+    beforeEach(fn () => config()->set('media-library.derivatives.small_original.bytes', 0));
+
+    it('returns a ready hash without queueing any work to compute one', function (): void {
+        Queue::fake();
+
+        $asset = ingest(UploadedFile::fake()->image('photo.png', 1200, 900));
+
+        expect($asset->blurhash)->toBeString()->not->toBeEmpty()
+            ->and($asset->blurhash_status)->toBe(BlurHashStatus::Ready)
+            ->and($asset->fresh()->blurhash)->toBe($asset->blurhash);
+
+        // The only thing queued is the thumbnail, which is a picture rather
+        // than a hash: the hash was already computed in this request.
+        Queue::assertPushed(GenerateDerivative::class, 1);
+    });
+
+    it('succeeds and records the failure where the bytes will not decode', function (): void {
+        // A PNG by its magic and a decode failure by its contents, which is
+        // the only shape that gets the hash as far as trying and losing: the
+        // floor above turns away anything that does not sniff as an image.
+        // Held in a variable: the fake's temp file goes when the fake does.
+        $whole = UploadedFile::fake()->image('photo.png', 1200, 900);
+        $truncated = substr((string) file_get_contents((string) $whole->getRealPath()), 0, 60);
+
+        $asset = ingest(UploadedFile::fake()->createWithContent('broken.png', $truncated));
+
+        expect($asset->exists)->toBeTrue()
+            ->and($asset->blurhash)->toBeNull()
+            ->and($asset->blurhash_status)->toBe(BlurHashStatus::Failed);
+
+        Storage::disk('media')->assertExists($asset->object_key);
+    });
+
+    it('never asks for one where the asset paints itself', function (UploadedFile $file): void {
+        config()->set('media-library.derivatives.small_original.bytes', SmallOriginal::DEFAULT_BYTES);
+
+        $asset = ingest($file);
+
+        expect($asset->blurhash)->toBeNull()
+            ->and($asset->blurhash_status)->toBeNull();
+    })->with([
+        'a small original' => fn (): UploadedFile => UploadedFile::fake()->image('tiny.png', 40, 40),
+        'an SVG' => fn (): UploadedFile => UploadedFile::fake()->createWithContent(
+            'logo.svg',
+            '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+        ),
+    ]);
+
+    it('never hashes a file that is not an image', function (): void {
+        $asset = ingest(UploadedFile::fake()->create('clip.mp4', 64, 'video/mp4'));
+
+        expect($asset->blurhash)->toBeNull()
+            ->and($asset->blurhash_status)->toBeNull();
+    });
 });

@@ -65,6 +65,13 @@ abstract class BrowserTestCase extends Orchestra
     /** Where files handed to a file input are staged. */
     protected string $files = '';
 
+    /**
+     * The file input once Filepond has adopted it. Filepond takes over the
+     * field's own input rather than making one, and only then marks it, so
+     * this selector matches nothing until there is a pond behind it.
+     */
+    protected string $pondInput = '.filepond--root input.filepond--browser';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -250,7 +257,12 @@ abstract class BrowserTestCase extends Orchestra
     }
 
     /**
-     * Wait for a selector to be in the DOM, and answer with the page.
+     * Ask the page a yes-or-no question until it says yes, and fail the test
+     * with the given complaint if the deadline passes first.
+     *
+     * `$question` is JavaScript that answers truthy when the wait is over. It
+     * is run inside the page, so it reads the live DOM rather than a snapshot
+     * of it.
      *
      * The poll is a timer rather than a frame callback: a headless page is not
      * obliged to paint, and a wait that only advances on a repaint can sit
@@ -260,18 +272,21 @@ abstract class BrowserTestCase extends Orchestra
      * right default: a test that waits on everything cannot say when something
      * took too long. What does need waiting on is work the page starts on its
      * own, a tab rendering or Filepond finishing a send, and waiting on the
-     * element that settles is the ADR 16 answer to a flaky test rather than a
+     * thing that settles is the ADR 16 answer to a flaky test rather than a
      * sleep or a retry.
      */
-    protected function present(AwaitableWebpage|PendingAwaitablePage $page, string $selector, int $seconds = 10): AwaitableWebpage|PendingAwaitablePage
+    protected function until(AwaitableWebpage|PendingAwaitablePage $page, string $question, string $complaint, int $seconds = 10): AwaitableWebpage|PendingAwaitablePage
     {
         $milliseconds = $seconds * 1000;
 
-        $appeared = $page->script(<<<JS
+        $answered = $page->script(<<<JS
             new Promise((resolve) => {
                 const deadline = Date.now() + {$milliseconds};
+                const ask = () => {
+                    {$question}
+                };
                 const look = () => {
-                    if (document.querySelector({$this->js($selector)})) {
+                    if (ask()) {
                         return resolve(true);
                     }
 
@@ -286,9 +301,22 @@ abstract class BrowserTestCase extends Orchestra
             })
         JS);
 
-        expect($appeared)->toBeTrue("Expected element [{$selector}] to appear within {$seconds} seconds, and it never did.");
+        expect($answered)->toBeTrue("{$complaint} within {$seconds} seconds, and it never did.");
 
         return $page;
+    }
+
+    /**
+     * Wait for a selector to be in the DOM, and answer with the page.
+     */
+    protected function present(AwaitableWebpage|PendingAwaitablePage $page, string $selector, int $seconds = 10): AwaitableWebpage|PendingAwaitablePage
+    {
+        return $this->until(
+            $page,
+            "return document.querySelector({$this->js($selector)});",
+            "Expected element [{$selector}] to appear",
+            $seconds,
+        );
     }
 
     /**
@@ -306,32 +334,16 @@ abstract class BrowserTestCase extends Orchestra
      */
     protected function bound(AwaitableWebpage|PendingAwaitablePage $page, string $selector, int $seconds = 10): AwaitableWebpage|PendingAwaitablePage
     {
-        $milliseconds = $seconds * 1000;
+        return $this->until(
+            $page,
+            <<<JS
+                const target = document.querySelector({$this->js($selector)});
 
-        $ready = $page->script(<<<JS
-            new Promise((resolve) => {
-                const deadline = Date.now() + {$milliseconds};
-                const look = () => {
-                    const target = document.querySelector({$this->js($selector)});
-
-                    if (target && (! target.hasAttribute('x-data') || target._x_dataStack)) {
-                        return resolve(true);
-                    }
-
-                    if (Date.now() > deadline) {
-                        return resolve(false);
-                    }
-
-                    setTimeout(look, 50);
-                };
-
-                look();
-            })
-        JS);
-
-        expect($ready)->toBeTrue("Expected element [{$selector}] to appear and bind its handlers within {$seconds} seconds, and it never did.");
-
-        return $page;
+                return target && (! target.hasAttribute('x-data') || target._x_dataStack);
+            JS,
+            "Expected element [{$selector}] to appear and bind its handlers",
+            $seconds,
+        );
     }
 
     /**
@@ -388,6 +400,50 @@ abstract class BrowserTestCase extends Orchestra
     protected function confirm(): string
     {
         return '.fi-modal-footer-actions button[type="submit"]:visible';
+    }
+
+    /**
+     * Hand a file to the Upload tab's pond, and answer with the page.
+     *
+     * The wait before the attach is the whole point of the helper. The modal's
+     * text lands about a tenth of a second before Filepond exists at all, and
+     * Filepond adopts the field's own file input rather than making one: it
+     * reads whatever is already on that input once, at creation, then moves
+     * the node into its root, marks it `filepond--browser` and binds its
+     * change handler. A file set on the input inside that gap is read by
+     * nobody. Nothing is thrown, no item joins the pond, and the test sits out
+     * its whole deadline waiting for a send that was never started.
+     *
+     * So this waits for the far end of the gap: an input Filepond has taken
+     * over, inside a root Filepond answers for. Attaching after that is
+     * attaching to a listening pond.
+     */
+    protected function pour(AwaitableWebpage|PendingAwaitablePage $page, string $path, int $seconds = 10): AwaitableWebpage|PendingAwaitablePage
+    {
+        $adopted = $this->js($this->pondInput);
+
+        $this->until(
+            $page,
+            <<<JS
+                const browser = document.querySelector({$adopted});
+
+                if (! browser) {
+                    return false;
+                }
+
+                try {
+                    return window.FilePond.find(browser.closest('.filepond--root'));
+                } catch (error) {
+                    // The markup is there but no pond is registered against it
+                    // yet, which is a moment to look again.
+                    return false;
+                }
+            JS,
+            'Expected a Filepond ready for a file',
+            $seconds,
+        );
+
+        return $page->attach($this->pondInput, $path);
     }
 
     /**

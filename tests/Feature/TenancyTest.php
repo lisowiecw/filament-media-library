@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
+use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Exceptions\AttachRefused;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
@@ -94,6 +95,28 @@ describe('the offer', function (): void {
         $plugin->tenantUsing(fn () => null);
 
         expect(offeredNames())->toBe([]);
+    });
+});
+
+describe('hashing', function (): void {
+    it('asks for a hash of what the grid offers and of nothing else', function (): void {
+        tenantIs('acme');
+
+        $ours = makeAsset(['display_name' => 'Ours', 'tenant_id' => 'acme', 'size' => 900_000]);
+        $theirs = makeAsset([
+            'display_name' => 'Theirs',
+            'tenant_id' => 'other',
+            'size' => 900_000,
+            'object_key' => 'media/theirs.jpg',
+        ]);
+
+        libraryModal();
+
+        // Hashing rides on the render, so the boundary the grid already draws
+        // is the only boundary there is: an asset it never offered is never
+        // asked about.
+        expect($ours->fresh()->blurhash_status)->toBe(BlurHashStatus::Pending)
+            ->and($theirs->fresh()->blurhash_status)->toBeNull();
     });
 });
 

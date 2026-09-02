@@ -79,7 +79,10 @@ final readonly class Derivatives
         // A pending row is a job already in flight, and a failed one has
         // exhausted its retries: neither is re-dispatched, so a broken file is
         // not retried forever and a busy grid does not pile jobs on itself.
-        if ($derivative === null) {
+        // A pending row too old to still be in flight is the exception: its
+        // worker was killed between the dispatch and the outcome, and nothing
+        // else will ever settle it.
+        if ($derivative === null || $derivative->isAbandoned()) {
             self::dispatchLazily($asset, $variant);
         }
 
@@ -146,8 +149,8 @@ final readonly class Derivatives
 
     /**
      * Whether this asset wants a rendering of this variant that it does not
-     * have: generatable, not already its own picture, and with no row of any
-     * status behind it.
+     * have: generatable, not already its own picture, and with no row behind
+     * it that anything is still coming for.
      *
      * The question lives here rather than in whatever is asking, because it is
      * the same question `resolve()` asks on a render, and an answer that drifts
@@ -160,9 +163,63 @@ final readonly class Derivatives
      */
     public static function wanted(MediaAsset $asset, DerivativeVariant $variant): bool
     {
+        $derivative = self::existing($asset, $variant);
+
         return self::generatable($asset)
             && ! self::paintsItself($asset)
-            && self::existing($asset, $variant) === null;
+            && ($derivative === null || $derivative->isAbandoned());
+    }
+
+    /**
+     * Whether this asset wants a rendering of this variant and has no row for
+     * it at all: the narrower half of `wanted()`.
+     *
+     * It lives here beside `wanted()` rather than in the selector that asks
+     * it, for the reason `wanted()` gives: an asset with an abandoned row is
+     * wanted too, and a selector keeping its sets apart would otherwise spell
+     * out half of this question itself and drift from it.
+     */
+    public static function missing(MediaAsset $asset, DerivativeVariant $variant): bool
+    {
+        return self::existing($asset, $variant) === null && self::wanted($asset, $variant);
+    }
+
+    /**
+     * Whether a BlurHash is a coherent thing to ask for: a picture the package
+     * can decode, and not one that is already its own.
+     *
+     * The question lives here for the same reason `wanted()` does. An asset
+     * that paints itself never reaches a placeholder, so hashing it would be
+     * work for a card that will never ask, and an answer that drifted from the
+     * one `resolve()` uses would have the two disagreeing about what an asset
+     * even is.
+     */
+    public static function hashable(MediaAsset $asset): bool
+    {
+        return self::generatable($asset) && ! self::paintsItself($asset);
+    }
+
+    /**
+     * Whether a rendering of this variant has stopped being in flight: a row
+     * that is ready or failed, or an asset no rendering was ever coming for.
+     *
+     * This is what a polling surface asks, and the near mirror of `wanted()`:
+     * that one says whether there is work to queue, this one whether there is
+     * work to wait for. A failed row settles the question, because a file that
+     * will never decode must not keep a page asking.
+     *
+     * An abandoned row is the one place the two are not mirrors, and
+     * deliberately: it is both wanted and unsettled, so a page keeps waiting
+     * while the render it is polling queues the work again, which is exactly
+     * how such a card heals without a reload.
+     */
+    public static function settled(MediaAsset $asset, DerivativeVariant $variant): bool
+    {
+        if (! self::generatable($asset) || self::paintsItself($asset)) {
+            return true;
+        }
+
+        return self::existing($asset, $variant)?->status->isSettled() === true;
     }
 
     /**
@@ -209,6 +266,12 @@ final readonly class Derivatives
                 'failure_reason' => null,
             ],
         );
+
+        // A re-dispatch over an abandoned row writes the same values it
+        // already holds, so nothing would be dirty and the timestamp the age
+        // is read from would not move: the row would stay abandoned and every
+        // render after this one would queue the job again.
+        $derivative->beginGeneration();
 
         // The loaded relation is what the next resolve reads, and a second
         // resolve of the same card within one render would otherwise not see

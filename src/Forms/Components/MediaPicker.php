@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
+use Lisowiecw\MediaLibrary\Derivatives\CardResolution;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
 use Lisowiecw\MediaLibrary\Filament\Notifications\RefusalNotice;
@@ -287,6 +288,43 @@ class MediaPicker extends Field
         $url = $this->evaluate($this->thumbnailUsing, ['asset' => $asset], [MediaAsset::class => $asset]);
 
         return $url;
+    }
+
+    /**
+     * Whether the attached items beside the field ask again while the person
+     * looks at them, on the same terms as the library grid: while anything
+     * listed is unresolved, and not at all once everything listed is ready or
+     * failed.
+     *
+     * An item the viewer may not be delivered paints no thumbnail whatever
+     * lands, so nothing is waited on for it.
+     *
+     * @param  Collection<int, MediaAsset>  $assets
+     */
+    public function shouldPoll(Collection $assets): bool
+    {
+        if (! $this->paintsThroughPipeline()) {
+            return false;
+        }
+
+        return CardResolution::pending($assets->filter(
+            fn (MediaAsset $asset): bool => app(MediaAuthorization::class)->allowsView($asset),
+        ));
+    }
+
+    public function getPollInterval(): string
+    {
+        return CardResolution::interval();
+    }
+
+    /**
+     * Whether the package's own derivative pipeline is what paints this
+     * field's thumbnails. A field that resolves its own is waiting on nothing
+     * the package can settle, so neither surface asks again for it.
+     */
+    public function paintsThroughPipeline(): bool
+    {
+        return $this->thumbnailUsing === null;
     }
 
     /**
@@ -715,6 +753,7 @@ class MediaPicker extends Field
                     LibraryGrid::make('library')
                         ->offerScope(fn (): OfferScope => $this->getOfferScope())
                         ->thumbnailUsing(fn (MediaAsset $asset): ?string => $this->getThumbnailUrl($asset))
+                        ->pollable($this->paintsThroughPipeline())
                         ->selectionLimit(fn (): ?int => $this->getSelectionLimit())
                         ->dropTargetKey(fn (): ?string => $this->isDroppable() ? $this->getKey() : null)
                         ->dropStatePath(fn (): string => $this->getDropStatePath()),

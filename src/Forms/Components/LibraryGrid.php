@@ -9,7 +9,9 @@ use Filament\Forms\Components\Field;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\HtmlString;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
+use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
 use Lisowiecw\MediaLibrary\Derivatives\BlurHashPaint;
+use Lisowiecw\MediaLibrary\Derivatives\CardResolution;
 use Lisowiecw\MediaLibrary\Ingest\TypeFamily;
 use Lisowiecw\MediaLibrary\Library\Facets\Facet;
 use Lisowiecw\MediaLibrary\Library\FacetSidebar;
@@ -51,6 +53,8 @@ class LibraryGrid extends Field
     protected Closure|string|null $dropTargetKey = null;
 
     protected Closure|string|null $dropStatePath = null;
+
+    protected Closure|bool $pollable = true;
 
     /**
      * The sidebar for the state it was built from, so one render's counts,
@@ -479,6 +483,48 @@ class LibraryGrid extends Field
     }
 
     /**
+     * Whether the grid asks again while the person looks at it.
+     *
+     * The page in hand is what decides, not the library: a card that resolves
+     * is repainted where it is, and once every card on the page is ready or
+     * failed the attribute stops being emitted, so an idle open modal over a
+     * fully generated library costs nothing.
+     *
+     * A card that may not preview at all is a glyph tile for good and is
+     * waited on by nothing, and a grid whose thumbnails a field paints itself
+     * waits on nothing either, since the package's pipeline is then not what
+     * the card is waiting for.
+     *
+     * @param  Collection<int, MediaAsset>  $assets
+     */
+    public function shouldPoll(Collection $assets): bool
+    {
+        return $this->isPollable() && CardResolution::pending($assets->filter($this->canPreview(...)));
+    }
+
+    /**
+     * Whether waiting for the package's own pipeline says anything about this
+     * grid's cards. Told by the field the grid belongs to, because the field
+     * is what owns the thumbnail rule.
+     */
+    public function pollable(bool|Closure $condition = true): static
+    {
+        $this->pollable = $condition;
+
+        return $this;
+    }
+
+    public function isPollable(): bool
+    {
+        return (bool) $this->evaluate($this->pollable);
+    }
+
+    public function getPollInterval(): string
+    {
+        return CardResolution::interval();
+    }
+
+    /**
      * A video always gets a glyph tile and a play badge, never a poster frame:
      * a frame would mean an optional binary, which the package does not ask an
      * operator to install for a card.
@@ -492,10 +538,15 @@ class LibraryGrid extends Field
      * The BlurHash the card paints under an in-flight thumbnail, handed to the
      * view as part of the grid payload and decoded by the consumer. Null where
      * there is none, and the dimmed tile stands alone.
+     *
+     * Asking is what queues the hash of an asset that arrived by import, in
+     * the same way asking for a thumbnail queues a missing one, so a library
+     * nothing has ever generated for paints colour on the second look rather
+     * than never.
      */
     public function blurhash(MediaAsset $asset): ?string
     {
-        return $this->canPreview($asset) ? $asset->blurhash : null;
+        return $this->canPreview($asset) ? BlurHashing::hashFor($asset) : null;
     }
 
     /**

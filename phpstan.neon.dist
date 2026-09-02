@@ -13,6 +13,8 @@ parameters:
             # Marked optional: the directory only exists once the workbench has
             # rendered a view, so a fresh CI checkout has no such path.
             - workbench/storage/framework/views (?)
+    bootstrapFiles:
+        - bin/phpstan-bootstrap.php
     tmpDir: build/phpstan
     configDirectories:
         - config

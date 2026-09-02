@@ -162,7 +162,7 @@ return [
         ],
 
         'health' => [
-            'summary' => ':failed failed, :missing missing and :stale stale rendering(s). Regenerating queues a batch of them.',
+            'summary' => ':failed failed, :missing missing, :stale stale and :abandoned abandoned rendering(s). Regenerating queues a batch of them.',
         ],
 
         'usage' => [

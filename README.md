@@ -382,6 +382,50 @@ The package's own painting lives entirely in that element's `style` attribute,
 so a decoder that renders over the top either paints above it or clears it with
 `tile.style.background = ''`.
 
+A card that is still waiting heals where it is. While anything on the page is
+unresolved, the library grid and a picker's attached items ask again every
+`poll_interval`, and the placeholder becomes the real thumbnail without a
+reload. The asking stops on its own once every card is ready or has failed, so
+a page of finished cards, and an open modal nobody is uploading into, make no
+requests at all. Asking is paused while the surface is scrolled out of view,
+and a field given a `thumbnailUsing()` rule of its own never asks, since the
+package's pipeline is then not what its cards are waiting for. The Filament
+resource table does not poll: reload it.
+
+A library that predates hashing fills in from the command line rather than by
+being browsed:
+
+```bash
+php artisan media:regenerate-derivatives --hashes --dry-run
+php artisan media:regenerate-derivatives --hashes
+```
+
+`--hashes` queues hash work and no derivative work, so it cannot be combined
+with `--missing`, `--failed`, `--stale` or `--variant`. It obeys the hash
+allowance rather than the derivative one, waiting out a spent minute rather
+than refusing, so a run over a large library finishes: its wall time is the
+library's size over `media-library.blurhash.lazy_dispatch.per_minute`, and the
+dry run, which queues nothing, says that estimate in minutes before you start.
+Assets that already have a hash, that failed to decode, that are already being
+hashed, and that paint themselves or are not images, are all left alone.
+
+Being hashed lapses. A worker killed outright, by an OOM or by a deploy that
+stops the queue mid-job, settles nothing and would otherwise leave its assets
+pending for good, so an asset pending longer than
+`media-library.blurhash.abandoned_after` seconds is read as nobody's work and
+asked for again by the next view or backfill. The default is 15 minutes, far
+longer than a read and a decode; inside the window a hash in flight is still
+never asked for twice.
+
+Generating lapses the same way. A rendering left pending longer than
+`media-library.derivatives.abandoned_after` seconds, 30 minutes by default,
+stops counting as work in flight: the next render queues it again, and
+`media:regenerate-derivatives --abandoned` selects the whole set for an
+operator who would rather not wait for somebody to open the cards. The age is
+the row's own `updated_at`, which only the pipeline writes. A failed rendering
+is still never re-dispatched by a render at any age, and a ready one is still
+served however stale its digest.
+
 ### Lifecycle and cleanup
 
 Removing a picture from a record detaches it, which touches the attachment row and
@@ -577,8 +621,9 @@ Cleanup has its own filter with a grace-period preset, and a bulk delete
 restricted to what that preset selects. Eligibility is recomputed at the moment
 of the delete rather than trusted from the filter the rows were listed under.
 
-A health readout carries the failed, missing and stale derivative counts with a
-regenerate action beside them. It queues a bounded batch, since it runs in a
+A health readout carries the failed, missing, stale and abandoned derivative
+counts with a regenerate action beside them. The four sets are disjoint, so the
+count an operator reads is the work one press queues. It queues a bounded batch, since it runs in a
 request, and names `media:regenerate-derivatives` for whatever is left. The
 importer stays a command and is never exposed here.
 
@@ -765,9 +810,11 @@ survive an upgrade.
   variables: `disk`, `public_disk`, `private_disk`, `directory`, `visibility`,
   `enforce_disk_visibility`, `max_upload_size`, `blocked_types`,
   `signed_url_ttl`, `derivative_url_bucket`, `derivatives` (its `prefix`,
-  `quality`, `variants`, `small_original` and `lazy_dispatch`),
-  `search_debounce`, `facet_count_threshold` and `unattached_grace_days`. The
-  published file is the reference: every key in it is promised.
+  `quality`, `variants`, `small_original`, `lazy_dispatch` and
+  `abandoned_after`), `blurhash` (its `lazy_dispatch` and `abandoned_after`),
+  `search_debounce`, `facet_count_threshold`,
+  `poll_interval` and `unattached_grace_days`. The published file is the
+  reference: every key in it is promised.
 - **The command signatures** `media:import`, `media:resolve-mimes`,
   `media:regenerate-derivatives`, `media:assign-tenant` and
   `media:unattached-assets`.

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
+use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaDerivative;
 
 /**
@@ -39,4 +40,46 @@ it('paints a card with no thumbnail from the BlurHash, and leaves a card that ha
         ->assertPresent(".fi-ml-card[data-asset-id=\"{$ready->id}\"] img.fi-ml-card-thumb")
         ->assertNotPresent(".fi-ml-card[data-asset-id=\"{$ready->id}\"] .fi-ml-card-glyph")
         ->assertNotPresent(".fi-ml-card[data-asset-id=\"{$ready->id}\"] [data-blurhash]");
+});
+
+/**
+ * The library somebody meets after an import: rows adopted from a bucket, with
+ * nothing generated behind any of them and no hash to paint from. The first
+ * open is what asks for the hashes; the second paints them, and what the
+ * person sees is their library rather than a page of grey.
+ */
+it('paints a library that nothing has ever generated for', function (): void {
+    $this->signIn();
+
+    $imported = collect(['one.jpg', 'two.jpg', 'three.jpg'])
+        ->map(fn (string $name): MediaAsset => $this->ingest($name));
+
+    // What an adopted library looks like: bytes on the disk, and rows that
+    // know nothing about them. The thumbnails are left in flight rather than
+    // deleted, so the cards go on wanting one and the render under test is the
+    // one a person meets while the queue is still working through the backlog.
+    MediaDerivative::query()->update(['status' => DerivativeStatus::Pending]);
+    MediaAsset::query()->update(['blurhash' => null, 'blurhash_status' => null]);
+
+    $article = $this->article('Imported');
+
+    $open = fn () => visit("/admin/articles/{$article->id}/edit")
+        ->click('[data-field="gallery"] .fi-ml-picker-trigger button')
+        ->waitForText('Library');
+
+    $open();
+
+    expect($imported->every(fn (MediaAsset $asset): bool => $asset->fresh()->blurhash !== null))->toBeTrue();
+
+    $page = $open();
+
+    $imported->each(function (MediaAsset $asset) use ($page): void {
+        $page
+            ->assertPresent(".fi-ml-card[data-asset-id=\"{$asset->id}\"] .fi-ml-card-glyph[data-blurhash]")
+            ->assertAttributeContains(
+                ".fi-ml-card[data-asset-id=\"{$asset->id}\"] .fi-ml-card-glyph",
+                'style',
+                'radial-gradient',
+            );
+    });
 });

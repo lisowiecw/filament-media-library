@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Filament\Actions\Testing\TestAction;
+use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Forms\Components\LibraryGrid;
@@ -276,4 +277,116 @@ it('lets a multiple-selection field hold up to its maximum', function (): void {
     $component = clickCard(libraryModal(['maxItems' => 3]), $first);
 
     $component->assertSee('selection\', JSON.parse(\'['.$first.','.$second.']\')', escape: false);
+});
+
+it('polls while a card on the page is still unresolved', function (): void {
+    makeAsset(['display_name' => 'A photo', 'visibility' => 'public', 'size' => 900_000]);
+
+    libraryModal()->assertSee('wire:poll', escape: false);
+});
+
+it('stops polling once every card on the page is ready', function (): void {
+    $asset = makeAsset([
+        'display_name' => 'A photo',
+        'visibility' => 'public',
+        'size' => 900_000,
+        'blurhash' => 'LEHV6nWB2yk8pyo0adR*.7kCMdnj',
+        'blurhash_status' => BlurHashStatus::Ready,
+    ]);
+
+    readyDerivative($asset);
+
+    libraryModal()->assertDontSee('wire:poll', escape: false);
+});
+
+it('stops polling over a card whose hash and rendering have both failed', function (): void {
+    $asset = makeAsset([
+        'display_name' => 'A broken photo',
+        'visibility' => 'public',
+        'size' => 900_000,
+        'blurhash_status' => BlurHashStatus::Failed,
+    ]);
+
+    $asset->derivatives()->create([
+        'variant' => DerivativeVariant::Thumb,
+        'disk' => $asset->disk,
+        'object_key' => MediaDerivative::keyFor($asset, DerivativeVariant::Thumb),
+        'status' => DerivativeStatus::Failed,
+    ]);
+
+    libraryModal()->assertDontSee('wire:poll', escape: false);
+});
+
+it('counts a failed hash as resolved, with the thumb already ready', function (): void {
+    $asset = makeAsset([
+        'display_name' => 'A photo',
+        'visibility' => 'public',
+        'size' => 900_000,
+        'blurhash_status' => BlurHashStatus::Failed,
+    ]);
+
+    readyDerivative($asset);
+
+    libraryModal()->assertDontSee('wire:poll', escape: false);
+});
+
+it('counts a failed rendering as resolved, with the hash already ready', function (): void {
+    $asset = makeAsset([
+        'display_name' => 'A photo',
+        'visibility' => 'public',
+        'size' => 900_000,
+        'blurhash' => 'LEHV6nWB2yk8pyo0adR*.7kCMdnj',
+        'blurhash_status' => BlurHashStatus::Ready,
+    ]);
+
+    $asset->derivatives()->create([
+        'variant' => DerivativeVariant::Thumb,
+        'disk' => $asset->disk,
+        'object_key' => MediaDerivative::keyFor($asset, DerivativeVariant::Thumb),
+        'status' => DerivativeStatus::Failed,
+    ]);
+
+    libraryModal()->assertDontSee('wire:poll', escape: false);
+});
+
+it('keeps polling while a hash is still in flight', function (): void {
+    $asset = makeAsset([
+        'display_name' => 'A photo',
+        'visibility' => 'public',
+        'size' => 900_000,
+        'blurhash_status' => BlurHashStatus::Pending,
+    ]);
+
+    readyDerivative($asset);
+
+    libraryModal()->assertSee('wire:poll', escape: false);
+});
+
+it('never polls a field that paints its own thumbnails', function (): void {
+    makeAsset(['display_name' => 'A photo', 'visibility' => 'public', 'size' => 900_000]);
+
+    libraryModal(['thumbnailUsing' => 'stamped'])->assertDontSee('wire:poll', escape: false);
+});
+
+it('keeps polling while one card of a resolved page is still unresolved', function (): void {
+    $ready = makeAsset([
+        'display_name' => 'A photo',
+        'visibility' => 'public',
+        'size' => 900_000,
+        'blurhash' => 'LEHV6nWB2yk8pyo0adR*.7kCMdnj',
+        'blurhash_status' => BlurHashStatus::Ready,
+    ]);
+
+    readyDerivative($ready);
+
+    makeAsset(['display_name' => 'A newer photo', 'visibility' => 'public',
+        'size' => 900_000, 'object_key' => 'media/newer.jpg']);
+
+    libraryModal()->assertSee('wire:poll', escape: false);
+});
+
+it('never polls over a card that is a glyph tile for good', function (): void {
+    makeAsset(['display_name' => 'A clip', 'mime_type' => 'video/mp4', 'extension' => 'mp4', 'object_key' => 'media/clip.mp4']);
+
+    libraryModal()->assertDontSee('wire:poll', escape: false);
 });

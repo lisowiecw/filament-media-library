@@ -6,6 +6,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
@@ -138,4 +139,27 @@ it('indexes tenant id', function (): void {
 it('fixes the table name with no prefix knob', function (): void {
     expect((new MediaAsset)->getTable())->toBe('media_assets')
         ->and(DB::getTablePrefix())->toBe('');
+});
+
+it('reads a hash that predates the status column as ready', function (): void {
+    insertAssetRow(['blurhash' => 'LEHV6nWB2yk8']);
+    insertAssetRow();
+
+    DB::table('media_assets')->update(['blurhash_status' => null]);
+
+    // The migration's own backfill, run again over rows written behind it.
+    (require __DIR__.'/../../database/migrations/record_blurhash_status_on_media_assets.php')->up();
+
+    expect(MediaAsset::whereNotNull('blurhash')->first()->blurhash_status)->toBe(BlurHashStatus::Ready)
+        ->and(MediaAsset::whereNull('blurhash')->first()->blurhash_status)->toBeNull();
+});
+
+it('leaves the pending time of an existing row alone', function (): void {
+    insertAssetRow(['blurhash_status' => BlurHashStatus::Pending->value]);
+
+    // A pending row written before the column existed has no time to read, and
+    // the migration invents none for it: null is what makes it reclaimable.
+    (require __DIR__.'/../../database/migrations/record_blurhash_pending_since_on_media_assets.php')->up();
+
+    expect(MediaAsset::first()->blurhash_pending_since)->toBeNull();
 });

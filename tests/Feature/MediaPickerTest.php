@@ -5,10 +5,14 @@ declare(strict_types=1);
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
+use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
+use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
+use Lisowiecw\MediaLibrary\Models\MediaDerivative;
 use Workbench\App\Models\Article;
 
 it('starts a create form with an empty ordered list', function (): void {
@@ -264,4 +268,53 @@ it('paints no thumbnail for an attachment outside the current tenant, leaving a 
     $picker = MediaPicker::make('cover_image');
 
     expect($picker->getThumbnailUrl($theirs))->toBeNull();
+});
+
+it('polls while an attached item beside the field is still unresolved', function (): void {
+    $host = article();
+    attach($host, makeAsset(['visibility' => 'public', 'size' => 900_000]));
+
+    pickerForm($host)->assertSee('wire:poll', escape: false);
+});
+
+it('stops polling once every attached item is ready or failed', function (): void {
+    $host = article();
+
+    $ready = makeAsset([
+        'visibility' => 'public',
+        'size' => 900_000,
+        'blurhash' => 'LEHV6nWB2yk8pyo0adR*.7kCMdnj',
+        'blurhash_status' => BlurHashStatus::Ready,
+    ]);
+
+    readyDerivative($ready);
+
+    $failed = makeAsset([
+        'visibility' => 'public',
+        'size' => 900_000,
+        'object_key' => 'media/broken.jpg',
+        'blurhash_status' => BlurHashStatus::Failed,
+    ]);
+
+    $failed->derivatives()->create([
+        'variant' => DerivativeVariant::Thumb,
+        'disk' => $failed->disk,
+        'object_key' => MediaDerivative::keyFor($failed, DerivativeVariant::Thumb),
+        'status' => DerivativeStatus::Failed,
+    ]);
+
+    attach($host, $ready, $failed);
+
+    pickerForm($host)->assertDontSee('wire:poll', escape: false);
+});
+
+it('never polls beside a field that paints its own thumbnails', function (): void {
+    $host = article();
+    attach($host, makeAsset(['visibility' => 'public', 'size' => 900_000]));
+
+    pickerForm($host, ['thumbnailUsing' => 'stamped'])->assertDontSee('wire:poll', escape: false);
+});
+
+it('never polls a field with nothing attached to it', function (): void {
+    pickerForm(article())->assertDontSee('wire:poll', escape: false);
 });

@@ -24,4 +24,15 @@ enum DerivativeStatus: string
     {
         return $this === self::Ready;
     }
+
+    /**
+     * Whether this status settles the question for good. A settled rendering
+     * is what a surface stops waiting on: a ready one is the picture, and a
+     * failed one has exhausted its retries and is re-dispatched by nothing
+     * short of a command.
+     */
+    public function isSettled(): bool
+    {
+        return $this !== self::Pending;
+    }
 }

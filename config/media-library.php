@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
 use Lisowiecw\MediaLibrary\Library\FacetSidebar;
+use Lisowiecw\MediaLibrary\Models\MediaDerivative;
 
 return [
 
@@ -102,6 +104,13 @@ return [
     | are configurable. An original small enough on both counts below gets no
     | derivatives at all.
     |
+    | A rendering that has been pending longer than the abandoned window, in
+    | seconds, stops counting as work in flight: its worker was killed between
+    | the dispatch and the outcome, so nothing else is ever going to settle it,
+    | and the next render queues it again. The age is the row's own
+    | `updated_at`, which only the pipeline writes. Size it comfortably longer
+    | than a scale plus an encode plus the object write.
+    |
     */
 
     'derivatives' => [
@@ -122,8 +131,40 @@ return [
 
         'lazy_dispatch' => [
             'per_minute' => 60,
-            'per_request' => 5,
+            'per_request' => 48,
         ],
+
+        'abandoned_after' => (int) env('MEDIA_LIBRARY_DERIVATIVE_ABANDONED_AFTER', MediaDerivative::DEFAULT_ABANDONED_AFTER),
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | BlurHash
+    |--------------------------------------------------------------------------
+    |
+    | An asset that arrived by import has no hash until the first card that
+    | wants one asks for it. That work is capped on its own terms, and far more
+    | loosely than derivative generation: a hash is a read and a decode, and
+    | writes nothing back to the object store.
+    |
+    | An asset that has been pending longer than the abandoned window, in
+    | seconds, is treated as nobody's work and asked for again by the next
+    | render. It covers a worker killed outright, an OOM or a deploy that
+    | stopped the queue mid-job, which settles nothing and would otherwise
+    | leave the card grey for good. Size it comfortably longer than a read plus
+    | a decode, so a hash still running is never asked for twice.
+    |
+    */
+
+    'blurhash' => [
+
+        'lazy_dispatch' => [
+            'per_minute' => 300,
+            'per_request' => 48,
+        ],
+
+        'abandoned_after' => (int) env('MEDIA_LIBRARY_BLURHASH_ABANDONED_AFTER', BlurHashing::DEFAULT_ABANDONED_AFTER),
 
     ],
 
@@ -141,6 +182,20 @@ return [
     'search_debounce' => (int) env('MEDIA_LIBRARY_SEARCH_DEBOUNCE', 400),
 
     'facet_count_threshold' => (int) env('MEDIA_LIBRARY_FACET_COUNT_THRESHOLD', FacetSidebar::DEFAULT_THRESHOLD),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Healing in place
+    |--------------------------------------------------------------------------
+    |
+    | How often the library grid and a picker's attached items ask again while
+    | a card on the page is still waiting on its hash or its thumbnail. Asked
+    | only while something is unresolved: a page of finished cards makes no
+    | request at all, however long it is left open.
+    |
+    */
+
+    'poll_interval' => env('MEDIA_LIBRARY_POLL_INTERVAL', '3s'),
 
     /*
     |--------------------------------------------------------------------------

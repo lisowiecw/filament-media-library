@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\PendingCommand;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
@@ -422,4 +424,28 @@ describe('drift', function (): void {
 
         expect(importReport()['drifts'])->toBe([]);
     });
+});
+
+/**
+ * A run that touched every object is exactly the cheap re-run the report
+ * exists to protect, so adopting rows fans nothing out. The hash of an
+ * imported asset is asked for by the first card that wants one, not here.
+ */
+it('queues no hash work, however many rows it adopts', function (): void {
+    Bus::fake();
+
+    foreach (range(1, 3) as $i) {
+        // The fake upload has to outlive the read: its temp file goes with it.
+        $file = UploadedFile::fake()->image('x.png', 900, 900);
+
+        Storage::disk('media')->put("photos/{$i}.png", (string) file_get_contents((string) $file->getRealPath()));
+
+        LegacyRecord::create(['cover_path' => "photos/{$i}.png"]);
+    }
+
+    runImport()->assertSuccessful()->run();
+
+    expect(MediaAsset::query()->count())->toBe(3);
+
+    Bus::assertNothingDispatched();
 });

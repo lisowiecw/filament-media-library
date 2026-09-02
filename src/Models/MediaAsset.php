@@ -15,7 +15,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Attachments\Attachments;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
+use Lisowiecw\MediaLibrary\Derivatives\AbandonedWindow;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
+use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
@@ -45,6 +47,8 @@ use Lisowiecw\MediaLibrary\Lifecycle\AssetLifecycle;
  * @property string|null $uploaded_by
  * @property string|null $tenant_id
  * @property string|null $blurhash
+ * @property BlurHashStatus|null $blurhash_status
+ * @property Carbon|null $blurhash_pending_since
  * @property Carbon|null $unattached_since
  * @property Carbon|null $created_at
  */
@@ -88,6 +92,7 @@ class MediaAsset extends Model
         'uploaded_by',
         'tenant_id',
         'blurhash',
+        'blurhash_status',
     ];
 
     protected static function booted(): void
@@ -212,6 +217,38 @@ class MediaAsset extends Model
     }
 
     /**
+     * Assets a BlurHash may be asked for: owed one, with nobody computing it
+     * that is still anybody.
+     *
+     * This is the SQL half of the question `BlurHashing::claimable()` asks of
+     * a model in hand, and the two are kept in step because they decide the
+     * same thing for the same asset. The claim carries this into an update,
+     * where it is what settles the race between two renders; a backfill's
+     * selector carries it into a read, so a dry run reports the set a real run
+     * would queue rather than a larger one.
+     *
+     * A pending row is somebody else's claim while that claim is young enough
+     * to be anybody's. Held longer than the window, it is a computation whose
+     * worker died and may be taken again, and a pending row with no time at
+     * all is abandoned rather than fresh: those are the rows written before the
+     * column existed, stranded by exactly the crash this releases.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeUnclaimedHash(Builder $query): void
+    {
+        $query
+            ->whereNull('blurhash')
+            ->where(fn (Builder $status) => $status
+                ->whereNull('blurhash_status')
+                ->orWhere(fn (Builder $pending) => $pending
+                    ->where('blurhash_status', BlurHashStatus::Pending->value)
+                    ->where(fn (Builder $stale) => $stale
+                        ->whereNull('blurhash_pending_since')
+                        ->orWhere('blurhash_pending_since', '<', AbandonedWindow::hash()->before()))));
+    }
+
+    /**
      * Assets nothing has referenced for longer than the grace period: what the
      * report-only sweep lists, and what a management page's cleanup filter
      * narrows to.
@@ -306,7 +343,9 @@ class MediaAsset extends Model
             'mime_source' => MimeSource::class,
             'visibility' => Visibility::class,
             'source' => MediaSource::class,
+            'blurhash_status' => BlurHashStatus::class,
             'size' => 'integer',
+            'blurhash_pending_since' => 'datetime',
             'unattached_since' => 'datetime',
         ];
     }
