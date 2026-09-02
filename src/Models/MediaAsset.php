@@ -16,6 +16,7 @@ use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Attachments\Attachments;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
+use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\MediaSource;
 use Lisowiecw\MediaLibrary\Enums\MimeSource;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
@@ -45,6 +46,7 @@ use Lisowiecw\MediaLibrary\Lifecycle\AssetLifecycle;
  * @property string|null $uploaded_by
  * @property string|null $tenant_id
  * @property string|null $blurhash
+ * @property BlurHashStatus|null $blurhash_status
  * @property Carbon|null $unattached_since
  * @property Carbon|null $created_at
  */
@@ -88,6 +90,7 @@ class MediaAsset extends Model
         'uploaded_by',
         'tenant_id',
         'blurhash',
+        'blurhash_status',
     ];
 
     protected static function booted(): void
@@ -306,6 +309,7 @@ class MediaAsset extends Model
             'mime_source' => MimeSource::class,
             'visibility' => Visibility::class,
             'source' => MediaSource::class,
+            'blurhash_status' => BlurHashStatus::class,
             'size' => 'integer',
             'unattached_since' => 'datetime',
         ];

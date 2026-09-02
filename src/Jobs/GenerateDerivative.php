@@ -7,6 +7,7 @@ namespace Lisowiecw\MediaLibrary\Jobs;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Storage;
+use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
 use Lisowiecw\MediaLibrary\Derivatives\Raster;
 use Lisowiecw\MediaLibrary\Derivatives\SmallOriginal;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
@@ -112,14 +113,20 @@ class GenerateDerivative implements ShouldQueue
     }
 
     /**
-     * The blurhash rides on the thumb job's own decode rather than costing a
-     * read of its own, and only the thumb's: the preview would compute the
-     * same string from the same picture.
+     * The hash rides on the thumb job's own decode rather than costing a read
+     * of its own, and only the thumb's: the preview would compute the same
+     * string from the same picture.
+     *
+     * It is a top-up rather than a write. An asset uploaded through ingest
+     * already has its hash before this job runs, and one that was recorded as
+     * undecodable is not asked again here; only an asset that arrived without
+     * a hash, an import above all, is given one. `BlurHashing` is what holds
+     * that rule, so the job cannot disagree with ingest about it.
      */
     private function blurhash(MediaAsset $asset, Raster $raster): void
     {
         if ($this->variant === DerivativeVariant::Thumb) {
-            $asset->forceFill(['blurhash' => $raster->blurhash()])->save();
+            BlurHashing::fromRaster($asset, $raster);
         }
     }
 

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Delivery\Disposition;
 use Lisowiecw\MediaLibrary\Delivery\DownloadFilename;
+use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Derivatives\SmallOriginal;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
@@ -97,11 +98,36 @@ class IngestService
         $asset->size = $this->write($path, $asset, $placement, $sanitized);
         $asset->nameCollided = $this->collides($name->displayName);
 
+        $this->blurhash($asset, $path);
+
         $asset->save();
 
         $this->dispatchThumb($asset, $path);
 
         return $asset;
+    }
+
+    /**
+     * Compute the BlurHash here, in the request, so an uploaded asset has one
+     * before its card is ever drawn and the person who made the upload sees
+     * colour rather than a grey tile.
+     *
+     * This is not the synchronous generation a thumbnail would be. The bytes
+     * are already on local disk, so it costs no read of the object store, and
+     * nothing is scaled, encoded or written: what comes out is thirty-odd
+     * bytes on the row the insert below was making anyway.
+     *
+     * A file that will not decode is recorded as failed rather than raised.
+     * The upload succeeds either way; a hash nobody asked for is not a reason
+     * to lose somebody's file.
+     */
+    private function blurhash(MediaAsset $asset, string $path): void
+    {
+        if (! BlurHashing::applies($asset)) {
+            return;
+        }
+
+        BlurHashing::fromBytes($asset, $this->read($path));
     }
 
     /**

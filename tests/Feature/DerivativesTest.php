@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
+use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
@@ -104,14 +105,40 @@ describe('the generation job', function (): void {
         expect($asset->derivatives()->first()->height)->toBeLessThan(200);
     });
 
-    it('computes the blurhash from the decode it already holds', function (): void {
-        $asset = makeAsset();
+    it('tops up the blurhash of an asset that arrived without one', function (): void {
+        $asset = makeAsset(['size' => 900_000]);
         storeImage($asset);
 
         Derivatives::dispatchEagerly($asset, DerivativeVariant::Thumb);
         (new GenerateDerivative($asset->id, DerivativeVariant::Thumb))->handle();
 
-        expect($asset->fresh()->blurhash)->toBeString()->not->toBeEmpty();
+        expect($asset->fresh()->blurhash)->toBeString()->not->toBeEmpty()
+            ->and($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Ready);
+    });
+
+    it('leaves a hash that is already ready exactly where it was', function (): void {
+        $asset = makeAsset([
+            'size' => 900_000,
+            'blurhash' => 'LEHV6nWB2yk8',
+            'blurhash_status' => BlurHashStatus::Ready,
+        ]);
+        storeImage($asset);
+
+        Derivatives::dispatchEagerly($asset, DerivativeVariant::Thumb);
+        (new GenerateDerivative($asset->id, DerivativeVariant::Thumb))->handle();
+
+        expect($asset->fresh()->blurhash)->toBe('LEHV6nWB2yk8');
+    });
+
+    it('never turns a recorded failure ready by the side door', function (): void {
+        $asset = makeAsset(['size' => 900_000, 'blurhash_status' => BlurHashStatus::Failed]);
+        storeImage($asset);
+
+        Derivatives::dispatchEagerly($asset, DerivativeVariant::Thumb);
+        (new GenerateDerivative($asset->id, DerivativeVariant::Thumb))->handle();
+
+        expect($asset->fresh()->blurhash)->toBeNull()
+            ->and($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Failed);
     });
 
     it('leaves no rows at all where the original turns out to be its own thumbnail', function (): void {
@@ -121,8 +148,12 @@ describe('the generation job', function (): void {
         Derivatives::dispatchEagerly($asset, DerivativeVariant::Thumb);
         (new GenerateDerivative($asset->id, DerivativeVariant::Thumb))->handle();
 
+        // An original that paints itself never reaches a placeholder, so it is
+        // not hashed here either, and is left as never asked rather than as a
+        // hash somebody could have painted over the picture itself.
         expect($asset->derivatives()->count())->toBe(0)
-            ->and($asset->fresh()->blurhash)->toBeString();
+            ->and($asset->fresh()->blurhash)->toBeNull()
+            ->and($asset->fresh()->blurhash_status)->toBeNull();
     });
 
     it('sticks at failed with a reason once the object cannot be decoded', function (): void {

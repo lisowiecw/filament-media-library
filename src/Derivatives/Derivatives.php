@@ -183,8 +183,13 @@ final readonly class Derivatives
      * of the pipeline; and a raster under the small-original ceiling earns no
      * derivative rows at all, so it is painted directly rather than rendered a
      * second time.
+     *
+     * Public because the BlurHash path asks the same question: an asset that
+     * is already its picture is never hashed either, and an answer that drifted
+     * between the two would have a card painting a placeholder over something
+     * it could have shown outright.
      */
-    private static function paintsItself(MediaAsset $asset): bool
+    public static function paintsItself(MediaAsset $asset): bool
     {
         return self::isSvg($asset) || SmallOriginal::paintsOriginal($asset);
     }
