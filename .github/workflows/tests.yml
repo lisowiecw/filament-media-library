@@ -139,13 +139,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # One stable name for branch protection to require, since every matrix leg is
-  # named after the versions it ran. A leg that fails, or is cancelled by
-  # fail-fast before it reports, leaves this red, so a red Filament 4 job blocks
-  # a release rather than sitting under a check nobody pinned.
+  # One stable name for branch protection and the release guard to require,
+  # since every matrix leg is named after the versions it ran. A leg that fails,
+  # or is cancelled by fail-fast before it reports, leaves this red, so a red
+  # Filament 4 job blocks a release rather than sitting under a check nobody
+  # pinned. The browser suite is part of what this name covers: it runs once
+  # rather than across the matrix, but a panel that no longer works in a browser
+  # is not a release, and a check nothing requires is a check nothing blocks.
   matrix-result:
     name: matrix
-    needs: tests
+    needs: [tests, browser]
     if: always()
     runs-on: ubuntu-latest
 
@@ -154,5 +157,10 @@ jobs:
         run: |
           if [ "${{ needs.tests.result }}" != "success" ]; then
             echo "The compatibility matrix did not pass: ${{ needs.tests.result }}."
+            exit 1
+          fi
+
+          if [ "${{ needs.browser.result }}" != "success" ]; then
+            echo "The browser suite did not pass: ${{ needs.browser.result }}."
             exit 1
           fi
