@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
@@ -32,6 +34,7 @@ use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
  * @property DerivativeStatus $status
  * @property string|null $failure_reason
  * @property string|null $config_digest
+ * @property Carbon|null $updated_at
  * @property-read MediaAsset|null $asset
  */
 class MediaDerivative extends Model
@@ -41,6 +44,22 @@ class MediaDerivative extends Model
      * key suffix, one response type.
      */
     public const string MIME_TYPE = 'image/webp';
+
+    /**
+     * How long a row may sit at pending before the next render treats the
+     * generation as nobody's and queues it again, in seconds.
+     *
+     * The age is read off `updated_at`, which is trustworthy here in a way it
+     * is not on the asset row: the pipeline is the only writer of a derivative,
+     * so the column moves when and only when the pipeline wrote it. An asset
+     * is touched by renames, tenancy and everything else an operator does,
+     * which is why hashing needed a column of its own.
+     *
+     * Comfortably longer than a scale plus a WebP encode plus the object
+     * write, and longer than the hash window, so a generation still running is
+     * never queued a second time.
+     */
+    public const int DEFAULT_ABANDONED_AFTER = 1800;
 
     protected $table = 'media_derivatives';
 
@@ -168,6 +187,44 @@ class MediaDerivative extends Model
                         ->where('config_digest', '!=', $variant->digest()));
                 }
             });
+    }
+
+    /**
+     * Whether this row is a generation whose worker never came back: pending,
+     * and last written longer ago than the configured window.
+     *
+     * Only pending is readable this way. A ready row is a rendering however
+     * old, and a failed one exhausted its retries and is cleared by an
+     * operator rather than by age.
+     */
+    public function isAbandoned(): bool
+    {
+        return $this->status === DerivativeStatus::Pending
+            && $this->updated_at !== null
+            && $this->updated_at < self::abandonedBefore();
+    }
+
+    /**
+     * The same question as a query, for the count an operator is shown and the
+     * run that acts on it. Stated twice for the same reason `stale` is: a card
+     * asks about the row it holds, a count cannot load every row.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeAbandoned(Builder $query): void
+    {
+        $query->where('status', DerivativeStatus::Pending->value)
+            ->where('updated_at', '<', self::abandonedBefore());
+    }
+
+    /**
+     * The instant a pending row has to predate to count as abandoned.
+     */
+    private static function abandonedBefore(): CarbonImmutable
+    {
+        $window = (int) config('media-library.derivatives.abandoned_after', self::DEFAULT_ABANDONED_AFTER);
+
+        return CarbonImmutable::now()->subSeconds($window);
     }
 
     /**

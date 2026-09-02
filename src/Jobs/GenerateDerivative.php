@@ -39,6 +39,15 @@ class GenerateDerivative implements ShouldQueue
      */
     public int $tries = 3;
 
+    /**
+     * A job that runs out of time has decided nothing about the bytes, so it
+     * is routed through `failed()` rather than left holding the pending row:
+     * that row is the pipeline's only record that somebody is generating, and
+     * a worker that never returns would otherwise keep it until the abandoned
+     * window expires rather than settling it now.
+     */
+    public bool $failOnTimeout = true;
+
     public function __construct(
         private readonly int $assetId,
         private readonly DerivativeVariant $variant,

@@ -34,11 +34,12 @@ class RegenerateDerivatives extends Command
         {--missing : Assets with no rendering of a variant at all}
         {--failed : Renderings that exhausted their retries}
         {--stale : Renderings generated under settings that have since changed}
+        {--abandoned : Renderings left pending by a worker that never came back}
         {--hashes : Assets with no BlurHash, instead of any derivative work}
         {--variant= : Limit to one variant, thumb or preview}
         {--dry-run : Report what would be queued and queue nothing}';
 
-    protected $description = 'Queue derivative generation for missing, failed or stale renderings, or BlurHashes for a library that has none.';
+    protected $description = 'Queue derivative generation for missing, failed, stale or abandoned renderings, or BlurHashes for a library that has none.';
 
     public function handle(LazyDispatch $cap): int
     {
@@ -52,8 +53,9 @@ class RegenerateDerivatives extends Command
             return self::FAILURE;
         }
 
-        if (! $this->option('missing') && ! $this->option('failed') && ! $this->option('stale')) {
-            $this->components->error('Name at least one of --missing, --failed or --stale.');
+        if (! $this->option('missing') && ! $this->option('failed')
+            && ! $this->option('stale') && ! $this->option('abandoned')) {
+            $this->components->error('Name at least one of --missing, --failed, --stale or --abandoned.');
 
             return self::FAILURE;
         }
@@ -99,7 +101,8 @@ class RegenerateDerivatives extends Command
      */
     private function hashes(): int
     {
-        if ($this->option('missing') || $this->option('failed') || $this->option('stale') || $this->option('variant')) {
+        if ($this->option('missing') || $this->option('failed') || $this->option('stale')
+            || $this->option('abandoned') || $this->option('variant')) {
             $this->components->error('--hashes queues no derivative work, so it cannot be combined with the derivative selectors.');
 
             return self::FAILURE;
@@ -161,6 +164,7 @@ class RegenerateDerivatives extends Command
             failed: (bool) $this->option('failed'),
             stale: (bool) $this->option('stale'),
             missing: (bool) $this->option('missing'),
+            abandoned: (bool) $this->option('abandoned'),
         );
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
 use Lisowiecw\MediaLibrary\Library\FacetSidebar;
+use Lisowiecw\MediaLibrary\Models\MediaDerivative;
 
 return [
 
@@ -103,6 +104,13 @@ return [
     | are configurable. An original small enough on both counts below gets no
     | derivatives at all.
     |
+    | A rendering that has been pending longer than the abandoned window, in
+    | seconds, stops counting as work in flight: its worker was killed between
+    | the dispatch and the outcome, so nothing else is ever going to settle it,
+    | and the next render queues it again. The age is the row's own
+    | `updated_at`, which only the pipeline writes. Size it comfortably longer
+    | than a scale plus an encode plus the object write.
+    |
     */
 
     'derivatives' => [
@@ -125,6 +133,8 @@ return [
             'per_minute' => 60,
             'per_request' => 48,
         ],
+
+        'abandoned_after' => (int) env('MEDIA_LIBRARY_DERIVATIVE_ABANDONED_AFTER', MediaDerivative::DEFAULT_ABANDONED_AFTER),
 
     ],
 

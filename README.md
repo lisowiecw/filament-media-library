@@ -417,6 +417,15 @@ asked for again by the next view or backfill. The default is 15 minutes, far
 longer than a read and a decode; inside the window a hash in flight is still
 never asked for twice.
 
+Generating lapses the same way. A rendering left pending longer than
+`media-library.derivatives.abandoned_after` seconds, 30 minutes by default,
+stops counting as work in flight: the next render queues it again, and
+`media:regenerate-derivatives --abandoned` selects the whole set for an
+operator who would rather not wait for somebody to open the cards. The age is
+the row's own `updated_at`, which only the pipeline writes. A failed rendering
+is still never re-dispatched by a render at any age, and a ready one is still
+served however stale its digest.
+
 ### Lifecycle and cleanup
 
 Removing a picture from a record detaches it, which touches the attachment row and
@@ -612,8 +621,9 @@ Cleanup has its own filter with a grace-period preset, and a bulk delete
 restricted to what that preset selects. Eligibility is recomputed at the moment
 of the delete rather than trusted from the filter the rows were listed under.
 
-A health readout carries the failed, missing and stale derivative counts with a
-regenerate action beside them. It queues a bounded batch, since it runs in a
+A health readout carries the failed, missing, stale and abandoned derivative
+counts with a regenerate action beside them. The four sets are disjoint, so the
+count an operator reads is the work one press queues. It queues a bounded batch, since it runs in a
 request, and names `media:regenerate-derivatives` for whatever is left. The
 importer stays a command and is never exposed here.
 

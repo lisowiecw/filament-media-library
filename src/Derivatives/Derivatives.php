@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Derivatives;
 
+use Carbon\CarbonImmutable;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Jobs\GenerateDerivative;
@@ -51,7 +52,7 @@ final readonly class Derivatives
      */
     public static function ready(MediaAsset $asset, DerivativeVariant $variant): ?MediaDerivative
     {
-        $derivative = self::existing($asset, $variant);
+        $derivative = self::rendering($asset, $variant);
 
         return $derivative?->status->isReady() === true ? $derivative : null;
     }
@@ -66,7 +67,7 @@ final readonly class Derivatives
      */
     private static function resolve(MediaAsset $asset, DerivativeVariant $variant): ?string
     {
-        $derivative = self::existing($asset, $variant);
+        $derivative = self::rendering($asset, $variant);
 
         if ($derivative?->status->isReady() === true) {
             return $derivative->url();
@@ -79,7 +80,10 @@ final readonly class Derivatives
         // A pending row is a job already in flight, and a failed one has
         // exhausted its retries: neither is re-dispatched, so a broken file is
         // not retried forever and a busy grid does not pile jobs on itself.
-        if ($derivative === null) {
+        // A pending row too old to still be in flight is the exception: its
+        // worker was killed between the dispatch and the outcome, and nothing
+        // else will ever settle it.
+        if ($derivative === null || $derivative->isAbandoned()) {
             self::dispatchLazily($asset, $variant);
         }
 
@@ -92,7 +96,7 @@ final readonly class Derivatives
      */
     public static function dispatchEagerly(MediaAsset $asset, DerivativeVariant $variant): void
     {
-        if (! self::generatable($asset) || self::existing($asset, $variant) !== null) {
+        if (! self::generatable($asset) || self::rendering($asset, $variant) !== null) {
             return;
         }
 
@@ -133,7 +137,7 @@ final readonly class Derivatives
             return false;
         }
 
-        if (self::existing($asset, $variant)?->status->isReady() === true) {
+        if (self::rendering($asset, $variant)?->status->isReady() === true) {
             GenerateDerivative::dispatch($asset->id, $variant);
 
             return true;
@@ -146,8 +150,8 @@ final readonly class Derivatives
 
     /**
      * Whether this asset wants a rendering of this variant that it does not
-     * have: generatable, not already its own picture, and with no row of any
-     * status behind it.
+     * have: generatable, not already its own picture, and with no row behind
+     * it that anything is still coming for.
      *
      * The question lives here rather than in whatever is asking, because it is
      * the same question `resolve()` asks on a render, and an answer that drifts
@@ -160,9 +164,11 @@ final readonly class Derivatives
      */
     public static function wanted(MediaAsset $asset, DerivativeVariant $variant): bool
     {
+        $derivative = self::rendering($asset, $variant);
+
         return self::generatable($asset)
             && ! self::paintsItself($asset)
-            && self::existing($asset, $variant) === null;
+            && ($derivative === null || $derivative->isAbandoned());
     }
 
     /**
@@ -195,7 +201,7 @@ final readonly class Derivatives
             return true;
         }
 
-        return self::existing($asset, $variant)?->status->isSettled() === true;
+        return self::rendering($asset, $variant)?->status->isSettled() === true;
     }
 
     /**
@@ -243,6 +249,12 @@ final readonly class Derivatives
             ],
         );
 
+        // A re-dispatch over an abandoned row writes the same values it
+        // already holds, so nothing would be dirty and the timestamp the age
+        // is read from would not move: the row would stay abandoned and every
+        // render after this one would queue the job again.
+        $derivative->forceFill(['updated_at' => CarbonImmutable::now()])->save();
+
         // The loaded relation is what the next resolve reads, and a second
         // resolve of the same card within one render would otherwise not see
         // the row this one just wrote, and would queue the work twice.
@@ -255,7 +267,15 @@ final readonly class Derivatives
         GenerateDerivative::dispatch($asset->id, $variant);
     }
 
-    private static function existing(MediaAsset $asset, DerivativeVariant $variant): ?MediaDerivative
+    /**
+     * The row this asset holds for a variant, of whatever status, or null
+     * where it holds none.
+     *
+     * Public because `wanted()` no longer answers the narrower question of
+     * whether a row exists at all, and a selector that has to keep its sets
+     * apart still needs to ask it.
+     */
+    public static function rendering(MediaAsset $asset, DerivativeVariant $variant): ?MediaDerivative
     {
         return $asset->derivatives->firstWhere('variant', $variant);
     }

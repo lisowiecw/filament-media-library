@@ -58,6 +58,16 @@ final readonly class DerivativeHealth
     }
 
     /**
+     * Renderings whose worker was killed between the dispatch and the
+     * outcome, so the row has sat at pending past the window and nothing else
+     * is ever going to settle it.
+     */
+    public static function abandoned(): int
+    {
+        return MediaDerivative::query()->abandoned()->whereHas('asset')->count();
+    }
+
+    /**
      * Assets with no rendering of a variant at all: imports the pipeline never
      * saw, and previews nobody has opened.
      *
@@ -70,10 +80,10 @@ final readonly class DerivativeHealth
     }
 
     /**
-     * The whole readout in one call, so a page asks for the three numbers
-     * together rather than naming each selector itself.
+     * The whole readout in one call, so a page asks for the numbers together
+     * rather than naming each selector itself.
      *
-     * @return array{failed: int, missing: int, stale: int}
+     * @return array{failed: int, missing: int, stale: int, abandoned: int}
      */
     public static function counts(): array
     {
@@ -81,6 +91,7 @@ final readonly class DerivativeHealth
             'failed' => self::failed(),
             'missing' => self::missing(),
             'stale' => self::stale(),
+            'abandoned' => self::abandoned(),
         ];
     }
 
@@ -105,6 +116,7 @@ final readonly class DerivativeHealth
             failed: true,
             stale: true,
             missing: true,
+            abandoned: true,
         );
 
         foreach ($targets as [$asset, $variant]) {

@@ -20,8 +20,8 @@ use Lisowiecw\MediaLibrary\Models\MediaDerivative;
  * offering to fix three renderings and queueing four.
  *
  * Selectors are read in turn rather than unioned, since a row can only be one
- * of failed, stale or missing, and reading them apart is what lets a report
- * say which.
+ * of failed, stale, abandoned or missing, and reading them apart is what lets
+ * a report say which.
  */
 final readonly class RegenerationTargets
 {
@@ -34,8 +34,13 @@ final readonly class RegenerationTargets
      * @param  list<DerivativeVariant>  $variants
      * @return Generator<array{MediaAsset, DerivativeVariant, string}>
      */
-    public static function for(array $variants, bool $failed, bool $stale, bool $missing): Generator
-    {
+    public static function for(
+        array $variants,
+        bool $failed,
+        bool $stale,
+        bool $missing,
+        bool $abandoned = false,
+    ): Generator {
         if ($failed) {
             yield from self::rows($variants, 'failed', fn (Builder $query): Builder => $query
                 ->where('status', DerivativeStatus::Failed->value));
@@ -43,6 +48,10 @@ final readonly class RegenerationTargets
 
         if ($stale) {
             yield from self::rows($variants, 'stale', fn (Builder $query): Builder => $query->stale());
+        }
+
+        if ($abandoned) {
+            yield from self::rows($variants, 'abandoned', fn (Builder $query): Builder => $query->abandoned());
         }
 
         if ($missing) {
@@ -127,6 +136,11 @@ final readonly class RegenerationTargets
      * Assets that could have a rendering of a variant and have no row for it
      * at all: imports the pipeline never saw, and previews nobody has opened.
      *
+     * The absence of a row is asked for on its own rather than left to
+     * `wanted()`, which also answers yes for an abandoned row: that row is the
+     * abandoned selector's, and a count an operator reads adds the selectors
+     * up rather than meeting the same work twice.
+     *
      * The candidate set is narrowed in SQL to what could possibly want one, so
      * a library of documents is not walked asset by asset to be told no. The
      * narrowing is deliberately looser than `Derivatives::generatable()` and
@@ -144,7 +158,7 @@ final readonly class RegenerationTargets
 
         foreach ($assets->lazyById(self::CHUNK) as $asset) {
             foreach ($variants as $variant) {
-                if (Derivatives::wanted($asset, $variant)) {
+                if (Derivatives::rendering($asset, $variant) === null && Derivatives::wanted($asset, $variant)) {
                     yield [$asset, $variant, 'missing'];
                 }
             }
