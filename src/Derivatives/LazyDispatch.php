@@ -11,10 +11,12 @@ use Illuminate\Support\Sleep;
  * The cap on how much generation a page of cards is allowed to ask for.
  *
  * The first person to browse a freshly imported library meets a grid where
- * nothing has a rendering yet. Without a cap, that one scroll queues a job per
- * card, and every read and write in it is billed to the operator. So the
- * backfill trickles: a few per render, a bounded number per minute, and the
- * rest heal on a later visit.
+ * nothing has a rendering yet. The page they are looking at is the page that
+ * gets served: one render may queue a whole page of cards, so a first view is
+ * complete rather than rationed. The per-minute cap is what protects the
+ * object store, because every read and write in that backfill is billed to the
+ * operator, and it is what stops a long scroll queueing without bound; cards
+ * past it heal on a later visit.
  *
  * Eager generation at upload does not come through here. That is one job for
  * one deliberate act, and delaying it would leave a fresh upload without the
@@ -24,7 +26,12 @@ class LazyDispatch
 {
     public const int DEFAULT_PER_MINUTE = 60;
 
-    public const int DEFAULT_PER_REQUEST = 5;
+    /**
+     * A whole page of the library grid, `LibraryGrid::BATCH`, kept as a
+     * literal because a derivative knows nothing about a form component.
+     * A test holds the two numbers together.
+     */
+    public const int DEFAULT_PER_REQUEST = 48;
 
     /**
      * Scoped to one request, so a render's own allowance cannot be spent twice
@@ -55,8 +62,9 @@ class LazyDispatch
      * Wait until one more job may be dispatched, then spend the allowance.
      *
      * This is the command's way in. A command is not a render, so the
-     * per-request budget, which exists to stop one page of cards queueing
-     * dozens of jobs, means nothing to it; the per-minute cap is the one that
+     * per-request budget, which is sized to the page a person is looking at
+     * and so has nothing to say about a run with no page, means nothing to
+     * it; the per-minute cap is the one that
      * protects the object store, and it is the one a regeneration run obeys.
      * Waiting rather than refusing is what makes a run over a large library
      * finish instead of stopping a minute in. The cost is that the run's wall

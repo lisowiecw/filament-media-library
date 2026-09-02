@@ -122,7 +122,7 @@ return [
 
         'lazy_dispatch' => [
             'per_minute' => 60,
-            'per_request' => 5,
+            'per_request' => 48,
         ],
 
     ],

@@ -12,6 +12,7 @@ use Lisowiecw\MediaLibrary\Derivatives\Raster;
 use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
+use Lisowiecw\MediaLibrary\Forms\Components\LibraryGrid;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
 use Lisowiecw\MediaLibrary\Jobs\GenerateDerivative;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
@@ -261,6 +262,28 @@ describe('resolving a thumbnail at render time', function (): void {
         }
 
         Bus::assertDispatchedTimes(GenerateDerivative::class, 2);
+    });
+
+    it('serves a whole page of never-generated cards from one render', function (): void {
+        Bus::fake();
+
+        // Held clear of the page so what is measured is the render's own
+        // allowance rather than the minute's.
+        config()->set('media-library.derivatives.lazy_dispatch.per_minute', 1000);
+
+        foreach (range(1, LibraryGrid::BATCH) as $i) {
+            Derivatives::thumbnailUrl(libraryAsset()->forceFill(['size' => 900_000]));
+        }
+
+        Bus::assertDispatchedTimes(GenerateDerivative::class, LibraryGrid::BATCH);
+    });
+
+    it('ships a per-request allowance that covers a whole grid page', function (): void {
+        // The two numbers are one decision: a render's allowance is a page of
+        // cards, so a page size that grows past it would silently ration the
+        // view again.
+        expect(config('media-library.derivatives.lazy_dispatch.per_request'))
+            ->toBeGreaterThanOrEqual(LibraryGrid::BATCH);
     });
 
     it('caps how much backfill a minute may queue', function (): void {
