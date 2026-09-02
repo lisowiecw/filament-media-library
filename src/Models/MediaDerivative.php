@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
+use Lisowiecw\MediaLibrary\Derivatives\AbandonedWindow;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 
@@ -201,7 +202,7 @@ class MediaDerivative extends Model
     {
         return $this->status === DerivativeStatus::Pending
             && $this->updated_at !== null
-            && $this->updated_at < self::abandonedBefore();
+            && AbandonedWindow::rendering()->lapsed($this->updated_at);
     }
 
     /**
@@ -227,17 +228,7 @@ class MediaDerivative extends Model
     public function scopeAbandoned(Builder $query): void
     {
         $query->where('status', DerivativeStatus::Pending->value)
-            ->where('updated_at', '<', self::abandonedBefore());
-    }
-
-    /**
-     * The instant a pending row has to predate to count as abandoned.
-     */
-    private static function abandonedBefore(): CarbonImmutable
-    {
-        $window = (int) config('media-library.derivatives.abandoned_after', self::DEFAULT_ABANDONED_AFTER);
-
-        return CarbonImmutable::now()->subSeconds($window);
+            ->where('updated_at', '<', AbandonedWindow::rendering()->before());
     }
 
     /**

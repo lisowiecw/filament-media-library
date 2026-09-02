@@ -136,7 +136,7 @@ final readonly class BlurHashing
      */
     private static function abandoned(?DateTimeInterface $pendingSince): bool
     {
-        return $pendingSince === null || $pendingSince < self::abandonedBefore();
+        return $pendingSince === null || AbandonedWindow::hash()->lapsed($pendingSince);
     }
 
     /**
@@ -162,17 +162,7 @@ final readonly class BlurHashing
                     ->where('blurhash_status', BlurHashStatus::Pending->value)
                     ->where(fn (Builder $stale) => $stale
                         ->whereNull('blurhash_pending_since')
-                        ->orWhere('blurhash_pending_since', '<', self::abandonedBefore()))));
-    }
-
-    /**
-     * The instant a pending status has to predate to count as abandoned.
-     */
-    private static function abandonedBefore(): CarbonImmutable
-    {
-        $window = (int) config('media-library.blurhash.abandoned_after', self::DEFAULT_ABANDONED_AFTER);
-
-        return CarbonImmutable::now()->subSeconds($window);
+                        ->orWhere('blurhash_pending_since', '<', AbandonedWindow::hash()->before()))));
     }
 
     /**
