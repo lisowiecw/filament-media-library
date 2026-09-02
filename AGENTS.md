@@ -8,6 +8,10 @@ When reporting information to me, be extremely concise and sacrifice grammar for
 
 Issues live as GitHub issues on `lisowiecw/filament-media-library`, reached with `gh`. Specs and research notes stay as markdown under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
 
+### Workflow
+
+Changes go through a pull request onto `main`, the only permanent branch, and squash-merge. Releases are tagged with `gh release create` and finish by merging the changelog PR that opens itself. See `docs/agents/workflow.md`.
+
 ### Triage labels
 
 Use the canonical labels `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
