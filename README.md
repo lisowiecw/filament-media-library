@@ -392,6 +392,23 @@ and a field given a `thumbnailUsing()` rule of its own never asks, since the
 package's pipeline is then not what its cards are waiting for. The Filament
 resource table does not poll: reload it.
 
+A library that predates hashing fills in from the command line rather than by
+being browsed:
+
+```bash
+php artisan media:regenerate-derivatives --hashes --dry-run
+php artisan media:regenerate-derivatives --hashes
+```
+
+`--hashes` queues hash work and no derivative work, so it cannot be combined
+with `--missing`, `--failed`, `--stale` or `--variant`. It obeys the hash
+allowance rather than the derivative one, waiting out a spent minute rather
+than refusing, so a run over a large library finishes: its wall time is the
+library's size over `media-library.blurhash.lazy_dispatch.per_minute`, and the
+dry run, which queues nothing, says that estimate in minutes before you start.
+Assets that already have a hash, that failed to decode, that are already being
+hashed, and that paint themselves or are not images, are all left alone.
+
 ### Lifecycle and cleanup
 
 Removing a picture from a record detaches it, which touches the attachment row and

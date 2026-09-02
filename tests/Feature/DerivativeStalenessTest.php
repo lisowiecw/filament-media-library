@@ -6,8 +6,10 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Sleep;
 use Lisowiecw\MediaLibrary\Derivatives\DerivativeHealth;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
+use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
+use Lisowiecw\MediaLibrary\Jobs\ComputeBlurHash;
 use Lisowiecw\MediaLibrary\Jobs\GenerateDerivative;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaDerivative;
@@ -276,5 +278,122 @@ describe('the regenerate command', function (): void {
         Sleep::assertSlept(fn (): bool => true, 1);
 
         Bus::assertDispatchedTimes(GenerateDerivative::class, 3);
+    });
+});
+
+describe('the regenerate command asked for hashes', function (): void {
+    beforeEach(function (): void {
+        Bus::fake();
+
+        $this->freezeTime();
+        Sleep::fake(syncWithCarbon: true);
+    });
+
+    it('queues hash work and no derivative work', function (): void {
+        $asset = renderableAsset();
+
+        $this->artisan('media:regenerate-derivatives --hashes')->assertSuccessful();
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
+        Bus::assertNotDispatched(GenerateDerivative::class);
+
+        expect($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Pending);
+    });
+
+    it('refuses to mix the hash selector with the derivative ones', function (): void {
+        renderableAsset();
+
+        $this->artisan('media:regenerate-derivatives --hashes --missing')->assertFailed();
+
+        Bus::assertNothingDispatched();
+    });
+
+    it('reports without queueing or claiming under --dry-run', function (): void {
+        $asset = renderableAsset();
+
+        $this->artisan('media:regenerate-derivatives --hashes --dry-run')
+            ->expectsOutputToContain($asset->ulid)
+            ->assertSuccessful();
+
+        Bus::assertNothingDispatched();
+
+        expect($asset->fresh()->blurhash_status)->toBeNull();
+    });
+
+    it('says how long a real run of that size would take', function (): void {
+        config()->set('media-library.blurhash.lazy_dispatch.per_minute', 2);
+
+        foreach (range(1, 5) as $ignored) {
+            libraryAsset()->forceFill(['size' => 900_000])->save();
+        }
+
+        $this->artisan('media:regenerate-derivatives --hashes --dry-run')
+            ->expectsOutputToContain('about 3 minute(s) at 2 a minute')
+            ->assertSuccessful();
+    });
+
+    it('leaves alone an asset that already has a hash', function (): void {
+        renderableAsset()->forceFill([
+            'blurhash' => 'LEHV6nWB2yk8',
+            'blurhash_status' => BlurHashStatus::Ready->value,
+        ])->save();
+
+        $this->artisan('media:regenerate-derivatives --hashes')->assertSuccessful();
+
+        Bus::assertNothingDispatched();
+    });
+
+    it('leaves alone an asset whose bytes already refused to decode', function (): void {
+        renderableAsset()->forceFill(['blurhash_status' => BlurHashStatus::Failed->value])->save();
+
+        $this->artisan('media:regenerate-derivatives --hashes')->assertSuccessful();
+
+        Bus::assertNothingDispatched();
+    });
+
+    it('leaves alone an asset in flight, since the claim was already made', function (): void {
+        renderableAsset()->forceFill(['blurhash_status' => BlurHashStatus::Pending->value])->save();
+
+        $this->artisan('media:regenerate-derivatives --hashes')->assertSuccessful();
+
+        Bus::assertNothingDispatched();
+    });
+
+    it('leaves alone what nothing could hash, and what is its own rendering', function (): void {
+        makeAsset(['mime_type' => 'video/mp4', 'object_key' => 'media/clip.mp4']);
+        makeAsset(['mime_type' => 'image/svg+xml', 'object_key' => 'media/logo.svg']);
+        makeAsset(['size' => 512, 'object_key' => 'media/icon.png', 'mime_type' => 'image/png']);
+
+        $this->artisan('media:regenerate-derivatives --hashes')->assertSuccessful();
+
+        Bus::assertNothingDispatched();
+    });
+
+    it('waits out the hash allowance rather than refusing, so a large library finishes', function (): void {
+        config()->set('media-library.blurhash.lazy_dispatch.per_minute', 2);
+
+        foreach (range(1, 3) as $ignored) {
+            libraryAsset()->forceFill(['size' => 900_000])->save();
+        }
+
+        $this->artisan('media:regenerate-derivatives --hashes')->assertSuccessful();
+
+        Sleep::assertSlept(fn (): bool => true, 1);
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 3);
+    });
+
+    it('obeys the hash allowance rather than the derivative one', function (): void {
+        config()->set('media-library.derivatives.lazy_dispatch.per_minute', 1);
+
+        foreach (range(1, 3) as $ignored) {
+            libraryAsset()->forceFill(['size' => 900_000])->save();
+        }
+
+        $this->artisan('media:regenerate-derivatives --hashes')->assertSuccessful();
+
+        Sleep::assertNeverSlept();
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 3);
     });
 });

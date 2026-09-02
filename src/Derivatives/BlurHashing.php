@@ -10,9 +10,10 @@ use Lisowiecw\MediaLibrary\Jobs\ComputeBlurHash;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 
 /**
- * The one place a BlurHash is written, and the contract between the two paths
- * that write it: ingest, which has the bytes in hand, and the thumb job, which
- * tops up an asset that arrived without one.
+ * The one place a BlurHash is written, and the contract between the paths that
+ * write it: ingest, which has the bytes in hand, the thumb job, which tops up
+ * an asset that arrived without one, and the read the first card or an
+ * operator's backfill asks for.
  *
  * The rules are the whole of that contract. A ready hash is never overwritten,
  * because two paths computing the same string must not fight over it. A failed
@@ -58,7 +59,7 @@ final readonly class BlurHashing
      */
     public static function dispatchLazily(MediaAsset $asset): void
     {
-        if (! self::wanted($asset) || $asset->blurhash_status !== null) {
+        if (! self::claimable($asset)) {
             return;
         }
 
@@ -66,6 +67,46 @@ final readonly class BlurHashing
             return;
         }
 
+        self::claimAndDispatch($asset);
+    }
+
+    /**
+     * Ask for a hash on behalf of an operator backfilling a library, which is
+     * the same claim without the render's allowance.
+     *
+     * The budget is not skipped, it is spent elsewhere: a backfill run waits
+     * out the per-minute cap before it gets here, and the per-request half is
+     * sized to a page of cards and has nothing to say about a run with no
+     * page. Everything that makes the claim safe stays where it was, so a
+     * backfill and a render arriving at the same asset still cannot both queue
+     * it.
+     */
+    public static function backfill(MediaAsset $asset): bool
+    {
+        if (! self::claimable($asset)) {
+            return false;
+        }
+
+        return self::claimAndDispatch($asset);
+    }
+
+    /**
+     * Whether it is worth trying to claim this asset: one that is owed a hash
+     * with nobody already computing it. A pending row is somebody else's claim
+     * and is left alone, which is what keeps a backfill off the assets a
+     * render has already asked for.
+     */
+    private static function claimable(MediaAsset $asset): bool
+    {
+        return self::wanted($asset) && $asset->blurhash_status === null;
+    }
+
+    /**
+     * Take the pending status in the database and queue the read where the
+     * claim was won, which is the half both ways in share.
+     */
+    private static function claimAndDispatch(MediaAsset $asset): bool
+    {
         $claimed = MediaAsset::withTrashed()
             ->whereKey($asset->getKey())
             ->whereNull('blurhash')
@@ -73,12 +114,14 @@ final readonly class BlurHashing
             ->update(['blurhash_status' => BlurHashStatus::Pending->value]);
 
         if ($claimed === 0) {
-            return;
+            return false;
         }
 
         $asset->forceFill(['blurhash_status' => BlurHashStatus::Pending])->syncOriginal();
 
         ComputeBlurHash::dispatch($asset->getKey());
+
+        return true;
     }
 
     /**

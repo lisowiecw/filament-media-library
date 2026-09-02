@@ -79,6 +79,50 @@ final readonly class RegenerationTargets
     }
 
     /**
+     * The candidate set both hunts start from: anything that could plausibly
+     * be an image, narrowed in SQL so a library of documents is not walked
+     * asset by asset to be told no.
+     *
+     * It is deliberately looser than the questions `Derivatives` asks, and
+     * case-insensitive, because it is an optimisation rather than the
+     * decision: a prefilter that dropped a row the pipeline wants would be a
+     * bug rather than a saving.
+     *
+     * @return Builder<MediaAsset>
+     */
+    private static function images(): Builder
+    {
+        return MediaAsset::query()
+            ->whereRaw("lower(mime_type) like 'image/%'")
+            ->orderBy('id');
+    }
+
+    /**
+     * Assets owed a BlurHash and not already claimed for one: a library that
+     * predates hashing, and imports whose cards nobody has opened.
+     *
+     * The status is read in SQL as well as through `wanted()` because a
+     * pending row is one the command would skip anyway, and a dry run has to
+     * report the set a real run would queue rather than a larger one. The mime
+     * narrowing is the same loose prefilter as `missing()`, with
+     * `BlurHashing::wanted()` making the actual decision.
+     *
+     * @return Generator<array{MediaAsset, string}>
+     */
+    public static function hashes(): Generator
+    {
+        $assets = self::images()
+            ->whereNull('blurhash')
+            ->whereNull('blurhash_status');
+
+        foreach ($assets->lazyById(self::CHUNK) as $asset) {
+            if (BlurHashing::wanted($asset)) {
+                yield [$asset, 'no hash'];
+            }
+        }
+    }
+
+    /**
      * Assets that could have a rendering of a variant and have no row for it
      * at all: imports the pipeline never saw, and previews nobody has opened.
      *
@@ -95,10 +139,7 @@ final readonly class RegenerationTargets
      */
     public static function missing(array $variants): Generator
     {
-        $assets = MediaAsset::query()
-            ->with('derivatives')
-            ->whereRaw("lower(mime_type) like 'image/%'")
-            ->orderBy('id');
+        $assets = self::images()->with('derivatives');
 
         foreach ($assets->lazyById(self::CHUNK) as $asset) {
             foreach ($variants as $variant) {
