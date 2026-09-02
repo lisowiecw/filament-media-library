@@ -1,8 +1,6 @@
 # Release Notes
 
-## [Unreleased](https://github.com/lisowiecw/filament-media-library/compare/v0.2.1...HEAD)
-
-- An application that asks Laravel for immutable dates can remove an asset's last reference again: the method that stamps `unattached_since` was typed against the mutable `Illuminate\Support\Carbon` subclass while the delete event handed it `now()`, which is whatever the date factory is configured to produce. Under `Date::use(CarbonImmutable::class)`, detaching a picked image nothing else used, revoking an External reference from the usage panel, and an application reconciling its own external references all raised a `TypeError` at the point the final reference went. The attachment row is deleted before the event fires, so the data change landed and only the clock was lost, which is the worse half: an asset whose `unattached_since` was never written is invisible to `media:unattached-assets`, which selects on that column, so it could never be reported as unused. The accessor that reads the clock back declared the same mutable type over a `datetime` cast, and casts resolve through the same factory, so the report itself was unrunnable too. Both signatures now name `CarbonInterface`, the contract both implementations satisfy and the honest one here, since the stamping method only forwards its argument into an `update()` and the accessor's only caller formats what it returns. Nothing changes for an application on mutable dates, and assets whose clock was already swallowed are not backfilled: re-attaching and detaching one stamps it correctly from then on.
+## [Unreleased](https://github.com/lisowiecw/filament-media-library/compare/v0.2.1...main)
 
 ## [v0.2.1](https://github.com/lisowiecw/filament-media-library/compare/v0.2.0...v0.2.1) - 2026-09-02
 
