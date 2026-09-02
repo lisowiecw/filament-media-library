@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Derivatives\Raster;
+use Lisowiecw\MediaLibrary\Derivatives\RegenerationTargets;
 use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
@@ -656,6 +657,34 @@ describe('a hash left pending by a worker that died', function (): void {
 
         expect($ready->fresh()->blurhash)->toBe('LEHV6nWB2yk8')
             ->and($failed->fresh()->blurhash_status)->toBe(BlurHashStatus::Failed);
+    });
+
+    it('computes the hash once the retaken job runs', function (): void {
+        $asset = pendingAsset(now()->subHours(2)->toDateTimeString());
+        storeImage($asset);
+
+        BlurHashing::dispatchLazily($asset);
+        (new ComputeBlurHash($asset->id))->handle();
+
+        expect($asset->fresh()->blurhash)->toBeString()->not->toBeEmpty()
+            ->and($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Ready);
+    });
+
+    it('offers an abandoned asset to a backfill on the same terms', function (): void {
+        Bus::fake();
+
+        $abandoned = pendingAsset(now()->subHours(2)->toDateTimeString());
+        $inFlight = pendingAsset(now()->subSeconds(30)->toDateTimeString());
+
+        $targets = collect(iterator_to_array(RegenerationTargets::hashes(), false))
+            ->map(fn (array $target): int => $target[0]->id);
+
+        expect($targets->all())->toBe([$abandoned->id]);
+
+        BlurHashing::backfill($abandoned);
+        BlurHashing::backfill($inFlight);
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
     });
 
     it('clears the pending time wherever the status settles', function (): void {

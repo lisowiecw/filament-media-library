@@ -103,17 +103,18 @@ final readonly class RegenerationTargets
      *
      * The status is read in SQL as well as through `wanted()` because a
      * pending row is one the command would skip anyway, and a dry run has to
-     * report the set a real run would queue rather than a larger one. The mime
-     * narrowing is the same loose prefilter as `missing()`, with
-     * `BlurHashing::wanted()` making the actual decision.
+     * report the set a real run would queue rather than a larger one. The
+     * narrowing is `BlurHashing::unclaimed()` itself rather than a second
+     * spelling of it, so an asset a dead worker left pending is offered to a
+     * backfill on the same terms a render meets it on. The mime narrowing is
+     * the same loose prefilter as `missing()`, with `BlurHashing::wanted()`
+     * making the actual decision.
      *
      * @return Generator<array{MediaAsset, string}>
      */
     public static function hashes(): Generator
     {
-        $assets = self::images()
-            ->whereNull('blurhash')
-            ->whereNull('blurhash_status');
+        $assets = BlurHashing::unclaimed(self::images());
 
         foreach ($assets->lazyById(self::CHUNK) as $asset) {
             if (BlurHashing::wanted($asset)) {

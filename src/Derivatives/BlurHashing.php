@@ -121,7 +121,9 @@ final readonly class BlurHashing
             return false;
         }
 
-        return $asset->blurhash_status === null || self::abandoned($asset->blurhash_pending_since);
+        return $asset->blurhash_status === null
+            || ($asset->blurhash_status === BlurHashStatus::Pending
+                && self::abandoned($asset->blurhash_pending_since));
     }
 
     /**
@@ -135,6 +137,32 @@ final readonly class BlurHashing
     private static function abandoned(?DateTimeInterface $pendingSince): bool
     {
         return $pendingSince === null || $pendingSince < self::abandonedBefore();
+    }
+
+    /**
+     * Narrow a query to the assets a hash may be asked for: owed one, with
+     * nobody computing it that is still anybody.
+     *
+     * This is the SQL half of `claimable()`, and the two are kept beside each
+     * other because they answer the same question of a row and of a model in
+     * hand. The claim carries it into an update, where it is what settles the
+     * race; a backfill's selector carries it into a read, so a dry run reports
+     * the set a real run would queue.
+     *
+     * @param  Builder<MediaAsset>  $query
+     * @return Builder<MediaAsset>
+     */
+    public static function unclaimed(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('blurhash')
+            ->where(fn (Builder $status) => $status
+                ->whereNull('blurhash_status')
+                ->orWhere(fn (Builder $pending) => $pending
+                    ->where('blurhash_status', BlurHashStatus::Pending->value)
+                    ->where(fn (Builder $stale) => $stale
+                        ->whereNull('blurhash_pending_since')
+                        ->orWhere('blurhash_pending_since', '<', self::abandonedBefore()))));
     }
 
     /**
@@ -161,16 +189,7 @@ final readonly class BlurHashing
     {
         $now = CarbonImmutable::now();
 
-        $claimed = MediaAsset::withTrashed()
-            ->whereKey($asset->getKey())
-            ->whereNull('blurhash')
-            ->where(fn (Builder $query) => $query
-                ->whereNull('blurhash_status')
-                ->orWhere(fn (Builder $pending) => $pending
-                    ->where('blurhash_status', BlurHashStatus::Pending->value)
-                    ->where(fn (Builder $stale) => $stale
-                        ->whereNull('blurhash_pending_since')
-                        ->orWhere('blurhash_pending_since', '<', self::abandonedBefore()))))
+        $claimed = self::unclaimed(MediaAsset::withTrashed()->whereKey($asset->getKey()))
             ->update([
                 'blurhash_status' => BlurHashStatus::Pending->value,
                 'blurhash_pending_since' => $now,

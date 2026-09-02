@@ -352,11 +352,25 @@ describe('the regenerate command asked for hashes', function (): void {
     });
 
     it('leaves alone an asset in flight, since the claim was already made', function (): void {
-        renderableAsset()->forceFill(['blurhash_status' => BlurHashStatus::Pending->value])->save();
+        renderableAsset()->forceFill([
+            'blurhash_status' => BlurHashStatus::Pending->value,
+            'blurhash_pending_since' => now(),
+        ])->save();
 
         $this->artisan('media:regenerate-derivatives --hashes')->assertSuccessful();
 
         Bus::assertNothingDispatched();
+    });
+
+    it('picks up an asset a dead worker left pending', function (): void {
+        renderableAsset()->forceFill([
+            'blurhash_status' => BlurHashStatus::Pending->value,
+            'blurhash_pending_since' => now()->subHours(2),
+        ])->save();
+
+        $this->artisan('media:regenerate-derivatives --hashes')->assertSuccessful();
+
+        Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
     });
 
     it('leaves alone what nothing could hash, and what is its own rendering', function (): void {
