@@ -382,6 +382,16 @@ The package's own painting lives entirely in that element's `style` attribute,
 so a decoder that renders over the top either paints above it or clears it with
 `tile.style.background = ''`.
 
+A card that is still waiting heals where it is. While anything on the page is
+unresolved, the library grid and a picker's attached items ask again every
+`poll_interval`, and the placeholder becomes the real thumbnail without a
+reload. The asking stops on its own once every card is ready or has failed, so
+a page of finished cards, and an open modal nobody is uploading into, make no
+requests at all. Asking is paused while the surface is scrolled out of view,
+and a field given a `thumbnailUsing()` rule of its own never asks, since the
+package's pipeline is then not what its cards are waiting for. The Filament
+resource table does not poll: reload it.
+
 ### Lifecycle and cleanup
 
 Removing a picture from a record detaches it, which touches the attachment row and
@@ -766,9 +776,9 @@ survive an upgrade.
   `enforce_disk_visibility`, `max_upload_size`, `blocked_types`,
   `signed_url_ttl`, `derivative_url_bucket`, `derivatives` (its `prefix`,
   `quality`, `variants`, `small_original` and `lazy_dispatch`), `blurhash`
-  (its `lazy_dispatch`), `search_debounce`, `facet_count_threshold` and
-  `unattached_grace_days`. The published file is the reference: every key in
-  it is promised.
+  (its `lazy_dispatch`), `search_debounce`, `facet_count_threshold`,
+  `poll_interval` and `unattached_grace_days`. The published file is the
+  reference: every key in it is promised.
 - **The command signatures** `media:import`, `media:resolve-mimes`,
   `media:regenerate-derivatives`, `media:assign-tenant` and
   `media:unattached-assets`.

@@ -14,7 +14,16 @@
 @endphp
 
 <x-dynamic-component :component="$getFieldWrapperView()" :field="$field">
-    <div class="fi-ml-picker" data-field="{{ $getName() }}">
+    <div
+        class="fi-ml-picker"
+        data-field="{{ $getName() }}"
+        {{-- An item that was just chosen heals beside the field rather than on
+             the next page load, and the asking stops once every item listed is
+             ready or failed. --}}
+        @if ($shouldPoll($assets))
+            wire:poll.visible.{{ $getPollInterval() }}
+        @endif
+    >
         {{-- Directly under the label, so the placement is read before anything is added. --}}
         <p class="fi-ml-picker-banner">{{ $getPlacementSummary() }}</p>
 

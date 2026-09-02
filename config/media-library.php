@@ -165,6 +165,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Healing in place
+    |--------------------------------------------------------------------------
+    |
+    | How often the library grid and a picker's attached items ask again while
+    | a card on the page is still waiting on its hash or its thumbnail. Asked
+    | only while something is unresolved: a page of finished cards makes no
+    | request at all, however long it is left open.
+    |
+    */
+
+    'poll_interval' => env('MEDIA_LIBRARY_POLL_INTERVAL', '3s'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Unattached assets
     |--------------------------------------------------------------------------
     |

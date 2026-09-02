@@ -181,6 +181,24 @@ final readonly class Derivatives
     }
 
     /**
+     * Whether a rendering of this variant has stopped being in flight: a row
+     * that is ready or failed, or an asset no rendering was ever coming for.
+     *
+     * This is what a polling surface asks, and the mirror of `wanted()`: that
+     * one says whether there is work to queue, this one whether there is work
+     * to wait for. A failed row settles the question, because a file that will
+     * never decode must not keep a page asking.
+     */
+    public static function settled(MediaAsset $asset, DerivativeVariant $variant): bool
+    {
+        if (! self::generatable($asset) || self::paintsItself($asset)) {
+            return true;
+        }
+
+        return self::existing($asset, $variant)?->status->isSettled() === true;
+    }
+
+    /**
      * Whether a rendering of this asset is even a coherent thing to ask for.
      * A video is a glyph tile plus a play badge and always was, because the
      * alternative is a poster frame, and that means a binary.

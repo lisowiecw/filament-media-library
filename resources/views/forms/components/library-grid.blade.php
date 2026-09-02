@@ -14,6 +14,12 @@
          click-selection that waits for the confirm. --}}
     <div
         class="fi-ml-library"
+        {{-- A card heals where it is: while anything on this page is still
+             waiting on a hash or a thumbnail the grid asks again, and it stops
+             asking of its own accord once every card is ready or failed. --}}
+        @if ($shouldPoll($assets))
+            wire:poll.visible.{{ $getPollInterval() }}
+        @endif
         @if ($dropKey !== null)
             data-droppable="true"
             x-data="{ hot: false }"
