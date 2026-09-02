@@ -206,6 +206,21 @@ describe('the generation job', function (): void {
         Bus::assertNothingDispatched();
     });
 
+    it('still computes for an asset trashed between the claim and the job', function (): void {
+        $asset = makeAsset(['size' => 900_000]);
+        storeImage($asset);
+
+        BlurHashing::dispatchLazily($asset);
+        $asset->delete();
+
+        (new ComputeBlurHash($asset->id))->handle();
+
+        $fresh = MediaAsset::withTrashed()->find($asset->id);
+
+        expect($fresh->blurhash)->toBeString()->not->toBeEmpty()
+            ->and($fresh->blurhash_status)->toBe(BlurHashStatus::Ready);
+    });
+
     it('does nothing where the asset is gone by the time the job runs', function (): void {
         $asset = makeAsset();
         $id = $asset->id;

@@ -22,8 +22,8 @@ use Throwable;
  *
  * Like `GenerateDerivative` it is neither scoped nor policy-checked, and takes
  * an id rather than the model: tenancy governs who is offered an asset, not
- * whether the library may describe it, and a payload that outlives a delete
- * resolves to nothing.
+ * whether the library may describe it, and a payload that outlives a hard
+ * delete resolves to nothing.
  */
 class ComputeBlurHash implements ShouldQueue
 {
@@ -36,11 +36,19 @@ class ComputeBlurHash implements ShouldQueue
      */
     public int $tries = 3;
 
+    /**
+     * A job that runs out of time has not decided anything about the bytes, so
+     * it is routed through `failed()` rather than left holding the claim: the
+     * pending status is the asset's only record that somebody is computing,
+     * and a worker that never returns would otherwise keep it for good.
+     */
+    public bool $failOnTimeout = true;
+
     public function __construct(private readonly int $assetId) {}
 
     public function handle(): void
     {
-        $asset = MediaAsset::query()->find($this->assetId);
+        $asset = $this->asset();
 
         if ($asset === null) {
             return;
@@ -66,10 +74,21 @@ class ComputeBlurHash implements ShouldQueue
      */
     public function failed(?Throwable $exception): void
     {
-        $asset = MediaAsset::query()->find($this->assetId);
+        $asset = $this->asset();
 
         if ($asset !== null) {
             BlurHashing::settleAsFailed($asset);
         }
+    }
+
+    /**
+     * Trashed rows are resolved too, because the claim that queued this job
+     * was made over the same set: a soft delete between the two would
+     * otherwise strand the asset pending, still claimed and never computed,
+     * and restoring it would not bring its colour back.
+     */
+    private function asset(): ?MediaAsset
+    {
+        return MediaAsset::withTrashed()->find($this->assetId);
     }
 }
