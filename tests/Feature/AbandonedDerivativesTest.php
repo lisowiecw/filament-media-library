@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Sleep;
@@ -208,8 +209,47 @@ describe('an operator meeting abandoned rows', function (): void {
     });
 });
 
-describe('a generation that hangs', function (): void {
-    it('settles its row rather than stranding it', function (): void {
+describe('the job a retaken row queues', function (): void {
+    /**
+     * The same asset with an object behind it, so the job has bytes to read.
+     */
+    function storedAbandonableAsset(): MediaAsset
+    {
+        $asset = abandonableAsset();
+        $file = UploadedFile::fake()->image('photo.png', 1200, 900);
+
+        Storage::disk($asset->disk)->put($asset->object_key, (string) file_get_contents((string) $file->getRealPath()));
+
+        return $asset;
+    }
+
+    it('runs and settles the row it was queued for', function (): void {
+        $asset = storedAbandonableAsset();
+        pendingDerivative($asset, now()->subHours(2)->toDateTimeString());
+
+        Derivatives::thumbnailUrl($asset->fresh());
+        (new GenerateDerivative($asset->id, DerivativeVariant::Thumb))->handle();
+
+        $derivative = $asset->derivatives()->first();
+
+        expect($derivative->status)->toBe(DerivativeStatus::Ready)
+            ->and(Derivatives::thumbnailUrl($asset->fresh()))->toContain($derivative->object_key);
+    });
+
+    it('overwrites in place, so the retake leaves no orphaned object', function (): void {
+        $asset = storedAbandonableAsset();
+        $derivative = pendingDerivative($asset, now()->subHours(2)->toDateTimeString());
+
+        Derivatives::regenerate($asset, DerivativeVariant::Thumb);
+        (new GenerateDerivative($asset->id, DerivativeVariant::Thumb))->handle();
+
+        expect($asset->derivatives()->count())->toBe(1)
+            ->and($derivative->fresh()->object_key)->toBe($derivative->object_key)
+            ->and(Storage::disk($asset->disk)->allFiles(dirname($derivative->object_key)))
+            ->toBe([$derivative->object_key]);
+    });
+
+    it('settles its row on a timeout rather than stranding it', function (): void {
         expect((new GenerateDerivative(1, DerivativeVariant::Thumb))->failOnTimeout)->toBeTrue();
     });
 });

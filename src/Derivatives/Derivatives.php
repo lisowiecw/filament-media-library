@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Derivatives;
 
-use Carbon\CarbonImmutable;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Jobs\GenerateDerivative;
@@ -52,7 +51,7 @@ final readonly class Derivatives
      */
     public static function ready(MediaAsset $asset, DerivativeVariant $variant): ?MediaDerivative
     {
-        $derivative = self::rendering($asset, $variant);
+        $derivative = self::existing($asset, $variant);
 
         return $derivative?->status->isReady() === true ? $derivative : null;
     }
@@ -67,7 +66,7 @@ final readonly class Derivatives
      */
     private static function resolve(MediaAsset $asset, DerivativeVariant $variant): ?string
     {
-        $derivative = self::rendering($asset, $variant);
+        $derivative = self::existing($asset, $variant);
 
         if ($derivative?->status->isReady() === true) {
             return $derivative->url();
@@ -96,7 +95,7 @@ final readonly class Derivatives
      */
     public static function dispatchEagerly(MediaAsset $asset, DerivativeVariant $variant): void
     {
-        if (! self::generatable($asset) || self::rendering($asset, $variant) !== null) {
+        if (! self::generatable($asset) || self::existing($asset, $variant) !== null) {
             return;
         }
 
@@ -137,7 +136,7 @@ final readonly class Derivatives
             return false;
         }
 
-        if (self::rendering($asset, $variant)?->status->isReady() === true) {
+        if (self::existing($asset, $variant)?->status->isReady() === true) {
             GenerateDerivative::dispatch($asset->id, $variant);
 
             return true;
@@ -164,11 +163,25 @@ final readonly class Derivatives
      */
     public static function wanted(MediaAsset $asset, DerivativeVariant $variant): bool
     {
-        $derivative = self::rendering($asset, $variant);
+        $derivative = self::existing($asset, $variant);
 
         return self::generatable($asset)
             && ! self::paintsItself($asset)
             && ($derivative === null || $derivative->isAbandoned());
+    }
+
+    /**
+     * Whether this asset wants a rendering of this variant and has no row for
+     * it at all: the narrower half of `wanted()`.
+     *
+     * It lives here beside `wanted()` rather than in the selector that asks
+     * it, for the reason `wanted()` gives: an asset with an abandoned row is
+     * wanted too, and a selector keeping its sets apart would otherwise spell
+     * out half of this question itself and drift from it.
+     */
+    public static function missing(MediaAsset $asset, DerivativeVariant $variant): bool
+    {
+        return self::existing($asset, $variant) === null && self::wanted($asset, $variant);
     }
 
     /**
@@ -190,10 +203,15 @@ final readonly class Derivatives
      * Whether a rendering of this variant has stopped being in flight: a row
      * that is ready or failed, or an asset no rendering was ever coming for.
      *
-     * This is what a polling surface asks, and the mirror of `wanted()`: that
-     * one says whether there is work to queue, this one whether there is work
-     * to wait for. A failed row settles the question, because a file that will
-     * never decode must not keep a page asking.
+     * This is what a polling surface asks, and the near mirror of `wanted()`:
+     * that one says whether there is work to queue, this one whether there is
+     * work to wait for. A failed row settles the question, because a file that
+     * will never decode must not keep a page asking.
+     *
+     * An abandoned row is the one place the two are not mirrors, and
+     * deliberately: it is both wanted and unsettled, so a page keeps waiting
+     * while the render it is polling queues the work again, which is exactly
+     * how such a card heals without a reload.
      */
     public static function settled(MediaAsset $asset, DerivativeVariant $variant): bool
     {
@@ -201,7 +219,7 @@ final readonly class Derivatives
             return true;
         }
 
-        return self::rendering($asset, $variant)?->status->isSettled() === true;
+        return self::existing($asset, $variant)?->status->isSettled() === true;
     }
 
     /**
@@ -253,7 +271,7 @@ final readonly class Derivatives
         // already holds, so nothing would be dirty and the timestamp the age
         // is read from would not move: the row would stay abandoned and every
         // render after this one would queue the job again.
-        $derivative->forceFill(['updated_at' => CarbonImmutable::now()])->save();
+        $derivative->beginGeneration();
 
         // The loaded relation is what the next resolve reads, and a second
         // resolve of the same card within one render would otherwise not see
@@ -267,15 +285,7 @@ final readonly class Derivatives
         GenerateDerivative::dispatch($asset->id, $variant);
     }
 
-    /**
-     * The row this asset holds for a variant, of whatever status, or null
-     * where it holds none.
-     *
-     * Public because `wanted()` no longer answers the narrower question of
-     * whether a row exists at all, and a selector that has to keep its sets
-     * apart still needs to ask it.
-     */
-    public static function rendering(MediaAsset $asset, DerivativeVariant $variant): ?MediaDerivative
+    private static function existing(MediaAsset $asset, DerivativeVariant $variant): ?MediaDerivative
     {
         return $asset->derivatives->firstWhere('variant', $variant);
     }

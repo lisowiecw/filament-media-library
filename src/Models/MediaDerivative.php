@@ -205,6 +205,19 @@ class MediaDerivative extends Model
     }
 
     /**
+     * Record that generation starts now, so the window this row is read
+     * against is measured from this dispatch.
+     *
+     * A dispatch over a row that is already pending writes back the values it
+     * already holds, and an update with nothing dirty moves no timestamp, so
+     * the age is set here rather than left to the write.
+     */
+    public function beginGeneration(): void
+    {
+        $this->forceFill(['updated_at' => CarbonImmutable::now()])->save();
+    }
+
+    /**
      * The same question as a query, for the count an operator is shown and the
      * run that acts on it. Stated twice for the same reason `stale` is: a card
      * asks about the row it holds, a count cannot load every row.

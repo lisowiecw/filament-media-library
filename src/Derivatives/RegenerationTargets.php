@@ -39,7 +39,7 @@ final readonly class RegenerationTargets
         bool $failed,
         bool $stale,
         bool $missing,
-        bool $abandoned = false,
+        bool $abandoned,
     ): Generator {
         if ($failed) {
             yield from self::rows($variants, 'failed', fn (Builder $query): Builder => $query
@@ -136,10 +136,10 @@ final readonly class RegenerationTargets
      * Assets that could have a rendering of a variant and have no row for it
      * at all: imports the pipeline never saw, and previews nobody has opened.
      *
-     * The absence of a row is asked for on its own rather than left to
-     * `wanted()`, which also answers yes for an abandoned row: that row is the
-     * abandoned selector's, and a count an operator reads adds the selectors
-     * up rather than meeting the same work twice.
+     * The question is `Derivatives::missing()` rather than `wanted()`, which
+     * also answers yes for an abandoned row: that row belongs to the abandoned
+     * selector, and a count an operator reads adds the selectors up rather
+     * than meeting the same work twice.
      *
      * The candidate set is narrowed in SQL to what could possibly want one, so
      * a library of documents is not walked asset by asset to be told no. The
@@ -158,7 +158,7 @@ final readonly class RegenerationTargets
 
         foreach ($assets->lazyById(self::CHUNK) as $asset) {
             foreach ($variants as $variant) {
-                if (Derivatives::rendering($asset, $variant) === null && Derivatives::wanted($asset, $variant)) {
+                if (Derivatives::missing($asset, $variant)) {
                     yield [$asset, $variant, 'missing'];
                 }
             }
