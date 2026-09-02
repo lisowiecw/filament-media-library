@@ -38,11 +38,12 @@ it('refuses a file over the size limit', function (): void {
 
     $path = $this->file('far-too-big.jpg');
 
-    visit('/admin/media-assets')
+    $page = visit('/admin/media-assets')
         ->click('button:has-text("Upload")')
-        ->waitForText('Files')
-        ->attach('input[type="file"]', $path)
-        // Filepond refuses it in the browser, before a byte is posted.
+        ->waitForText('Files');
+
+    // Filepond refuses it in the browser, before a byte is posted.
+    $this->pour($page, $path)
         ->waitForText('File is too large')
         ->assertSee('Maximum file size is 4 KB');
 
@@ -56,10 +57,9 @@ it('refuses a blocked type', function (): void {
 
     $page = visit('/admin/media-assets')
         ->click('button:has-text("Upload")')
-        ->waitForText('Files')
-        ->attach('input[type="file"]', $path);
+        ->waitForText('Files');
 
-    $this->staged($page)
+    $this->staged($this->pour($page, $path))
         ->click($this->confirm())
         ->waitForText('is of a blocked type');
 
@@ -84,10 +84,9 @@ it('refuses an SVG the Strict pass takes an element out of', function (): void {
 
     $page = visit('/admin/media-assets')
         ->click('button:has-text("Upload")')
-        ->waitForText('Files')
-        ->attach('input[type="file"]', $path);
+        ->waitForText('Files');
 
-    $this->staged($page)
+    $this->staged($this->pour($page, $path))
         ->click($this->confirm())
         ->waitForText('Uploaded 0 file(s).');
 
