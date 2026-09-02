@@ -204,7 +204,7 @@ final readonly class BlurHashing
             'blurhash_pending_since' => $now,
         ])->syncOriginal();
 
-        ComputeBlurHash::dispatch($asset->getKey());
+        ComputeBlurHash::dispatch($asset->getKey(), $now->toDateTimeString());
 
         return true;
     }
@@ -213,10 +213,15 @@ final readonly class BlurHashing
      * Give up on an asset whose object could not even be read, so no later
      * render asks for it again. A hash that landed by another path in the
      * meantime keeps the row, as everywhere else here.
+     *
+     * Where the caller names the claim it was working under, the row is only
+     * settled while that claim is still the one recorded: a worker whose claim
+     * lapsed and was retaken has nothing left to say about the asset, and
+     * saying it would close the question against the job that replaced it.
      */
-    public static function settleAsFailed(MediaAsset $asset): void
+    public static function settleAsFailed(MediaAsset $asset, ?string $claimedAt = null): void
     {
-        self::write($asset, null, BlurHashStatus::Failed);
+        self::write($asset, null, BlurHashStatus::Failed, $claimedAt);
     }
 
     /**
@@ -295,7 +300,7 @@ final readonly class BlurHashing
      * because this is bookkeeping the package writes about its own work, and
      * it should not depend on the column staying mass-assignable.
      */
-    private static function write(MediaAsset $asset, ?string $hash, BlurHashStatus $status): void
+    private static function write(MediaAsset $asset, ?string $hash, BlurHashStatus $status, ?string $claimedAt = null): void
     {
         $written = ['blurhash' => $hash, 'blurhash_status' => $status, 'blurhash_pending_since' => null];
 
@@ -315,6 +320,8 @@ final readonly class BlurHashing
             ->where(fn (Builder $query) => $query
                 ->whereNull('blurhash_status')
                 ->orWhere('blurhash_status', BlurHashStatus::Pending->value))
+            ->when($claimedAt !== null, fn (Builder $query) => $query
+                ->where('blurhash_pending_since', $claimedAt))
             ->update([
                 'blurhash' => $hash,
                 'blurhash_status' => $status->value,

@@ -454,6 +454,14 @@ describe('hashing an imported asset at render time', function (): void {
 
         expect($asset->fresh()->blurhash)->toBeString()->not->toBeEmpty()
             ->and($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Ready);
+
+        // Recovered is settled like any other ready hash: the next render
+        // paints the one string it found and asks for nothing.
+        Bus::fake();
+
+        expect(BlurHashing::hashFor($asset->fresh()))->toBe($asset->fresh()->blurhash);
+
+        Bus::assertNotDispatched(ComputeBlurHash::class);
     });
 
     it('records a failure for an object that will not decode, and stops', function (): void {
@@ -676,16 +684,54 @@ describe('a hash left pending by a worker that died', function (): void {
             ->and($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Ready);
     });
 
+    it('lets the dead worker\'s failure settle nothing once the claim has moved on', function (): void {
+        Bus::fake();
+
+        $asset = pendingAsset(now()->subHours(2)->toDateTimeString());
+
+        // The render that found the claim lapsed takes it and queues a job of
+        // its own; the worker that held it before is still on its last retry.
+        BlurHashing::dispatchLazily($asset);
+
+        $retaken = $asset->fresh()->blurhash_pending_since;
+
+        (new ComputeBlurHash($asset->id, now()->subHours(2)->toDateTimeString()))
+            ->failed(new RuntimeException('read failed'));
+
+        // The failure belongs to a claim nobody holds any more, so it settles
+        // nothing: the asset is still owed the hash the live job will write.
+        expect($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Pending)
+            ->and($asset->fresh()->blurhash_pending_since->equalTo($retaken))->toBeTrue();
+    });
+
+    it('lets the worker holding the claim settle it as failed', function (): void {
+        Bus::fake();
+
+        $asset = makeAsset(['size' => 900_000]);
+
+        BlurHashing::dispatchLazily($asset);
+
+        $claim = $asset->fresh()->blurhash_pending_since;
+
+        (new ComputeBlurHash($asset->id, $claim->toDateTimeString()))
+            ->failed(new RuntimeException('read failed'));
+
+        expect($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Failed)
+            ->and($asset->fresh()->blurhash_pending_since)->toBeNull();
+    });
+
     it('offers an abandoned asset to a backfill on the same terms', function (): void {
         Bus::fake();
 
         $abandoned = pendingAsset(now()->subHours(2)->toDateTimeString());
         $inFlight = pendingAsset(now()->subSeconds(30)->toDateTimeString());
 
-        $targets = collect(iterator_to_array(RegenerationTargets::hashes(), false))
-            ->map(fn (array $target): int => $target[0]->id);
+        $targets = collect(iterator_to_array(RegenerationTargets::hashes(), false));
 
-        expect($targets->all())->toBe([$abandoned->id]);
+        // Reported as a lapsed claim rather than as an asset never asked, so a
+        // dry run says which of the two a real run would be doing.
+        expect($targets->map(fn (array $target): int => $target[0]->id)->all())->toBe([$abandoned->id])
+            ->and($targets->map(fn (array $target): string => $target[1])->all())->toBe(['abandoned']);
 
         BlurHashing::backfill($abandoned);
         BlurHashing::backfill($inFlight);

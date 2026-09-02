@@ -6,6 +6,7 @@ namespace Lisowiecw\MediaLibrary\Derivatives;
 
 use Generator;
 use Illuminate\Database\Eloquent\Builder;
+use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeStatus;
 use Lisowiecw\MediaLibrary\Enums\DerivativeVariant;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
@@ -127,7 +128,12 @@ final readonly class RegenerationTargets
 
         foreach ($assets->lazyById(self::CHUNK) as $asset) {
             if (BlurHashing::wanted($asset)) {
-                yield [$asset, 'no hash'];
+                // A row the selector reached at pending is one whose claim has
+                // lapsed, since a live claim never survives `unclaimed()`.
+                // Saying so is what lets a dry run report what a real run would
+                // reopen apart from what it would ask for the first time, the
+                // way the derivative selectors already name theirs.
+                yield [$asset, $asset->blurhash_status === BlurHashStatus::Pending ? 'abandoned' : 'no hash'];
             }
         }
     }

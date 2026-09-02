@@ -44,7 +44,22 @@ class ComputeBlurHash implements ShouldQueue
      */
     public bool $failOnTimeout = true;
 
-    public function __construct(private readonly int $assetId) {}
+    /**
+     * The claim this job was queued under, as the pending time stamped on the
+     * asset at the moment the status was taken.
+     *
+     * It travels with the job because a claim can lapse while its worker is
+     * still retrying, and the render that reclaims it queues a second job. The
+     * failure of the first must then settle nothing: without the stamp,
+     * `failed()` would write failed over a live claim and the running job would
+     * find the question already closed, leaving an asset that could be hashed
+     * recorded as one that cannot. A job queued before the stamp existed
+     * carries none and settles as it always did.
+     */
+    public function __construct(
+        private readonly int $assetId,
+        private readonly ?string $claimedAt = null,
+    ) {}
 
     public function handle(): void
     {
@@ -71,13 +86,18 @@ class ComputeBlurHash implements ShouldQueue
      * Once the retries are exhausted the status sticks at failed, so an object
      * this worker cannot read stops being asked for by every render that meets
      * its card.
+     *
+     * Failed only where this job still holds the claim it was queued under. A
+     * claim somebody else has since taken is somebody else's work, and closing
+     * the question on their behalf is how a reclaimed asset would end failed
+     * with no hash while the job that could have written one was still running.
      */
     public function failed(?Throwable $exception): void
     {
         $asset = $this->asset();
 
         if ($asset !== null) {
-            BlurHashing::settleAsFailed($asset);
+            BlurHashing::settleAsFailed($asset, $this->claimedAt);
         }
     }
 

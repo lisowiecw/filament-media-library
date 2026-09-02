@@ -362,6 +362,26 @@ describe('the regenerate command asked for hashes', function (): void {
         Bus::assertNothingDispatched();
     });
 
+    it('reports a lapsed claim under --dry-run and reopens nothing', function (): void {
+        $stamp = now()->subHours(2)->startOfSecond();
+
+        $asset = renderableAsset();
+        $asset->forceFill([
+            'blurhash_status' => BlurHashStatus::Pending->value,
+            'blurhash_pending_since' => $stamp,
+        ])->save();
+
+        $this->artisan('media:regenerate-derivatives --hashes --dry-run')
+            ->expectsOutputToContain($asset->ulid)
+            ->assertSuccessful();
+
+        Bus::assertNothingDispatched();
+
+        // The claim is exactly as the dead worker left it: a dry run that
+        // restamped it would have taken the work it was only reporting.
+        expect($asset->fresh()->blurhash_pending_since->equalTo($stamp))->toBeTrue();
+    });
+
     it('picks up an asset a dead worker left pending', function (): void {
         renderableAsset()->forceFill([
             'blurhash_status' => BlurHashStatus::Pending->value,
