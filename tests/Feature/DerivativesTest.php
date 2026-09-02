@@ -456,6 +456,25 @@ describe('hashing an imported asset at render time', function (): void {
         Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
     });
 
+    it('retries a read that answered with nothing, and settles once the tries are gone', function (): void {
+        $asset = makeAsset(['size' => 900_000]);
+
+        BlurHashing::dispatchLazily($asset);
+        $job = new ComputeBlurHash($asset->id);
+
+        // Nothing was ever put on the disk, which is a read failing rather
+        // than a file refusing to decode, so it is thrown for the retry.
+        try {
+            $job->handle();
+        } catch (Throwable $e) {
+            expect($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Pending);
+
+            $job->failed($e);
+        }
+
+        expect($asset->fresh()->blurhash_status)->toBe(BlurHashStatus::Failed);
+    });
+
     it('does nothing where the asset is gone by the time the job runs', function (): void {
         $asset = makeAsset(['size' => 900_000]);
         $id = $asset->id;

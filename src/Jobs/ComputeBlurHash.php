@@ -9,6 +9,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -30,7 +31,8 @@ class ComputeBlurHash implements ShouldQueue
 
     /**
      * Bytes that will not decode are not a transient failure and are recorded
-     * rather than retried; the tries here are for the read.
+     * rather than retried; the tries here are for the read, which is the half
+     * of this that a flaky bucket can lose and a second attempt can win.
      */
     public int $tries = 3;
 
@@ -44,7 +46,17 @@ class ComputeBlurHash implements ShouldQueue
             return;
         }
 
-        BlurHashing::fromBytes($asset, (string) Storage::disk($asset->disk)->get($asset->object_key));
+        $bytes = Storage::disk($asset->disk)->get($asset->object_key);
+
+        // A read that answers with nothing is the disk failing rather than the
+        // file refusing to decode, so it is thrown and retried: settling it as
+        // failed here would let one flaky read cost the asset its hash for
+        // good.
+        if ($bytes === null) {
+            throw new RuntimeException('The stored object could not be read.');
+        }
+
+        BlurHashing::fromBytes($asset, $bytes);
     }
 
     /**

@@ -50,6 +50,11 @@ final readonly class BlurHashing
      * job is queued only where the claim was won, because that claim is the
      * whole of what stops two renders of the same card queueing the same read
      * twice. A render that loses it paints the quiet tile and asks nothing.
+     *
+     * The allowance is spent before the claim, so a render that loses the race
+     * has spent one out of a budget it queued nothing against. That is a cap
+     * erring on the low side by a card, which is the direction it should err
+     * in, and the alternative is a claim that has to be rolled back.
      */
     public static function dispatchLazily(MediaAsset $asset): void
     {
@@ -141,7 +146,8 @@ final readonly class BlurHashing
     }
 
     /**
-     * Where first-writer-wins is actually decided.
+     * Where first-writer-wins is decided for a computed hash, as claiming the
+     * pending status is for the right to compute one at all.
      *
      * The condition is carried into the update rather than asked beforehand,
      * because the model in hand was read before the decode and a decode takes
@@ -164,6 +170,10 @@ final readonly class BlurHashing
         if (! $asset->exists) {
             $asset->forceFill($written);
 
+            return;
+        }
+
+        if (! app(HashDispatch::class)->allows()) {
             return;
         }
 
