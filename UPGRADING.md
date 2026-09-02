@@ -76,6 +76,6 @@ still claiming it. See [ADR 0008](docs/adr/0008-filament-4-support-rides-one-lin
 
 ## 0.x
 
-The package is `0.1.0` and pre-release. Until `1.0.0`, a minor version may carry
+The package is `0.2.0` and pre-release. Until `1.0.0`, a minor version may carry
 any of the four changes above; each one is still named in the changelog with its
 migration path.
