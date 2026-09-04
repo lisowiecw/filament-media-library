@@ -29,7 +29,7 @@ return new class extends Migration
         }
 
         Schema::table('media_assets', function (Blueprint $table): void {
-            $table->timestamp('blurhash_pending_since')->nullable()->after('blurhash_status');
+            $table->timestamp('blurhash_pending_since')->nullable();
         });
     }
 
