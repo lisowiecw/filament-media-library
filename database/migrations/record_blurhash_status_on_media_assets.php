@@ -9,8 +9,12 @@ use Illuminate\Support\Facades\Schema;
 use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 
 /**
- * Where the asset's BlurHash is in its lifecycle, beside the hash it already
- * had.
+ * Where the asset's BlurHash is in its lifecycle, alongside the hash it
+ * already had.
+ *
+ * The column is added wherever the engine puts it, never placed against
+ * `blurhash`, because a migration that names another migration's column has an
+ * ordering dependency these filenames cannot express (ADR 20).
  *
  * The column is nullable and stays nullable, because null is a state rather
  * than a gap: it means nobody has ever asked for this asset's hash, which a
@@ -28,7 +32,7 @@ return new class extends Migration
     {
         if (! Schema::hasColumn('media_assets', 'blurhash_status')) {
             Schema::table('media_assets', function (Blueprint $table): void {
-                $table->string('blurhash_status')->nullable()->after('blurhash');
+                $table->string('blurhash_status')->nullable();
             });
         }
 
