@@ -1,10 +1,10 @@
 name: Update Changelog
 
-# The release notes are written on the release and copied back into the
-# changelog afterwards, so the file on main and the notes on the tag cannot
-# drift. main takes changes through a pull request, so this opens one rather
-# than pushing: a bypass would have to cover every workflow in the repository
-# to buy one commit a fortnight.
+# The notes published on the release were taken out of Unreleased to begin
+# with, so the changelog already holds them and this dates them in place rather
+# than copying them back. main takes changes through a pull request, so this
+# opens one rather than pushing: a bypass would have to cover every workflow in
+# the repository to buy one commit a fortnight.
 on:
   release:
     types: [released]
@@ -24,12 +24,27 @@ jobs:
         with:
           ref: main
 
+      # `release-notes` is deliberately not passed. Given it, the action writes
+      # the notes into the new dated section and leaves Unreleased holding them
+      # too, so every note appeared twice and had to be deleted by hand before
+      # the pull request could be merged. Without it the action takes what is
+      # already between the Unreleased heading and the one below it, which is
+      # the same text the release was published from, and moves it.
+      #
+      # The compare revision is named for the same reason: the input defaults
+      # to `HEAD`, and every Unreleased link in this file has pointed at `main`
+      # since v0.1.0.
       - name: Update changelog
         uses: stefanzweifel/changelog-updater-action@a938690fad7edf25368f37e43a1ed1b34303eb36 # v1
         with:
           latest-version: ${{ github.event.release.name }}
-          release-notes: ${{ github.event.release.body }}
+          compare-url-target-revision: main
 
+      # This step fails until "Allow GitHub Actions to create and approve pull
+      # requests" is on, under Settings > Actions > General. Without it the
+      # branch is pushed and the run ends at "GitHub Actions is not permitted
+      # to create or approve pull requests", leaving the pull request to be
+      # opened by hand from the branch that is already there.
       - name: Open a pull request with the updated changelog
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
