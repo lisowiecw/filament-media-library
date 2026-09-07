@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Eloquent\Collection;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Workbench\App\Models\Article;
+use Workbench\App\Models\User as MediaHostUser;
 
 /**
  * The batch read's own fixture: hosts with a thumbnail each and a gallery on
@@ -118,6 +119,21 @@ it('leaves a host without the trait alone in a mixed collection', function (): v
     $hosts->loadMedia('thumbnail');
 
     expect($hosts->first()->relationLoaded('mediaAttachments'))->toBeTrue();
+});
+
+it('loads every host class in a collection of more than one', function (): void {
+    articlesWithMedia(1);
+
+    $other = MediaHostUser::create(['name' => 'Ada']);
+    attachToField($other, 'thumbnail', libraryAsset());
+
+    $hosts = new Collection([...Article::query()->get()->all(), $other]);
+
+    $hosts->loadMedia('thumbnail');
+
+    expect(queriesFor(fn () => $hosts->each(fn ($host) => $host->media('thumbnail'))))->toBe(0)
+        ->and($other->media('thumbnail'))->toHaveCount(1)
+        ->and($hosts->first()->media('thumbnail'))->toHaveCount(1);
 });
 
 it('loads nothing when no field is named', function (): void {

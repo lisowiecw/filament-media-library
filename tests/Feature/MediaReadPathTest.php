@@ -94,14 +94,22 @@ it('queries again once the relation is unset', function (): void {
     expect($loaded->media('gallery'))->toHaveCount(2);
 });
 
+/**
+ * Several attachments, and the count taken on the read that pays: a field
+ * whose assets are missing costs the one whole-field query, not a lazy load
+ * per attachment, which is the cost the rule exists to avoid.
+ */
 it('queries when an attachment on the field has no loaded asset', function (): void {
     $host = article();
-    $asset = libraryAsset();
-    attachToField($host, 'gallery', $asset);
+    $assets = [libraryAsset(), libraryAsset(), libraryAsset()];
+    attachToField($host, 'gallery', ...$assets);
 
     $loaded = Article::query()->with('mediaAttachments')->findOrFail($host->id);
 
-    expect($loaded->media('gallery')->pluck('id')->all())->toBe([$asset->id])
+    $first = queriesFor(fn () => $loaded->media('gallery'));
+
+    expect($first)->toBe(2)
+        ->and($loaded->media('gallery')->pluck('id')->all())->toBe(array_column($assets, 'id'))
         ->and(queriesFor(fn () => $loaded->media('gallery')))->toBe(0);
 });
 

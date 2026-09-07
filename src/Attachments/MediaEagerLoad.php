@@ -33,6 +33,13 @@ final class MediaEagerLoad
      * wholesale: keeping the old field set beside the new rows would name
      * fields the relation no longer holds.
      *
+     * Hosts are loaded a morph class at a time. Eloquent eager-loads a
+     * collection through its first model's relation, and a morph relation
+     * constrains `host_type` to that model's class, so one mixed load would
+     * leave every other class empty and still record the field set: a partial
+     * cache answering as a complete one, which is the one thing the field set
+     * exists to prevent.
+     *
      * @param  Model|Collection<int, Model>  $target
      * @param  list<string>  $fields
      */
@@ -55,7 +62,9 @@ final class MediaEagerLoad
             $hosts->push($model);
         }
 
-        $hosts->load(self::constraint($fields));
+        foreach ($hosts->groupBy(fn (Model $model): string => $model->getMorphClass()) as $ofOneClass) {
+            $ofOneClass->load(self::constraint($fields));
+        }
 
         self::recordFieldSet($hosts, $fields);
     }

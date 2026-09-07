@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -160,9 +161,10 @@ function attach(Article $host, MediaAsset ...$assets): void
 }
 
 /**
- * The same, where the field context is the point of the test.
+ * The same, where the field context is the point of the test. It takes any
+ * host model, because a batch read has to be told apart across host classes.
  */
-function attachToField(Article $host, string $field, MediaAsset ...$assets): void
+function attachToField(Model $host, string $field, MediaAsset ...$assets): void
 {
     foreach ($assets as $order => $asset) {
         MediaAttachment::query()->create([
