@@ -57,7 +57,7 @@ final class MediaEagerLoad
 
         $hosts->load(self::constraint($fields));
 
-        self::stamp($hosts, $fields);
+        self::recordFieldSet($hosts, $fields);
     }
 
     /**
@@ -92,7 +92,7 @@ final class MediaEagerLoad
      *
      * @param  list<string>  $fields
      */
-    public static function stamp(mixed $result, array $fields): void
+    public static function recordFieldSet(mixed $result, array $fields): void
     {
         if ($fields === []) {
             return;

@@ -82,7 +82,7 @@ trait HasMedia
 
         $query->with(MediaEagerLoad::constraint(array_values($fields)))
             ->afterQuery(function (mixed $result) use ($fields): void {
-                MediaEagerLoad::stamp($result, array_values($fields));
+                MediaEagerLoad::recordFieldSet($result, array_values($fields));
             });
     }
 
