@@ -50,16 +50,9 @@ trait HasMedia
      */
     public function media(string $field): Collection
     {
-        if (! $this->relationLoaded('mediaAttachments')) {
-            $this->mediaLoadedFields = [];
-        }
-
-        $attachments = $this->cachedMediaAttachments($field)
-            ?? $this->fillMediaAttachments($field);
-
-        $assets = $attachments
-            ->map(fn (MediaAttachment $attachment): ?MediaAsset => $attachment->asset)
-            ->filter(fn (?MediaAsset $asset): bool => $asset !== null && ! $asset->trashed())
+        $assets = $this->fieldAttachments($field)
+            ->map(fn (MediaAttachment $attachment): ?MediaAsset => $this->liveAsset($attachment))
+            ->filter()
             ->values()
             ->all();
 
@@ -126,6 +119,24 @@ trait HasMedia
         $this->unsetRelation('mediaAttachments');
 
         $this->mediaLoadedFields = [];
+    }
+
+    /**
+     * The field's attachment rows, from the cache when it can answer and from
+     * a query that fills it when it cannot. Every read of a field comes
+     * through here, which is what keeps the cheap reads and the whole-field
+     * read on one cache.
+     *
+     * @return Collection<int, MediaAttachment>
+     */
+    private function fieldAttachments(string $field): Collection
+    {
+        if (! $this->relationLoaded('mediaAttachments')) {
+            $this->mediaLoadedFields = [];
+        }
+
+        return $this->cachedMediaAttachments($field)
+            ?? $this->fillMediaAttachments($field);
     }
 
     /**
@@ -197,9 +208,41 @@ trait HasMedia
         return $attachments;
     }
 
+    /**
+     * The field's first asset, or null when it has none.
+     *
+     * It reads the same rows `media()` does, through the same cache and in the
+     * same order, so the two cannot disagree about which asset is first and a
+     * `firstMedia()` leaves the field cached exactly as a `media()` would.
+     *
+     * A bounded query of its own was considered and dropped: a window smaller
+     * than the field cannot fill the cache honestly, and a following `media()`
+     * re-querying is the asymmetry this read path exists to remove. So the
+     * saving here is only the collection of assets it would have thrown away.
+     */
     public function firstMedia(string $field): ?MediaAsset
     {
-        return $this->media($field)->first();
+        foreach ($this->fieldAttachments($field) as $attachment) {
+            $asset = $this->liveAsset($attachment);
+
+            if ($asset !== null) {
+                return $asset;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The asset an attachment resolves to, or null when it resolves to nothing
+     * a reader should be handed. Both reads go through it, so the rule that a
+     * soft-deleted asset drops out is written once.
+     */
+    private function liveAsset(MediaAttachment $attachment): ?MediaAsset
+    {
+        $asset = $attachment->asset;
+
+        return $asset !== null && ! $asset->trashed() ? $asset : null;
     }
 
     /**

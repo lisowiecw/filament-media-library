@@ -178,3 +178,44 @@ it('costs the same number of queries however many hosts are read', function (): 
         }
     }))->toBe(0);
 });
+
+it('reads the first asset of a field out of the loaded relation without querying', function (): void {
+    $host = article();
+    [$one, $two] = [libraryAsset(), libraryAsset()];
+    attachToField($host, 'gallery', $one, $two);
+
+    $loaded = Article::query()->with('mediaAttachments.asset')->findOrFail($host->id);
+
+    $first = null;
+
+    expect(queriesFor(function () use ($loaded, &$first): void {
+        $first = $loaded->firstMedia('gallery');
+    }))->toBe(0)
+        ->and($first?->id)->toBe($one->id);
+});
+
+it('skips a soft-deleted asset when reading the first of a field', function (): void {
+    $host = article();
+    [$one, $two] = [libraryAsset(), libraryAsset()];
+    attachToField($host, 'gallery', $one, $two);
+
+    $one->delete();
+
+    expect(Article::query()->findOrFail($host->id)->firstMedia('gallery')?->id)->toBe($two->id);
+});
+
+it('fills the cache when the first read of a field is a firstMedia', function (): void {
+    $host = article();
+    [$one, $two] = [libraryAsset(), libraryAsset()];
+    attachToField($host, 'gallery', $one, $two);
+
+    $fresh = Article::query()->findOrFail($host->id);
+    $fresh->firstMedia('gallery');
+
+    $ids = null;
+
+    expect(queriesFor(function () use ($fresh, &$ids): void {
+        $ids = $fresh->media('gallery')->pluck('id')->all();
+    }))->toBe(0)
+        ->and($ids)->toBe([$one->id, $two->id]);
+});

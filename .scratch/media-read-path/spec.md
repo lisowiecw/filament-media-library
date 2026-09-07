@@ -86,13 +86,17 @@ never goes through `media()`, so it is not a cache consumer and needs no change.
 
 ## firstMedia
 
-Free off the cached path. On the query fallback it takes a small window rather
-than `limit(1)`, so the trashed-asset skip survives: a naive `limit(1)` returns
-null where the current code skips a trashed asset and returns the next live one.
+Free off the cached path. It must not get a path that skips filling the cache:
+cheaper in isolation at the cost of a following `media()` re-querying would
+reintroduce the asymmetry this work exists to remove.
 
-It must not get a path that skips filling the cache. Cheaper in isolation at the
-cost of a following `media()` re-querying would reintroduce the asymmetry this
-work exists to remove.
+Settled in implementation, 2026-09-07: the window fallback this section first
+asked for is dropped, and the two rules above are why. A window returns fewer
+rows than the field holds, so it cannot fill the cache honestly, and the field
+cannot then be marked loaded without lying to the next `media()`. The cache rule
+wins, since it is the point of the whole sequence and #94 was trivial by its own
+account. `firstMedia()` reads the same rows `media()` does and stops at the
+first live asset; what it saves is the collection it would have thrown away.
 
 ## Tests
 
