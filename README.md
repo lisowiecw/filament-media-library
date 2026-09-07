@@ -130,7 +130,10 @@ $product->loadMedia('thumbnail');             // one host
 ```
 
 The load is constrained to the fields named, and a later `media()` on a field
-that was not named still queries rather than reading an empty answer.
+that was not named still queries rather than reading an empty answer. The
+collection form is a macro the package registers on Eloquent's collection, so
+it needs nothing from your models. See
+[ADR 21](docs/adr/0021-the-batch-reads-collection-half-is-a-macro.md).
 
 `$asset->url()` is the supported way to get a URL for an asset. It resolves a
 public asset to its disk's own URL and a private one to the Delivery route,

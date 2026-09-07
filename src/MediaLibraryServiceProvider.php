@@ -82,9 +82,8 @@ class MediaLibraryServiceProvider extends PackageServiceProvider
         }
 
         // The collection half of the batch read. It is a macro rather than a
-        // custom collection class because a host application's models return
-        // whatever collection they already return, and the package is in no
-        // position to replace it. Hosts that do not read media pass through.
+        // custom collection class or an interface, because a host model's
+        // collection is the application's to choose. See ADR 21.
         Collection::macro('loadMedia', function (string ...$fields): Collection {
             /** @var Collection<int, Model> $this */
             MediaEagerLoad::into($this, array_values($fields));
