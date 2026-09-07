@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Lisowiecw\MediaLibrary\Concerns;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Lisowiecw\MediaLibrary\Attachments\MediaEagerLoad;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 
@@ -66,6 +68,43 @@ trait HasMedia
     }
 
     /**
+     * Load the named fields for every host the query returns, mirroring
+     * Laravel's own `with`: one query for the attachment rows and one for
+     * their assets, however many hosts come back.
+     *
+     * The field set is recorded in `afterQuery`, which fires once for the
+     * whole result set, so a host read afterwards knows which fields its
+     * loaded relation can answer for and which still cost a query.
+     *
+     * Naming no field loads nothing, rather than loading an empty relation
+     * that would then answer empty for every field.
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopeWithMedia(Builder $query, string ...$fields): void
+    {
+        if ($fields === []) {
+            return;
+        }
+
+        $query->with(MediaEagerLoad::constraint(array_values($fields)))
+            ->afterQuery(function (mixed $result) use ($fields): void {
+                MediaEagerLoad::stamp($result, array_values($fields));
+            });
+    }
+
+    /**
+     * The same load for a host already in memory, mirroring Laravel's `load`.
+     * The collection form is the macro of the same name.
+     */
+    public function loadMedia(string ...$fields): static
+    {
+        MediaEagerLoad::into($this, array_values($fields));
+
+        return $this;
+    }
+
+    /**
      * Record that the loaded relation covers these fields, which is how a
      * constrained eager load stops the relation answering for a field it never
      * held rows for.
@@ -113,7 +152,7 @@ trait HasMedia
         $loaded = $this->getRelation('mediaAttachments');
 
         $attachments = $loaded->filter(
-            fn (MediaAttachment $attachment): bool => $attachment->field_name === $field,
+            fn (MediaAttachment $attachment): bool => $attachment->matchesField($this, $field),
         );
 
         foreach ($attachments as $attachment) {
@@ -147,7 +186,7 @@ trait HasMedia
         /** @var Collection<int, MediaAttachment> $held */
         $held = $this->relationLoaded('mediaAttachments')
             ? $this->getRelation('mediaAttachments')->reject(
-                fn (MediaAttachment $attachment): bool => $attachment->field_name === $field,
+                fn (MediaAttachment $attachment): bool => $attachment->matchesField($this, $field),
             )
             : new Collection;
 

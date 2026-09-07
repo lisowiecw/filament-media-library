@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Delivery\DownloadFilename;
@@ -112,6 +113,26 @@ function withoutTemporaryUrls(string $disk = 'media'): void
 function user(): User
 {
     return User::create(['name' => 'Ada']);
+}
+
+/**
+ * How many queries a piece of work costs, for the reads where the count is
+ * the contract rather than an incidental.
+ *
+ * @param  callable(): mixed  $work
+ */
+function queriesFor(callable $work): int
+{
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    $work();
+
+    $count = count(DB::getQueryLog());
+
+    DB::disableQueryLog();
+
+    return $count;
 }
 
 /**

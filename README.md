@@ -119,6 +119,19 @@ foreach ($article->media('gallery') as $asset) {
 }
 ```
 
+Reading a page of hosts at once, so a grid of thumbnails costs a fixed number
+of queries rather than one per row:
+
+```php
+$products = Product::query()->withMedia('thumbnail')->get();
+
+$products->loadMedia('thumbnail', 'gallery'); // hosts already in memory
+$product->loadMedia('thumbnail');             // one host
+```
+
+The load is constrained to the fields named, and a later `media()` on a field
+that was not named still queries rather than reading an empty answer.
+
 `$asset->url()` is the supported way to get a URL for an asset. It resolves a
 public asset to its disk's own URL and a private one to the Delivery route,
 which is why nothing in your templates should ever build that route by hand.
@@ -788,8 +801,11 @@ survive an upgrade.
   `visibility()`, `maxSize()`, `multiple()`, `reorderable()`, `droppable()`,
   `scopeLibrary()`, `thumbnailUsing()`, `modalWidth()` and `defaultTab()`.
 - **The host trait** `Lisowiecw\MediaLibrary\Concerns\HasMedia`, with
-  `media()`, `firstMedia()` and `detachMedia()`, and the optional
-  `mediaUsageLabel()` a host model may define.
+  `media()`, `firstMedia()`, `detachMedia()`, the batch read `withMedia()`
+  and `loadMedia()`, and the optional `mediaUsageLabel()` a host model may
+  define.
+- **The `loadMedia()` collection macro**, the collection half of that batch
+  read, on `Illuminate\Database\Eloquent\Collection`.
 - **The model** `Lisowiecw\MediaLibrary\Models\MediaAsset` as something to read
   and query, with `url()`, `previewUrl()` and `downloadUrl()`, and the columns
   named below.

@@ -2,27 +2,9 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Facades\DB;
 use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Workbench\App\Models\Article;
-
-/**
- * @param  callable(): mixed  $work
- */
-function queriesFor(callable $work): int
-{
-    DB::flushQueryLog();
-    DB::enableQueryLog();
-
-    $work();
-
-    $count = count(DB::getQueryLog());
-
-    DB::disableQueryLog();
-
-    return $count;
-}
 
 it('reads a field out of the loaded relation without querying', function (): void {
     $host = article();
