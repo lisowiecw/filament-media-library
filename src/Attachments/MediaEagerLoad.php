@@ -22,7 +22,12 @@ use Lisowiecw\MediaLibrary\Models\MediaAttachment;
  *
  * A host is recognised by the read methods the trait gives it, so a model
  * that does not read media, in a mixed collection or on its own, passes
- * through untouched rather than failing.
+ * through untouched rather than failing. Both paths ask for the same pair of
+ * methods, not each for the one it happens to call: a model that got rows but
+ * no field set, or the reverse, would be a partial cache answering as a
+ * complete one. The question is asked inline at each path rather than through
+ * a shared predicate because `method_exists` narrows a type only where it is
+ * written, and losing that check costs more than the repetition saves.
  */
 final class MediaEagerLoad
 {
@@ -53,7 +58,9 @@ final class MediaEagerLoad
         $hosts = new Collection;
 
         foreach (self::models($target) as $model) {
-            if (! $model instanceof Model || ! method_exists($model, 'forgetMedia')) {
+            if (! $model instanceof Model
+                || ! method_exists($model, 'forgetMedia')
+                || ! method_exists($model, 'mediaFieldsLoaded')) {
                 continue;
             }
 
@@ -108,7 +115,9 @@ final class MediaEagerLoad
         }
 
         foreach (self::models($result) as $model) {
-            if ($model instanceof Model && method_exists($model, 'mediaFieldsLoaded')) {
+            if ($model instanceof Model
+                && method_exists($model, 'forgetMedia')
+                && method_exists($model, 'mediaFieldsLoaded')) {
                 $model->mediaFieldsLoaded(...$fields);
             }
         }

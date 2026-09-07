@@ -841,8 +841,9 @@ survive an upgrade.
   `scopeLibrary()`, `thumbnailUsing()`, `modalWidth()` and `defaultTab()`.
 - **The host trait** `Lisowiecw\MediaLibrary\Concerns\HasMedia`, with
   `media()`, `firstMedia()`, `detachMedia()`, the batch read `withMedia()`
-  and `loadMedia()`, and the optional `mediaUsageLabel()` a host model may
-  define.
+  and `loadMedia()`, `forgetMedia()` for the cache, and the optional
+  `mediaUsageLabel()` a host model may define. Its other public methods are
+  the batch read's own plumbing and are internal.
 - **The `loadMedia()` collection macro**, the collection half of that batch
   read, on `Illuminate\Database\Eloquent\Collection`.
 - **The model** `Lisowiecw\MediaLibrary\Models\MediaAsset` as something to read

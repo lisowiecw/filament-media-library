@@ -101,6 +101,12 @@ trait HasMedia
      * Record that the loaded relation covers these fields, which is how a
      * constrained eager load stops the relation answering for a field it never
      * held rows for.
+     *
+     * Public only because the batch read calls it from outside the host, and
+     * not part of what the package promises: a host application has no reason
+     * to say what its relation holds, and every reason to let a read say it.
+     *
+     * @internal
      */
     public function mediaFieldsLoaded(string ...$fields): void
     {
