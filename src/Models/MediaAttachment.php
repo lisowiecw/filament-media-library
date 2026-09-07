@@ -98,9 +98,43 @@ class MediaAttachment extends Model
      */
     public function scopeForField(Builder $query, Model $host, string $field): void
     {
-        $query->where('host_type', $host->getMorphClass())
-            ->where('host_id', $host->getKey())
-            ->where('field_name', $field);
+        $query->where(self::fieldConditions($host, $field));
+    }
+
+    /**
+     * Whether this row, already in memory, is one `forField` would have
+     * returned. The read path filters a loaded relation with it, so the rule
+     * is answered from one place however it is reached: a condition added to
+     * the scope is felt on the in-memory path in the same release.
+     */
+    public function matchesField(Model $host, string $field): bool
+    {
+        foreach (self::fieldConditions($host, $field) as $column => $value) {
+            $held = $this->getAttribute($column);
+
+            if ($held === null || (string) $held !== (string) $value) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The field predicate as column and value, which is what lets one rule
+     * serve both a query and a row already in hand. The host key goes to the
+     * driver as it is; only the in-memory comparison stringifies it, because
+     * a hydrated row holds the key as the column's own type.
+     *
+     * @return array<string, mixed>
+     */
+    private static function fieldConditions(Model $host, string $field): array
+    {
+        return [
+            'host_type' => $host->getMorphClass(),
+            'host_id' => $host->getKey(),
+            'field_name' => $field,
+        ];
     }
 
     /**

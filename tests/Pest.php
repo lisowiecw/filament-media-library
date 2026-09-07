@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Lisowiecw\MediaLibrary\Delivery\DownloadFilename;
@@ -115,6 +117,26 @@ function user(): User
 }
 
 /**
+ * How many queries a piece of work costs, for the reads where the count is
+ * the contract rather than an incidental.
+ *
+ * @param  callable(): mixed  $work
+ */
+function queriesFor(callable $work): int
+{
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    $work();
+
+    $count = count(DB::getQueryLog());
+
+    DB::disableQueryLog();
+
+    return $count;
+}
+
+/**
  * A host model to attach media to.
  */
 function article(string $title = 'A post'): Article
@@ -135,12 +157,21 @@ function pickerForm(?Article $record = null, array $picker = []): Testable
 
 function attach(Article $host, MediaAsset ...$assets): void
 {
+    attachToField($host, 'cover_image', ...$assets);
+}
+
+/**
+ * The same, where the field context is the point of the test. It takes any
+ * host model, because a batch read has to be told apart across host classes.
+ */
+function attachToField(Model $host, string $field, MediaAsset ...$assets): void
+{
     foreach ($assets as $order => $asset) {
         MediaAttachment::query()->create([
             'media_asset_id' => $asset->id,
             'host_type' => $host->getMorphClass(),
             'host_id' => $host->getKey(),
-            'field_name' => 'cover_image',
+            'field_name' => $field,
             'order' => $order,
         ]);
     }

@@ -6,7 +6,10 @@ namespace Lisowiecw\MediaLibrary;
 
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
+use Lisowiecw\MediaLibrary\Attachments\MediaEagerLoad;
 use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
 use Lisowiecw\MediaLibrary\Commands\AssignTenant;
 use Lisowiecw\MediaLibrary\Commands\ImportLegacyMedia;
@@ -77,5 +80,15 @@ class MediaLibraryServiceProvider extends PackageServiceProvider
         foreach (UploadCeiling::warnings($maxUploadSize) as $warning) {
             Log::warning($warning);
         }
+
+        // The collection half of the batch read. It is a macro rather than a
+        // custom collection class or an interface, because a host model's
+        // collection is the application's to choose. See ADR 21.
+        Collection::macro('loadMedia', function (string ...$fields): Collection {
+            /** @var Collection<int, Model> $this */
+            MediaEagerLoad::into($this, array_values($fields));
+
+            return $this;
+        });
     }
 }
