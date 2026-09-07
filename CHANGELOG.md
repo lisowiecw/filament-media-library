@@ -1,12 +1,15 @@
 # Release Notes
 
-## [Unreleased](https://github.com/lisowiecw/filament-media-library/compare/v0.2.2...main)
+## [Unreleased](https://github.com/lisowiecw/filament-media-library/compare/v0.3.0...main)
+
+## [v0.3.0](https://github.com/lisowiecw/filament-media-library/compare/v0.2.2...v0.3.0) - 2026-09-07
 
 - Reading a field twice costs one query: `HasMedia::media()` and `firstMedia()` now read through the loaded `mediaAttachments` relation and fill it on the way back, where every read previously built a fresh query and consulted nothing, so eager loading the relation bought nothing and a second read of a field paid again. There is one cache and it is the relation Eloquent would show you, rather than a memo beside it with its own lifetime and its own way of disagreeing, which is what makes `refresh()` answer for free and a hand-written `with('mediaAttachments')` answer at all. `firstMedia()` reads the first asset without hydrating the rest of the field. Staleness is the contract rather than a bug: a write through the trait, `detachMedia()` or the picker's own reconcile, clears the cache on the instance it was handed, and a write anywhere else does not, exactly as any Eloquent relation behaves, which is why the README now states what a media read costs in a section of its own.
-
+  
 - A page of hosts is a fixed number of queries: `Product::query()->withMedia('thumbnail')->get()` on a query, and `$hosts->loadMedia('thumbnail', 'gallery')` on a collection or a single host already in memory, load a whole page in two queries however many hosts come back, which is what keeps a grid of thumbnails off one query per row. The eager load is constrained to the fields you name, so the host records which fields its relation covers and a read of a field you did not name still queries rather than answering empty off rows that were never fetched: inferring the loaded fields from the rows present cannot tell an empty field from an unloaded one and would fail quietly instead. Naming no field loads nothing, a second `loadMedia()` replaces the relation rather than adding to it, so name every field you want in one call, and a collection mixing hosts that read media with models that do not passes the latter through untouched. The collection half is a macro on `Illuminate\Database\Eloquent\Collection`, registered at boot, so it reaches a collection that arrived through a relation or was assembled from more than one source with no change to any application model; it is not visible to static analysis, so a host application running PHPStan high will want a `@method` line of its own, and where the name is already taken the same load is reachable as `MediaEagerLoad::into($hosts, ['thumbnail'])`. See [ADR 21](docs/adr/0021-the-batch-reads-collection-half-is-a-macro.md).
-
+  
 - `forgetMedia()` on the host drops the read cache outright, for a caller that has written against the attachment rows directly and knows the instance in hand is stale. It joins `media()`, `firstMedia()`, `detachMedia()`, `withMedia()` and `loadMedia()` on the promised surface; the trait's remaining public methods are the batch read's own plumbing and are internal.
+  
 
 ## [v0.2.2](https://github.com/lisowiecw/filament-media-library/compare/v0.2.1...v0.2.2) - 2026-09-04
 
