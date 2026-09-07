@@ -24,26 +24,138 @@ use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 trait HasMedia
 {
     /**
+     * Which fields the loaded `mediaAttachments` relation actually covers.
+     *
+     * Advisory only: it is consulted when the relation is loaded and cleared
+     * whenever it is not, so the two can never disagree into a wrong answer.
+     * Empty means unconstrained, which is what a hand-written
+     * `with('mediaAttachments')` leaves behind.
+     *
+     * @var list<string>
+     */
+    protected array $mediaLoadedFields = [];
+
+    /**
      * Reads through the attachment rows rather than joining past them, so the
      * field context is expressed once, in `forField`. A soft-deleted asset
      * resolves to nothing and drops out here.
+     *
+     * The loaded relation is the only cache: a read that the relation can
+     * answer costs nothing, and a read that queries leaves the rows behind so
+     * the next one does not.
      *
      * @return Collection<int, MediaAsset>
      */
     public function media(string $field): Collection
     {
-        $assets = $this->mediaAttachments()
-            ->forField($this, $field)
-            ->orderBy('order')
-            ->with('asset')
-            ->get()
+        if (! $this->relationLoaded('mediaAttachments')) {
+            $this->mediaLoadedFields = [];
+        }
+
+        $attachments = $this->cachedMediaAttachments($field)
+            ?? $this->fillMediaAttachments($field);
+
+        $assets = $attachments
             ->map(fn (MediaAttachment $attachment): ?MediaAsset => $attachment->asset)
-            ->filter()
+            ->filter(fn (?MediaAsset $asset): bool => $asset !== null && ! $asset->trashed())
             ->values()
             ->all();
 
         /** @var Collection<int, MediaAsset> */
         return new Collection($assets);
+    }
+
+    /**
+     * Record that the loaded relation covers these fields, which is how a
+     * constrained eager load stops the relation answering for a field it never
+     * held rows for.
+     */
+    public function mediaFieldsLoaded(string ...$fields): void
+    {
+        $this->mediaLoadedFields = array_values(array_unique([...$this->mediaLoadedFields, ...$fields]));
+    }
+
+    /**
+     * Forget the cache on this instance, after a write that made it stale.
+     *
+     * Only the instance the write was handed is cleared. Another instance of
+     * the same host stays stale, exactly as it does for any other Eloquent
+     * relation.
+     */
+    public function forgetMedia(): void
+    {
+        $this->unsetRelation('mediaAttachments');
+
+        $this->mediaLoadedFields = [];
+    }
+
+    /**
+     * The field's attachments out of the loaded relation, or null when the
+     * relation cannot honestly answer for the field.
+     *
+     * An attachment whose asset is not loaded sends the whole field to the
+     * query, because lazy-loading one asset at a time would cost more than the
+     * query it replaced.
+     *
+     * @return Collection<int, MediaAttachment>|null
+     */
+    private function cachedMediaAttachments(string $field): ?Collection
+    {
+        if (! $this->relationLoaded('mediaAttachments')) {
+            return null;
+        }
+
+        if ($this->mediaLoadedFields !== [] && ! in_array($field, $this->mediaLoadedFields, true)) {
+            return null;
+        }
+
+        /** @var Collection<int, MediaAttachment> $loaded */
+        $loaded = $this->getRelation('mediaAttachments');
+
+        $attachments = $loaded->filter(
+            fn (MediaAttachment $attachment): bool => $attachment->field_name === $field,
+        );
+
+        foreach ($attachments as $attachment) {
+            if (! $attachment->relationLoaded('asset')) {
+                return null;
+            }
+        }
+
+        /** @var Collection<int, MediaAttachment> */
+        return $attachments->sortBy('order')->values();
+    }
+
+    /**
+     * Query the field and leave the rows in the loaded relation.
+     *
+     * A relation that is the union of two field loads is a legal state, so the
+     * field's own rows replace any it already held, and the field joins the
+     * set: a fill is what makes the relation trustworthy for it.
+     *
+     * @return Collection<int, MediaAttachment>
+     */
+    private function fillMediaAttachments(string $field): Collection
+    {
+        /** @var Collection<int, MediaAttachment> $attachments */
+        $attachments = $this->mediaAttachments()
+            ->forField($this, $field)
+            ->orderBy('order')
+            ->with('asset')
+            ->get();
+
+        /** @var Collection<int, MediaAttachment> $held */
+        $held = $this->relationLoaded('mediaAttachments')
+            ? $this->getRelation('mediaAttachments')->reject(
+                fn (MediaAttachment $attachment): bool => $attachment->field_name === $field,
+            )
+            : new Collection;
+
+        $this->setRelation('mediaAttachments', $held->concat($attachments)->values());
+
+        $this->mediaFieldsLoaded($field);
+
+        return $attachments;
     }
 
     public function firstMedia(string $field): ?MediaAsset
@@ -69,6 +181,8 @@ trait HasMedia
             ->where('media_asset_id', $asset->getKey())
             ->get()
             ->each(fn (MediaAttachment $attachment) => $attachment->delete());
+
+        $this->forgetMedia();
     }
 
     /**

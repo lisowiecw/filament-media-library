@@ -66,6 +66,20 @@ class AttachmentReconciler
                 }
             }
         });
+
+        $this->forgetHostCache($host);
+    }
+
+    /**
+     * The write just made the host's own read cache stale, so clear it on the
+     * instance the reconcile was handed. Any other instance stays stale, the
+     * same as it would for any Eloquent relation.
+     */
+    private function forgetHostCache(Model $host): void
+    {
+        if (method_exists($host, 'forgetMedia')) {
+            $host->forgetMedia();
+        }
     }
 
     /**

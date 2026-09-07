@@ -135,12 +135,20 @@ function pickerForm(?Article $record = null, array $picker = []): Testable
 
 function attach(Article $host, MediaAsset ...$assets): void
 {
+    attachToField($host, 'cover_image', ...$assets);
+}
+
+/**
+ * The same, where the field context is the point of the test.
+ */
+function attachToField(Article $host, string $field, MediaAsset ...$assets): void
+{
     foreach ($assets as $order => $asset) {
         MediaAttachment::query()->create([
             'media_asset_id' => $asset->id,
             'host_type' => $host->getMorphClass(),
             'host_id' => $host->getKey(),
-            'field_name' => 'cover_image',
+            'field_name' => $field,
             'order' => $order,
         ]);
     }
