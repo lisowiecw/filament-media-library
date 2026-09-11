@@ -74,6 +74,44 @@ patch. Leaving the constraint wide while the job is gone is the one outcome the
 matrix exists to prevent: the promise would have lapsed with only the constraint
 still claiming it. See [ADR 0008](docs/adr/0008-filament-4-support-rides-one-line-guarded-by-ci.md).
 
+## The SVG sanitizer upgrade
+
+`enshrined/svg-sanitize` moved from `^0.22` to `^1.0` to pick up four advisories
+unpatched in every `0.22` release. The upgrade narrows what an SVG upload is
+allowed to be, which is a changed default about what is refused, so it is
+breaking under rule 2 above.
+
+Two things can change for an upload that used to succeed:
+
+1. **An SVG referencing a custom entity is refused.** The `<!DOCTYPE>` is now
+   stripped before parsing, so a document that uses `&x;` against its own
+   `<!ENTITY x ...>` no longer parses and reaches the application as an ordinary
+   `IngestRefused` naming the file. Against `0.22` it was sanitized and stored
+   with the entity expanded. Re-export with the entity text inlined. Merely
+   declaring an entity is not refused: an unused declaration is dropped and the
+   document survives.
+2. **More remote references are stripped.** A bare remote `href` or `src`, an
+   unquoted `url()`, a `url()` among other declarations in a `style` attribute,
+   and a remote `@import` or `url()` inside a `<style>` element are now removed,
+   where `0.22` left them in the stored bytes. The file still uploads. A local
+   `/x` or fragment `#x` reference is untouched.
+
+   Watch the `style` attribute case, which is the one that can change how a file
+   looks: a remote `url()` costs the **whole attribute**, not just that one
+   declaration, so `style="fill:red;background:url(https://...)"` comes back
+   with no `style` at all and the `fill:red` is lost with it. An SVG that styled
+   itself inline alongside a remote reference will render differently.
+
+Nothing is re-sanitized at rest, so SVGs stored before this release keep the
+bytes `0.22` produced for them. Re-uploading is the only way to give an existing
+SVG the stricter pass, and it is worth doing for any public SVG, which no
+response header covers
+([ADR 5](docs/adr/0005-public-svg-is-sanitized-more-strictly.md)).
+
+There is no config key for this: the sanitizer's strictness is not configurable
+by design, because an application that could loosen it would be storing the
+markup this package promises it refuses.
+
 ## 0.x
 
 The package is `0.3.0` and pre-release. Until `1.0.0`, a minor version may carry
