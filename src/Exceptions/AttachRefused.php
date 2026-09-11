@@ -25,9 +25,13 @@ class AttachRefused extends RuntimeException
      * The reconcile asked for an id that names no live asset.
      *
      * Only the reconciler tells this apart from a tenant mismatch. A viewer
-     * picking ids never arrives here: the picker's own rule asks reach during
-     * validation and fails the save with its single wording before any
-     * reconcile runs, so the pair of messages is reachable by a caller
+     * picking ids does not normally arrive here: the picker's own rule asks
+     * reach during validation and fails the save with its single wording
+     * before any reconcile runs. The exception is the window between the two,
+     * where an asset deleted in between lands a viewer on this wording, which
+     * tells them an id they were already holding stopped resolving rather
+     * than anything about a tenant they cannot see. Otherwise the pair of
+     * messages is reachable by a caller
      * writing its own reconcile, for whom an id resolving to nothing is a bug
      * in its own code rather than a probe of somebody else's tenant. That is
      * the reading of ADR 7 this rests on: the boundary is what a viewer can
