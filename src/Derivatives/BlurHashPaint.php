@@ -13,6 +13,11 @@ namespace Lisowiecw\MediaLibrary\Derivatives;
  * attribute. That costs a few hundred bytes per pending card and needs no
  * decoder in the browser. It is deliberately coarser than a real decode: the
  * hash rides along as `data-blurhash` for a consumer who wants one.
+ *
+ * Private to Card painting, which is the only thing that asks for it: a
+ * surface is handed the painted style rather than the hash to paint from.
+ *
+ * @internal
  */
 final readonly class BlurHashPaint
 {

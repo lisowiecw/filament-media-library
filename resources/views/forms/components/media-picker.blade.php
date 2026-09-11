@@ -62,7 +62,7 @@
                             x-on:drop.prevent.stop="drop({{ $index }})"
                         @endif
                     >
-                        @if ($thumbnail = $getThumbnailUrl($asset))
+                        @if ($thumbnail = $paintCard($asset)->thumbnail)
                             <img class="fi-ml-picker-item-thumb" src="{{ $thumbnail }}" alt="{{ $asset->alt }}" loading="lazy">
                         @endif
 

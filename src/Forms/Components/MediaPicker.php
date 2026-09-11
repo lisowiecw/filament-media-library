@@ -19,9 +19,8 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
-use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
-use Lisowiecw\MediaLibrary\Derivatives\CardResolution;
-use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
+use Lisowiecw\MediaLibrary\Derivatives\CardPainting;
+use Lisowiecw\MediaLibrary\Derivatives\PaintedCard;
 use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
 use Lisowiecw\MediaLibrary\Filament\Notifications\RefusalNotice;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
@@ -75,6 +74,8 @@ class MediaPicker extends Field
     protected ?Closure $scopeLibrary = null;
 
     protected ?Closure $thumbnailUsing = null;
+
+    protected ?CardPainting $cardPainting = null;
 
     protected Width|string|Closure|null $modalWidth = null;
 
@@ -207,6 +208,10 @@ class MediaPicker extends Field
     {
         $this->thumbnailUsing = $callback;
 
+        // The Card painting is built from the rule, so a rule set after one
+        // was built has to drop it rather than paint through the old one.
+        $this->cardPainting = null;
+
         return $this;
     }
 
@@ -264,67 +269,51 @@ class MediaPicker extends Field
     }
 
     /**
-     * The preview URL for one asset under this field's own rule, which the
-     * Library grid asks for through the closure this field hands it. A field
-     * that was never told resolves through the derivative pipeline, which
-     * answers with a rendering, with the original where the original is small
-     * enough to be its own, and with null while there is nothing to paint yet.
+     * This field's Card painting, built once from its Thumbnail rule and used
+     * by both surfaces that paint a card for it: the library grid, and the
+     * items sitting beside the field.
      */
-    public function getThumbnailUrl(MediaAsset $asset): ?string
+    public function getCardPainting(): CardPainting
     {
-        // An asset the viewer may not be delivered paints no thumbnail here
-        // either, so an attachment made before the tenant existed degrades to
-        // a glyph tile rather than to a broken image. The row stays in the
-        // list, because it is still usage and still blocks deletion.
-        if (! app(MediaAuthorization::class)->allowsView($asset)) {
-            return null;
-        }
+        return $this->cardPainting ??= new CardPainting(
+            $this->thumbnailUsing === null
+                ? null
+                : function (MediaAsset $asset): ?string {
+                    /** @var string|null $url */
+                    $url = $this->evaluate($this->thumbnailUsing, ['asset' => $asset], [MediaAsset::class => $asset]);
 
-        if ($this->thumbnailUsing === null) {
-            return Derivatives::thumbnailUrl($asset);
-        }
+                    return $url;
+                },
+        );
+    }
 
-        /** @var string|null $url */
-        $url = $this->evaluate($this->thumbnailUsing, ['asset' => $asset], [MediaAsset::class => $asset]);
-
-        return $url;
+    /**
+     * What one attached item beside the field paints. An asset the viewer may
+     * not be delivered paints no thumbnail, so an attachment made before the
+     * tenant existed degrades to a bare item rather than to a broken image.
+     * The row stays in the list, because it is still usage and still blocks
+     * deletion.
+     */
+    public function paintCard(MediaAsset $asset): PaintedCard
+    {
+        return $this->getCardPainting()->paint($asset);
     }
 
     /**
      * Whether the attached items beside the field ask again while the person
-     * looks at them, on the same terms as the library grid: while anything
-     * listed is unresolved, and not at all once everything listed is ready or
-     * failed.
-     *
-     * An item the viewer may not be delivered paints no thumbnail whatever
-     * lands, so nothing is waited on for it.
+     * looks at them, on the same terms as the library grid, since both go
+     * through the same Card painting.
      *
      * @param  Collection<int, MediaAsset>  $assets
      */
     public function shouldPoll(Collection $assets): bool
     {
-        if (! $this->paintsThroughPipeline()) {
-            return false;
-        }
-
-        return CardResolution::pending($assets->filter(
-            fn (MediaAsset $asset): bool => app(MediaAuthorization::class)->allowsView($asset),
-        ));
+        return $this->getCardPainting()->pending($assets);
     }
 
     public function getPollInterval(): string
     {
-        return CardResolution::interval();
-    }
-
-    /**
-     * Whether the package's own derivative pipeline is what paints this
-     * field's thumbnails. A field that resolves its own is waiting on nothing
-     * the package can settle, so neither surface asks again for it.
-     */
-    public function paintsThroughPipeline(): bool
-    {
-        return $this->thumbnailUsing === null;
+        return $this->getCardPainting()->interval();
     }
 
     /**
@@ -752,8 +741,7 @@ class MediaPicker extends Field
                 ->schema([
                     LibraryGrid::make('library')
                         ->offerScope(fn (): OfferScope => $this->getOfferScope())
-                        ->thumbnailUsing(fn (MediaAsset $asset): ?string => $this->getThumbnailUrl($asset))
-                        ->pollable($this->paintsThroughPipeline())
+                        ->cardPainting(fn (): CardPainting => $this->getCardPainting())
                         ->selectionLimit(fn (): ?int => $this->getSelectionLimit())
                         ->dropTargetKey(fn (): ?string => $this->isDroppable() ? $this->getKey() : null)
                         ->dropStatePath(fn (): string => $this->getDropStatePath()),

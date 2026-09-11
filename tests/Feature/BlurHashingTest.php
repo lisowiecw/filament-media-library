@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
+use Lisowiecw\MediaLibrary\Derivatives\CardPainting;
 use Lisowiecw\MediaLibrary\Derivatives\Derivatives;
 use Lisowiecw\MediaLibrary\Derivatives\RegenerationTargets;
 use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
@@ -240,8 +241,7 @@ describe('hashing an imported asset at render time', function (): void {
 
         $asset = makeAsset(['size' => 900_000, 'visibility' => 'public']);
 
-        $grid = LibraryGrid::make('gallery');
-        $grid->blurhash($asset);
+        (new CardPainting)->paint($asset);
 
         Bus::assertDispatchedTimes(ComputeBlurHash::class, 1);
     });
