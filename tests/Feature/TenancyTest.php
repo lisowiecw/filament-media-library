@@ -183,6 +183,30 @@ describe('attaching', function (): void {
         expect($article->mediaAttachments()->count())->toBe(1);
     });
 
+    it('leaves an attachment alone once its asset is soft-deleted', function (): void {
+        $asset = makeAsset(['tenant_id' => 'acme']);
+        $article = Article::create(['title' => 'Post']);
+        app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$asset->id]);
+        $asset->delete();
+
+        tenantIs('acme');
+
+        app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$asset->id]);
+
+        expect($article->mediaAttachments()->count())->toBe(1);
+    });
+
+    it('refuses to attach a soft-deleted asset that was not attached already', function (): void {
+        $asset = makeAsset(['tenant_id' => 'acme']);
+        $asset->delete();
+        $article = Article::create(['title' => 'Post']);
+
+        tenantIs('acme');
+
+        expect(fn () => app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$asset->id]))
+            ->toThrow(AttachRefused::class);
+    });
+
     it('refuses to attach an id that names no asset at all', function (): void {
         $asset = makeAsset(['tenant_id' => 'acme']);
         $id = $asset->id;
