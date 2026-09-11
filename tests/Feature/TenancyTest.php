@@ -237,7 +237,7 @@ it('asks one place whether a field context reaches the ids it wants', function (
             (int) $reflected->getStartLine() - 1,
             (int) $reflected->getEndLine() - (int) $reflected->getStartLine() + 1,
         ));
-    }, [[MediaPicker::class, 'getAvailabilityRule'], [AttachmentReconciler::class, 'refuseCrossTenant']]);
+    }, [[MediaPicker::class, 'getReachRule'], [AttachmentReconciler::class, 'refuseUnreachable']]);
 
     foreach ($bodies as $body) {
         expect($body)->toContain('TenantReach::reaches(');

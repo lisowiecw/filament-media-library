@@ -43,7 +43,7 @@ class AttachmentReconciler
                 }
             }
 
-            $this->refuseCrossTenant($desired, array_values($existing->keys()->all()));
+            $this->refuseUnreachable($desired, array_values($existing->keys()->all()));
 
             foreach ($desired as $order => $assetId) {
                 $attachment = $existing->get($assetId);
@@ -82,7 +82,9 @@ class AttachmentReconciler
     }
 
     /**
-     * Refuse a reconcile that would attach an asset the caller cannot reach,
+     * Refuse a reconcile that would attach an id the caller cannot reach,
+     * whether it names an asset outside the tenant boundary or no live asset
+     * at all,
      * which is what stops a programmatic attach sailing past the scope the
      * grid was offering under.
      *
@@ -92,7 +94,7 @@ class AttachmentReconciler
      * @param  list<int>  $desired
      * @param  list<int|string>  $attached
      */
-    private function refuseCrossTenant(array $desired, array $attached): void
+    private function refuseUnreachable(array $desired, array $attached): void
     {
         if (! TenantReach::reaches($desired, $attached)) {
             throw AttachRefused::tenantMismatch();
