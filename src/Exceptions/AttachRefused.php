@@ -18,6 +18,20 @@ use RuntimeException;
  */
 class AttachRefused extends RuntimeException
 {
+    /**
+     * The reconcile asked for an id that names no live asset.
+     *
+     * Only the reconciler tells this apart from a tenant mismatch, because it
+     * is reached from application code rather than from a viewer: an id that
+     * resolves to nothing there is the caller's own bug, and saying so costs
+     * no confidentiality. The picker keeps one wording for every refusal,
+     * where telling the two apart would answer whether an asset exists.
+     */
+    public static function unknownAsset(): self
+    {
+        return new self('No such media asset: an id was asked for that names nothing the library holds.');
+    }
+
     public static function tenantMismatch(): self
     {
         return new self('An asset outside the current tenant cannot be attached.');
