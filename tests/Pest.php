@@ -71,6 +71,23 @@ function pngUpload(string $name = 'photo.png'): UploadedFile
 }
 
 /**
+ * A real raster of the given size, so the pipeline has something GD can decode
+ * rather than a fake with no pixels.
+ */
+function largeImage(string $name = 'photo.png', int $width = 1200, int $height = 900): UploadedFile
+{
+    return UploadedFile::fake()->image($name, $width, $height);
+}
+
+function storeImage(MediaAsset $asset, int $width = 1200, int $height = 900): void
+{
+    // The fake upload has to outlive the read: its temp file goes with it.
+    $file = largeImage('x.png', $width, $height);
+
+    Storage::disk($asset->disk)->put($asset->object_key, (string) file_get_contents((string) $file->getRealPath()));
+}
+
+/**
  * @param  array<string, mixed>  $overrides
  */
 function makeAsset(array $overrides = []): MediaAsset

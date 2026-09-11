@@ -261,6 +261,11 @@ final readonly class BlurHashing
      * describes a hash that is ready or failed and a settled row can never be
      * read as an abandoned computation.
      *
+     * The dispatch allowance is not asked here. It caps how much work may be
+     * admitted, and the read and the decode behind this call are already paid
+     * for: refusing the write would only lose the answer and buy it again once
+     * the pending row aged out. See ADR 22.
+     *
      * An unsaved asset has no row to race for, so it is filled and left for
      * its own save: that is what lets ingest write the hash in the insert it
      * was already making rather than in a second write. The fill is forced
@@ -274,10 +279,6 @@ final readonly class BlurHashing
         if (! $asset->exists) {
             $asset->forceFill($written);
 
-            return;
-        }
-
-        if (! app(HashDispatch::class)->allows()) {
             return;
         }
 
