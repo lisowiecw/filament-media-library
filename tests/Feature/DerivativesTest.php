@@ -286,6 +286,9 @@ describe('resolving a thumbnail at render time', function (): void {
     });
 
     it('caps how much backfill a minute may queue', function (): void {
+        // The cap holds within one wall-clock minute; see `LazyDispatch`.
+        $this->freezeTime();
+
         Bus::fake();
         config()->set('media-library.derivatives.lazy_dispatch.per_minute', 1);
 

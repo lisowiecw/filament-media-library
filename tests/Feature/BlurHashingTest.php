@@ -130,6 +130,10 @@ describe('hashing an imported asset at render time', function (): void {
     })->throwsNoExceptions();
 
     it('spends its own allowance rather than the derivative one', function (): void {
+        // The allowance belongs to the wall-clock minute it is spent in, so a
+        // boundary crossed mid-test would hand the next call a fresh one.
+        $this->freezeTime();
+
         Bus::fake();
         config()->set('media-library.blurhash.lazy_dispatch.per_minute', 1);
         config()->set('media-library.derivatives.lazy_dispatch.per_minute', 1000);
@@ -148,6 +152,8 @@ describe('hashing an imported asset at render time', function (): void {
     });
 
     it('spends no hash allowance on derivative work', function (): void {
+        $this->freezeTime();
+
         Bus::fake();
         config()->set('media-library.derivatives.lazy_dispatch.per_minute', 1);
 
@@ -172,6 +178,8 @@ describe('hashing an imported asset at render time', function (): void {
     });
 
     it('caps how much hashing one minute may queue', function (): void {
+        $this->freezeTime();
+
         Bus::fake();
         config()->set('media-library.blurhash.lazy_dispatch.per_minute', 2);
 
@@ -183,6 +191,8 @@ describe('hashing an imported asset at render time', function (): void {
     });
 
     it('records a computed hash with the minute\'s allowance already spent', function (): void {
+        $this->freezeTime();
+
         $asset = makeAsset(['size' => 900_000]);
         storeImage($asset);
 
@@ -202,6 +212,8 @@ describe('hashing an imported asset at render time', function (): void {
     });
 
     it('settles a failure with the minute\'s allowance already spent', function (): void {
+        $this->freezeTime();
+
         Bus::fake();
 
         $asset = makeAsset(['size' => 900_000]);
@@ -219,6 +231,8 @@ describe('hashing an imported asset at render time', function (): void {
     });
 
     it('spends nothing of the allowance on settling what it already computed', function (): void {
+        $this->freezeTime();
+
         Bus::fake();
         config()->set('media-library.blurhash.lazy_dispatch.per_minute', 2);
 

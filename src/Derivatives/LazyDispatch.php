@@ -85,6 +85,12 @@ class LazyDispatch
      * It is a counter rather than a lock: two workers racing it can overshoot
      * by one, which is a cap doing its job rather than a queue admission
      * control that has to be exact.
+     *
+     * The window is the wall-clock minute the spend lands in, since the key
+     * carries that minute's stamp, rather than a minute measured from the
+     * first spend. A caller straddling a boundary is handed a fresh allowance
+     * on the far side of it, which is the same overshoot by a different route
+     * and is why a test asserting a cap freezes the clock.
      */
     private function spendMinuteAllowance(): bool
     {
