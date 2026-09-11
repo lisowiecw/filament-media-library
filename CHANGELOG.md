@@ -2,6 +2,8 @@
 
 ## [Unreleased](https://github.com/lisowiecw/filament-media-library/compare/v0.3.0...main)
 
+- A programmatic reconcile that asks for an id naming no live asset now says so, rather than reporting a tenant mismatch for a save where no tenant was involved: `AttachRefused::unknownAsset()` joins `tenantMismatch()`, and the reconciler picks between them once the refusal is already settled. The picker is unchanged and keeps one wording for every refusal it shows, because telling the two apart there would tell a viewer whether an asset they cannot reach exists, which is the boundary [ADR 7](docs/adr/0007-tenancy-is-a-policy-boundary-not-a-query-scope.md) draws. An application catching `AttachRefused` catches both, since the new refusal is a second named constructor on the same class rather than a new type.
+
 - A host record whose picked asset has since been deleted saves again: the rule deciding whether a field context may attach the ids it is asking for checked that every desired id resolves to a live asset before it set aside the ids that were already attached, so an asset that a Delete had soft-deleted, with its attachment row still in place, refused every save of the record it sat on, rather than leaving the existing attachment alone and dimming its tile. Existence is now asked only of the ids actually arriving, which is the same treatment the tenant boundary already gave them: an attachment made before its asset was deleted, before tenancy was configured, or before an asset was claimed, is left as it is. Attaching an id that names no asset at all is refused exactly as before.
 
 ## [v0.3.0](https://github.com/lisowiecw/filament-media-library/compare/v0.2.2...v0.3.0) - 2026-09-07

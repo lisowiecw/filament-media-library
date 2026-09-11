@@ -226,7 +226,30 @@ describe('attaching', function (): void {
         tenantIs('acme');
 
         expect(fn () => app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$asset->id]))
-            ->toThrow(AttachRefused::class);
+            ->toThrow(AttachRefused::class, 'No such media asset');
+    });
+
+    it('says an unknown asset where no tenant is configured at all', function (): void {
+        $asset = makeAsset();
+        $id = $asset->id;
+        $asset->forceDelete();
+        $article = Article::create(['title' => 'Post']);
+
+        expect(fn () => app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$id]))
+            ->toThrow(AttachRefused::class, 'No such media asset');
+    });
+
+    it('reports the unknown id where one id is unknown and another is another tenant\'s', function (): void {
+        $theirs = makeAsset(['tenant_id' => 'other']);
+        $gone = makeAsset(['tenant_id' => 'acme', 'object_key' => 'media/two.jpg']);
+        $goneId = $gone->id;
+        $gone->forceDelete();
+        $article = Article::create(['title' => 'Post']);
+
+        tenantIs('acme');
+
+        expect(fn () => app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$theirs->id, $goneId]))
+            ->toThrow(AttachRefused::class, 'No such media asset');
     });
 
     it('refuses to attach an id that names no asset at all', function (): void {
