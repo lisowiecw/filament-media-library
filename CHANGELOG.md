@@ -2,7 +2,7 @@
 
 ## [Unreleased](https://github.com/lisowiecw/filament-media-library/compare/v0.3.0...main)
 
-- A host record whose picked asset has since been sent to the trash saves again: the rule deciding whether a field context may attach the ids it is asking for checked that every desired id resolves to a live asset before it set aside the ids that were already attached, so a soft-deleted asset with its attachment row still in place refused every save of the record it sat on, rather than leaving the existing attachment alone and dimming its tile. Existence is now asked only of the ids actually arriving, which is the same treatment the tenant boundary already gave them: an attachment made before an asset was trashed, before tenancy was configured, or before an asset was claimed, is left as it is. Attaching an id that names no asset at all is refused exactly as before.
+- A host record whose picked asset has since been deleted saves again: the rule deciding whether a field context may attach the ids it is asking for checked that every desired id resolves to a live asset before it set aside the ids that were already attached, so an asset that a Delete had soft-deleted, with its attachment row still in place, refused every save of the record it sat on, rather than leaving the existing attachment alone and dimming its tile. Existence is now asked only of the ids actually arriving, which is the same treatment the tenant boundary already gave them: an attachment made before its asset was deleted, before tenancy was configured, or before an asset was claimed, is left as it is. Attaching an id that names no asset at all is refused exactly as before.
 
 ## [v0.3.0](https://github.com/lisowiecw/filament-media-library/compare/v0.2.2...v0.3.0) - 2026-09-07
 
