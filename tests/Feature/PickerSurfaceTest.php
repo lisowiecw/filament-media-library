@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Filament\Actions\Testing\TestAction;
 use Filament\Support\Enums\Width;
 use Illuminate\Http\UploadedFile;
 use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
@@ -172,6 +173,20 @@ it('commits a drop at once, where a click in the Library tab waits for the confi
     expect($component->get('data.cover_image'))->toBe([$asset->id]);
 });
 
+it('replaces what a single-selection field holds with a file dropped onto it', function (): void {
+    $host = article();
+    $existing = libraryAsset();
+    attach($host, $existing);
+
+    $component = pickerForm($host);
+
+    dropOnPicker($component, UploadedFile::fake()->image('replacement.png'));
+
+    $uploaded = MediaAsset::query()->where('id', '!=', $existing->id)->firstOrFail();
+
+    expect($component->get('data.cover_image'))->toBe([$uploaded->id]);
+});
+
 it('uses the first of several files dropped on a single-selection field, and says so', function (): void {
     $component = pickerForm(article());
 
@@ -203,6 +218,25 @@ it('attaches the rest of a drop the ingest floor refuses one file out of, and sa
         ->and($component->get('data.cover_image'))->toBe(MediaAsset::query()->pluck('id')->all());
 
     $component->assertNotified();
+});
+
+it('uploads only what a gallery has room for from the Upload tab, as the confirm commits', function (): void {
+    $host = article();
+    attach($host, libraryAsset());
+
+    // The Upload tab stages behind the modal's confirm, and the cap is still
+    // on the gesture: what the field cannot hold is never ingested, so the
+    // confirm leaves no unattached asset behind in the library.
+    pickerForm($host, ['multiple' => true, 'maxItems' => 2])
+        ->callAction(
+            TestAction::make('library')->schemaComponent('cover_image'),
+            ['file' => [
+                UploadedFile::fake()->image('first.png'),
+                UploadedFile::fake()->image('second.png'),
+            ]],
+        );
+
+    expect(MediaAsset::query()->count())->toBe(2);
 });
 
 it('offers the Library tab body as a drop surface too', function (): void {
