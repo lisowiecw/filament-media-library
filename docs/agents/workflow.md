@@ -6,6 +6,7 @@ Two procedures, both enforced by configuration rather than by convention: main t
 
 - **main is the only permanent branch.** Every other branch is temporary and deletes itself on merge. Throwaway work worth keeping (prototypes, research) is an annotated tag, not a branch: `prototype/06-picker-workflow`, `research/svg-sanitizer` and the rest are tags, and the tickets that cite them use `git show <tag>:<path>`.
 - **The PR body becomes the commit message.** Squash merges take the PR title as the subject and the body as the message, so the prose that explains a change is written in the PR, not in the branch's commits.
+- **`/code-review` runs before the push, every time.** It is the one step with no configuration behind it: `matrix` cannot tell that a name stopped matching the glossary or that a change did more than its ticket asked. A push that happens before the review has skipped it, because a review whose findings land after the merge is a report rather than a gate. Both axes have to come back before `git push`, and a finding is either fixed on the branch or written down as a follow-up ticket in the PR body.
 - **Never merge with `--admin`.** It bypasses `matrix` as well as the review requirement, which is the one protection main has.
 - Commit messages carry no `Co-Authored-By` trailer.
 - The pre-commit hook runs PHPStan, Pint, Pest and type coverage, so a commit that breaks them does not get made.
@@ -30,9 +31,9 @@ Two procedures, both enforced by configuration rather than by convention: main t
 
 3. **Build it.** `/implement <number>` drives `/tdd` one red-green slice at a time. Clear context between tickets: each one is self-contained.
 
-4. **Review the diff before it leaves the machine.** `/code-review` reads it on both axes, Standards and Spec.
+4. **Review the diff before it leaves the machine.** `/code-review` reads it on both axes, Standards and Spec. Nothing is pushed until both axes have reported: see the standing rule above.
 
-5. **Push and open the pull request.**
+5. **Push and open the pull request**, with step 4 done and its findings either fixed or listed.
 
    ```bash
    git push -u origin <short-slug>
