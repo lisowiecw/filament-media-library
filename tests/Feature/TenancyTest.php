@@ -9,6 +9,7 @@ use Lisowiecw\MediaLibrary\Delivery\DeliveryRoute;
 use Lisowiecw\MediaLibrary\Enums\BlurHashStatus;
 use Lisowiecw\MediaLibrary\Enums\Visibility;
 use Lisowiecw\MediaLibrary\Exceptions\AttachRefused;
+use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
 use Lisowiecw\MediaLibrary\Library\OfferScope;
 use Lisowiecw\MediaLibrary\MediaLibraryPlugin;
@@ -181,6 +182,42 @@ describe('attaching', function (): void {
 
         expect($article->mediaAttachments()->count())->toBe(1);
     });
+
+    it('refuses to attach an id that names no asset at all', function (): void {
+        $asset = makeAsset(['tenant_id' => 'acme']);
+        $id = $asset->id;
+        $asset->forceDelete();
+        $article = Article::create(['title' => 'Post']);
+
+        tenantIs('acme');
+
+        expect(fn () => app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$id]))
+            ->toThrow(AttachRefused::class);
+    });
+});
+
+/**
+ * The rule "may this field context attach these ids" has one home, so the
+ * picker's validation rule and the reconciler cannot drift apart: a condition
+ * added to it is felt on both paths or neither. Read off the source, because
+ * agreeing on today's ids is what two spellings do right up until one of them
+ * changes.
+ */
+it('asks one place whether a field context reaches the ids it wants', function (): void {
+    $bodies = array_map(function (array $target): string {
+        $reflected = new ReflectionMethod($target[0], $target[1]);
+        $lines = file((string) $reflected->getFileName()) ?: [];
+
+        return implode('', array_slice(
+            $lines,
+            (int) $reflected->getStartLine() - 1,
+            (int) $reflected->getEndLine() - (int) $reflected->getStartLine() + 1,
+        ));
+    }, [[MediaPicker::class, 'getAvailabilityRule'], [AttachmentReconciler::class, 'refuseCrossTenant']]);
+
+    foreach ($bodies as $body) {
+        expect($body)->toContain('TenantReach::reaches(');
+    }
 });
 
 describe('the claim command', function (): void {

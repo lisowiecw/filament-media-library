@@ -87,6 +87,8 @@
   _Avoid_: Team, workspace, account (these name a host application's concept; the plugin only knows the resolved value)
 - **Untenanted asset**: A Media Asset with no Tenant: everything uploaded before tenancy was configured, and anything adopted by an import declared untenanted. It belongs to no one rather than to everyone, so no tenant sees it or can be delivered it; it is reachable only by cross-tenant authority. Treating it as shared would hand every tenant the library of the single-tenant app that preceded them.
   _Avoid_: Global asset, shared asset, orphan (an orphan is an asset with no Attachment, which is a different thing)
+- **Tenant reach**: Whether a field context may attach the ids it is asking for: every id has to name an asset that exists, and every id *arriving* has to be inside the current Tenant's boundary. What is already attached is left alone, so an Attachment written before tenancy was configured degrades to a dimmed tile rather than blocking every save of the host record it sits on. Reach answers yes or no and never names an id, since naming one back would confirm that an asset the viewer cannot reach exists.
+  _Avoid_: Available, permitted (View decides what is delivered; reach only decides what may be attached)
 - **Claim**: Assigning a Tenant to an Untenanted asset. Claiming is one-way and permitted once, because an unowned asset gaining an owner is not the same act as an asset changing owner, which never happens.
   _Avoid_: Move, transfer, reassign
 
