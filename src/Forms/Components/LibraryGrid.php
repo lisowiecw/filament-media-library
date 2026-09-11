@@ -8,10 +8,8 @@ use Closure;
 use Filament\Forms\Components\Field;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\HtmlString;
-use Lisowiecw\MediaLibrary\Authorization\MediaAuthorization;
-use Lisowiecw\MediaLibrary\Derivatives\BlurHashing;
-use Lisowiecw\MediaLibrary\Derivatives\BlurHashPaint;
-use Lisowiecw\MediaLibrary\Derivatives\CardResolution;
+use Lisowiecw\MediaLibrary\Derivatives\CardPainting;
+use Lisowiecw\MediaLibrary\Derivatives\PaintedCard;
 use Lisowiecw\MediaLibrary\Ingest\TypeFamily;
 use Lisowiecw\MediaLibrary\Library\Facets\Facet;
 use Lisowiecw\MediaLibrary\Library\FacetSidebar;
@@ -48,13 +46,11 @@ class LibraryGrid extends Field
 
     protected Closure|int|null $selectionLimit = null;
 
-    protected ?Closure $thumbnailUsing = null;
+    protected Closure|CardPainting|null $cardPainting = null;
 
     protected Closure|string|null $dropTargetKey = null;
 
     protected Closure|string|null $dropStatePath = null;
-
-    protected Closure|bool $pollable = true;
 
     /**
      * The sidebar for the state it was built from, so one render's counts,
@@ -113,11 +109,12 @@ class LibraryGrid extends Field
     }
 
     /**
-     * How the field this grid belongs to resolves a card's preview image.
+     * How the field this grid belongs to paints a card. The field owns the
+     * Thumbnail rule, so the field is what constructs this.
      */
-    public function thumbnailUsing(?Closure $callback): static
+    public function cardPainting(Closure|CardPainting|null $painting): static
     {
-        $this->thumbnailUsing = $callback;
+        $this->cardPainting = $painting;
 
         return $this;
     }
@@ -158,18 +155,16 @@ class LibraryGrid extends Field
     }
 
     /**
-     * The preview URL for a card that may paint one. It is asked for only
-     * after canPreview() has said yes, so a field's own callback is never
-     * handed an asset the viewer may not be delivered. The owning field always
-     * supplies the rule, so there is no second answer to the same question
-     * here.
+     * The Card painting this grid's cards go through. A grid the owning field
+     * never told paints through the package's own pipeline, which is what a
+     * grid standing on its own does anyway.
      */
-    public function thumbnailUrl(MediaAsset $asset): ?string
+    public function getCardPainting(): CardPainting
     {
-        /** @var string|null $url */
-        $url = $this->evaluate($this->thumbnailUsing, ['asset' => $asset], [MediaAsset::class => $asset]);
+        /** @var CardPainting|null $painting */
+        $painting = $this->evaluate($this->cardPainting);
 
-        return $url;
+        return $painting ?? new CardPainting;
     }
 
     public function getSelectionLimit(): ?int
@@ -450,78 +445,32 @@ class LibraryGrid extends Field
     }
 
     /**
-     * Whether this card may paint the asset's own bytes. View is asked for
-     * every card, in the order the cards paint, because the answer is what
-     * separates a preview from a glyph tile; the per-request cache in
-     * MediaAuthorization is what keeps a grid of 48 to 48 evaluations however
-     * often it re-renders.
-     *
-     * Listing is never gated on the answer. An asset the viewer may not be
-     * delivered is still offered and still selectable, since offering shows
-     * metadata rather than content.
+     * Everything one card shows, in one pass: the thumbnail, the hash, the
+     * painting of it and whether anything is still in flight. The grid asks
+     * once per card and reads the pieces off the answer, rather than asking
+     * four questions that could disagree with one another.
      */
-    public function canPreview(MediaAsset $asset): bool
+    public function paintCard(MediaAsset $asset): PaintedCard
     {
-        $allowed = app(MediaAuthorization::class)->allowsView($asset);
-
-        return $allowed
-            && is_string($asset->mime_type)
-            && TypeFamily::of($asset->mime_type) === 'image';
+        return $this->getCardPainting()->paint($asset);
     }
 
     /**
-     * What this card paints, resolved once because resolving is what queues a
-     * missing thumb. Null covers everything with nothing to paint: a card that
-     * may not preview at all, and one whose thumb is still in flight or whose
-     * generation gave up. Pending and failed paint the same quiet tile,
-     * because a person waiting on a thumbnail and a person who will never get
-     * one both want the grid to sit still rather than spin.
-     */
-    public function cardThumbnail(MediaAsset $asset): ?string
-    {
-        return $this->canPreview($asset) ? $this->thumbnailUrl($asset) : null;
-    }
-
-    /**
-     * Whether the grid asks again while the person looks at it.
-     *
-     * The page in hand is what decides, not the library: a card that resolves
-     * is repainted where it is, and once every card on the page is ready or
-     * failed the attribute stops being emitted, so an idle open modal over a
-     * fully generated library costs nothing.
-     *
-     * A card that may not preview at all is a glyph tile for good and is
-     * waited on by nothing, and a grid whose thumbnails a field paints itself
-     * waits on nothing either, since the package's pipeline is then not what
-     * the card is waiting for.
+     * Whether the grid asks again while the person looks at it. The page in
+     * hand is what decides, not the library: a card that resolves is repainted
+     * where it is, and once every card on the page is ready or failed the
+     * attribute stops being emitted.
      *
      * @param  Collection<int, MediaAsset>  $assets
      */
     public function shouldPoll(Collection $assets): bool
     {
-        return $this->isPollable() && CardResolution::pending($assets->filter($this->canPreview(...)));
-    }
-
-    /**
-     * Whether waiting for the package's own pipeline says anything about this
-     * grid's cards. Told by the field the grid belongs to, because the field
-     * is what owns the thumbnail rule.
-     */
-    public function pollable(bool|Closure $condition = true): static
-    {
-        $this->pollable = $condition;
-
-        return $this;
-    }
-
-    public function isPollable(): bool
-    {
-        return (bool) $this->evaluate($this->pollable);
+        return $this->getCardPainting()->pending($assets);
     }
 
     public function getPollInterval(): string
     {
-        return CardResolution::interval();
+        return $this->getCardPainting()->interval();
     }
 
     /**
@@ -532,34 +481,6 @@ class LibraryGrid extends Field
     public function hasPlayBadge(MediaAsset $asset): bool
     {
         return $this->glyphFamily($asset) === 'video';
-    }
-
-    /**
-     * The BlurHash the card paints under an in-flight thumbnail, handed to the
-     * view as part of the grid payload and decoded by the consumer. Null where
-     * there is none, and the dimmed tile stands alone.
-     *
-     * Asking is what queues the hash of an asset that arrived by import, in
-     * the same way asking for a thumbnail queues a missing one, so a library
-     * nothing has ever generated for paints colour on the second look rather
-     * than never.
-     */
-    public function blurhash(MediaAsset $asset): ?string
-    {
-        return $this->canPreview($asset) ? BlurHashing::hashFor($asset) : null;
-    }
-
-    /**
-     * The pending tile's own painting of the BlurHash, as an inline style, or
-     * null where there is no hash or the stored value is not one. Coarse by
-     * design; `data-blurhash` carries the hash itself for a consumer who wants
-     * a real decode over the top.
-     */
-    public function blurhashPaint(MediaAsset $asset): ?string
-    {
-        $hash = $this->blurhash($asset);
-
-        return $hash === null ? null : BlurHashPaint::css($hash);
     }
 
     /**
