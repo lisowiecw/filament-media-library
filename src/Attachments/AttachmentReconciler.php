@@ -84,9 +84,8 @@ class AttachmentReconciler
     /**
      * Refuse a reconcile that would attach an id the caller cannot reach,
      * whether it names an asset outside the tenant boundary or no live asset
-     * at all,
-     * which is what stops a programmatic attach sailing past the scope the
-     * grid was offering under.
+     * at all. That is what stops a programmatic attach sailing past the scope
+     * the grid was offering under.
      *
      * The rule itself is TenantReach, shared with the picker's validation
      * rule; only the refusal is this call site's own.

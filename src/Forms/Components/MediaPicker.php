@@ -87,7 +87,7 @@ class MediaPicker extends Field
         $this->default([]);
 
         // Virtual: the host has no column to write to, but the id list is
-        // still validated, so cardinality and availability are enforced.
+        // still validated, so cardinality and reach are enforced.
         $this->dehydrated(false);
 
         $this->afterStateHydrated(static function (MediaPicker $component, mixed $state): void {
