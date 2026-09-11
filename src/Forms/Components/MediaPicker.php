@@ -592,7 +592,7 @@ class MediaPicker extends Field
      * This field's Drop intake, built from what the field says about where its
      * uploads land and how many it holds.
      */
-    public function getDropIntake(): DropIntake
+    private function getDropIntake(): DropIntake
     {
         return new DropIntake(
             $this->getPlacement(),

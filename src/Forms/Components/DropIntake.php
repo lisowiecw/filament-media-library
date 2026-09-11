@@ -35,7 +35,10 @@ final readonly class DropIntake
     /**
      * @param  bool  $multiple  Whether the field holds more than one asset, which is what
      *                          makes a fumbled multi-file drop a first file rather than an error.
-     * @param  int|null  $limit  How many assets the field may hold in total, null for no ceiling.
+     * @param  int|null  $limit  How many assets the field may hold in total, null for no
+     *                            ceiling. It is what a multiple field is measured against; a
+     *                            single selection replaces rather than filling up, so its own
+     *                            ceiling of one is never what decides.
      */
     public function __construct(
         private Placement $placement,

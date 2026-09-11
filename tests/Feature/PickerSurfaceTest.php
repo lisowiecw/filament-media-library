@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Filament\Actions\Testing\TestAction;
 use Filament\Support\Enums\Width;
 use Illuminate\Http\UploadedFile;
 use Lisowiecw\MediaLibrary\Forms\Components\MediaPicker;
@@ -217,6 +218,25 @@ it('attaches the rest of a drop the ingest floor refuses one file out of, and sa
         ->and($component->get('data.cover_image'))->toBe(MediaAsset::query()->pluck('id')->all());
 
     $component->assertNotified();
+});
+
+it('uploads only what a gallery has room for from the Upload tab, as the confirm commits', function (): void {
+    $host = article();
+    attach($host, libraryAsset());
+
+    // The Upload tab stages behind the modal's confirm, and the cap is still
+    // on the gesture: what the field cannot hold is never ingested, so the
+    // confirm leaves no unattached asset behind in the library.
+    pickerForm($host, ['multiple' => true, 'maxItems' => 2])
+        ->callAction(
+            TestAction::make('library')->schemaComponent('cover_image'),
+            ['file' => [
+                UploadedFile::fake()->image('first.png'),
+                UploadedFile::fake()->image('second.png'),
+            ]],
+        );
+
+    expect(MediaAsset::query()->count())->toBe(2);
 });
 
 it('offers the Library tab body as a drop surface too', function (): void {
