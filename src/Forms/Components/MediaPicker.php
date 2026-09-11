@@ -87,7 +87,7 @@ class MediaPicker extends Field
         $this->default([]);
 
         // Virtual: the host has no column to write to, but the id list is
-        // still validated, so cardinality and availability are enforced.
+        // still validated, so cardinality and reach are enforced.
         $this->dehydrated(false);
 
         $this->afterStateHydrated(static function (MediaPicker $component, mixed $state): void {
@@ -102,7 +102,7 @@ class MediaPicker extends Field
             $component->reconcile();
         });
 
-        $this->rule(static fn (MediaPicker $component): Closure => $component->getAvailabilityRule());
+        $this->rule(static fn (MediaPicker $component): Closure => $component->getReachRule());
 
         $this->registerActions([
             fn (MediaPicker $component): Action => $component->getLibraryAction(),
@@ -801,7 +801,7 @@ class MediaPicker extends Field
      * quietly dropped, and the message names the field alone: naming the id
      * back would confirm that an asset the viewer cannot reach exists.
      */
-    public function getAvailabilityRule(): Closure
+    public function getReachRule(): Closure
     {
         return function (string $attribute, mixed $value, Closure $fail): void {
             $ids = $this->normalisePickerValue($value);
