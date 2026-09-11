@@ -267,7 +267,7 @@ it('paints no thumbnail for an attachment outside the current tenant, leaving a 
 
     $picker = MediaPicker::make('cover_image');
 
-    expect($picker->paintItem($theirs)->thumbnail)->toBeNull();
+    expect($picker->paintCard($theirs)->thumbnail)->toBeNull();
 });
 
 it('polls while an attached item beside the field is still unresolved', function (): void {

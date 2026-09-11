@@ -207,6 +207,9 @@ class MediaPicker extends Field
     public function thumbnailUsing(?Closure $callback): static
     {
         $this->thumbnailUsing = $callback;
+
+        // The Card painting is built from the rule, so a rule set after one
+        // was built has to drop it rather than paint through the old one.
         $this->cardPainting = null;
 
         return $this;
@@ -291,7 +294,7 @@ class MediaPicker extends Field
      * The row stays in the list, because it is still usage and still blocks
      * deletion.
      */
-    public function paintItem(MediaAsset $asset): PaintedCard
+    public function paintCard(MediaAsset $asset): PaintedCard
     {
         return $this->getCardPainting()->paint($asset);
     }

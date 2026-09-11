@@ -46,6 +46,9 @@ final readonly class CardPainting
             return new PaintedCard;
         }
 
+        // The hash is asked for whoever paints the thumbnail, because it is a
+        // fact about the asset rather than a by-product of the pipeline, and
+        // asking is what computes the hash of an asset that arrived by import.
         $hash = BlurHashing::hashFor($asset);
 
         return new PaintedCard(
@@ -97,9 +100,11 @@ final readonly class CardPainting
     /**
      * Whether the package's own pipeline is what paints this field's cards. A
      * field that resolves its own thumbnails is waiting on nothing the package
-     * can settle, so neither surface asks again for it.
+     * can settle, so neither surface asks again for it. Nothing outside asks:
+     * a surface is handed the poll decision and the card, not the rule behind
+     * them.
      */
-    public function paintsThroughPipeline(): bool
+    private function paintsThroughPipeline(): bool
     {
         return $this->rule === null;
     }
