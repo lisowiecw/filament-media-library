@@ -8,9 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Lisowiecw\MediaLibrary\Exceptions\AttachRefused;
-use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
-use Lisowiecw\MediaLibrary\Tenancy\Tenancy;
+use Lisowiecw\MediaLibrary\Tenancy\TenantReach;
 
 /**
  * Brings a host model's attachments in one field context into line with an
@@ -83,31 +82,19 @@ class AttachmentReconciler
     }
 
     /**
-     * Refuse a reconcile that would attach an asset from outside the current
-     * tenant, which is what stops a programmatic attach sailing past the scope
-     * the grid was offering under.
+     * Refuse a reconcile that would attach an asset the caller cannot reach,
+     * which is what stops a programmatic attach sailing past the scope the
+     * grid was offering under.
      *
-     * Only what is arriving is checked. An attachment written before tenancy
-     * was configured, or before an asset was claimed, stays where it is and
-     * degrades to a dimmed tile in the picker: the day a resolver is added is
-     * not the day every host form starts failing to save.
+     * The rule itself is TenantReach, shared with the picker's validation
+     * rule; only the refusal is this call site's own.
      *
      * @param  list<int>  $desired
      * @param  list<int|string>  $attached
      */
     private function refuseCrossTenant(array $desired, array $attached): void
     {
-        $arriving = array_values(array_diff($desired, array_map(intval(...), $attached)));
-
-        if ($arriving === [] || ! Tenancy::isEnabled()) {
-            return;
-        }
-
-        $reachable = MediaAsset::query()->whereIn('id', $arriving);
-
-        Tenancy::scope($reachable);
-
-        if ($reachable->count() !== count($arriving)) {
+        if (! TenantReach::reaches($desired, $attached)) {
             throw AttachRefused::tenantMismatch();
         }
     }

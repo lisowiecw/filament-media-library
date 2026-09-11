@@ -30,7 +30,7 @@ use Lisowiecw\MediaLibrary\Ingest\Placement;
 use Lisowiecw\MediaLibrary\Library\OfferScope;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
-use Lisowiecw\MediaLibrary\Tenancy\Tenancy;
+use Lisowiecw\MediaLibrary\Tenancy\TenantReach;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 /**
@@ -806,28 +806,15 @@ class MediaPicker extends Field
         return function (string $attribute, mixed $value, Closure $fail): void {
             $ids = $this->normalisePickerValue($value);
 
-            if ($ids === []) {
+            if (TenantReach::reaches($ids, $this->getAttachedIds())) {
                 return;
             }
 
-            $available = MediaAsset::query()->whereIn('id', $ids)->count();
+            $label = $this->getLabel();
 
-            // What is arriving has to be inside the tenant boundary; what is
-            // already attached is left alone, so an attachment made before
-            // tenancy was configured degrades rather than blocking every save
-            // of the host record it sits on.
-            $arriving = array_values(array_diff($ids, $this->getAttachedIds()));
-            $reachable = MediaAsset::query()->whereIn('id', $arriving);
-
-            Tenancy::scope($reachable);
-
-            if ($available !== count($ids) || ($arriving !== [] && $reachable->count() !== count($arriving))) {
-                $label = $this->getLabel();
-
-                $fail(__('media-library::messages.picker.unavailable', [
-                    'field' => $label instanceof Htmlable ? $label->toHtml() : $label,
-                ]));
-            }
+            $fail(__('media-library::messages.picker.unavailable', [
+                'field' => $label instanceof Htmlable ? $label->toHtml() : $label,
+            ]));
         };
     }
 }
