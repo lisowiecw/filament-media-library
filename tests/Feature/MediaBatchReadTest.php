@@ -154,16 +154,10 @@ it('loads nothing when no field is named', function (): void {
  * do right up until one of them changes.
  */
 it('answers the field rule from one place on both paths', function (): void {
-    $bodies = array_map(function (string $method): string {
-        $reflected = new ReflectionMethod(MediaAttachment::class, $method);
-        $lines = file((string) $reflected->getFileName()) ?: [];
-
-        return implode('', array_slice(
-            $lines,
-            (int) $reflected->getStartLine() - 1,
-            (int) $reflected->getEndLine() - (int) $reflected->getStartLine() + 1,
-        ));
-    }, ['scopeForField', 'matchesField']);
+    $bodies = array_map(
+        fn (string $method): string => methodSource(MediaAttachment::class, $method),
+        ['scopeForField', 'matchesField'],
+    );
 
     foreach ($bodies as $body) {
         expect($body)->toContain('fieldConditions(');

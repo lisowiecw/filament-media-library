@@ -273,16 +273,13 @@ describe('attaching', function (): void {
  * changes.
  */
 it('asks one place whether a field context reaches the ids it wants', function (): void {
-    $bodies = array_map(function (array $target): string {
-        $reflected = new ReflectionMethod($target[0], $target[1]);
-        $lines = file((string) $reflected->getFileName()) ?: [];
-
-        return implode('', array_slice(
-            $lines,
-            (int) $reflected->getStartLine() - 1,
-            (int) $reflected->getEndLine() - (int) $reflected->getStartLine() + 1,
-        ));
-    }, [[MediaPicker::class, 'getReachRule'], [AttachmentReconciler::class, 'refuseUnreachable']]);
+    $bodies = array_map(
+        fn (array $target): string => methodSource(...$target),
+        [
+            [MediaPicker::class, 'getReachRule'],
+            [AttachmentReconciler::class, 'refuseUnreachable'],
+        ],
+    );
 
     foreach ($bodies as $body) {
         expect($body)->toContain('TenantReach::reaches(');

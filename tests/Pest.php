@@ -322,3 +322,21 @@ function readyDerivative(MediaAsset $asset, DerivativeVariant $variant = Derivat
 
     return $derivative;
 }
+
+/**
+ * A method's source text, read off disk, for the fitness tests that assert a
+ * rule has one home.
+ *
+ * @param  class-string  $class
+ */
+function methodSource(string $class, string $method): string
+{
+    $reflected = new ReflectionMethod($class, $method);
+    $lines = file((string) $reflected->getFileName()) ?: [];
+
+    return implode('', array_slice(
+        $lines,
+        (int) $reflected->getStartLine() - 1,
+        (int) $reflected->getEndLine() - (int) $reflected->getStartLine() + 1,
+    ));
+}
