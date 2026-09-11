@@ -21,16 +21,12 @@ use Illuminate\Support\Arr;
 use Lisowiecw\MediaLibrary\Attachments\AttachmentReconciler;
 use Lisowiecw\MediaLibrary\Derivatives\CardPainting;
 use Lisowiecw\MediaLibrary\Derivatives\PaintedCard;
-use Lisowiecw\MediaLibrary\Exceptions\IngestRefused;
-use Lisowiecw\MediaLibrary\Filament\Notifications\RefusalNotice;
 use Lisowiecw\MediaLibrary\Ingest\IngestRules;
-use Lisowiecw\MediaLibrary\Ingest\IngestService;
 use Lisowiecw\MediaLibrary\Ingest\Placement;
 use Lisowiecw\MediaLibrary\Library\OfferScope;
 use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Lisowiecw\MediaLibrary\Tenancy\TenantReach;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 /**
  * The single field component that renders a host model's attachments for one
@@ -571,9 +567,9 @@ class MediaPicker extends Field
     }
 
     /**
-     * Ingest whatever the browser has just staged at the drop path. This is
-     * the drop's whole commit: a drop attaches at once, unlike a click in the
-     * Library tab, which waits for the modal's confirm.
+     * Ingest whatever the browser has just staged at the drop path, and select
+     * it. This is the drop's whole commit: a drop attaches at once, unlike a
+     * click in the Library tab, which waits for the modal's confirm.
      */
     #[ExposedLivewireMethod]
     public function dropped(): void
@@ -581,84 +577,41 @@ class MediaPicker extends Field
         $livewire = $this->getLivewire();
         $path = $this->getDropStatePath();
 
-        /** @var list<TemporaryUploadedFile> $files */
-        $files = array_values(array_filter(
-            Arr::wrap(data_get($livewire, $path)),
-            fn (mixed $file): bool => $file instanceof TemporaryUploadedFile,
-        ));
+        $staged = data_get($livewire, $path);
 
         data_set($livewire, $path, []);
 
-        if ($files === [] || ! $this->isDroppable()) {
+        if (! $this->isDroppable()) {
             return;
         }
 
-        // A fumbled drop on a cover image is not an error page: the first file
-        // is what was meant, and the rest are named as ignored.
-        if (! $this->isMultiple() && count($files) > 1) {
-            $this->warn(__('media-library::messages.picker.single_drop', ['count' => count($files)]));
-
-            $files = [$files[0]];
-        }
-
-        // The cap is on the gesture, not just on the list it leaves behind:
-        // what the field has no room for is never ingested in the first place.
-        $files = $this->withinRoom($files);
-
-        foreach ($files as $file) {
-            $this->upload($file);
-        }
+        $this->ingestStaged($staged);
     }
 
     /**
-     * As many of the dropped files as the field still has room for, saying so
-     * once when it has room for fewer.
-     *
-     * @param  list<TemporaryUploadedFile>  $files
-     * @return list<TemporaryUploadedFile>
+     * This field's Drop intake, built from what the field says about where its
+     * uploads land and how many it holds.
      */
-    private function withinRoom(array $files): array
+    public function getDropIntake(): DropIntake
     {
-        $limit = $this->getSelectionLimit();
-
-        if ($limit === null) {
-            return $files;
-        }
-
-        $room = max(0, $limit - count($this->getPickerValue()));
-
-        if (count($files) <= $room) {
-            return $files;
-        }
-
-        $this->warn(__('media-library::messages.picker.full', ['count' => $limit]));
-
-        return array_slice($files, 0, $room);
+        return new DropIntake(
+            $this->getPlacement(),
+            $this->getIngestRules(),
+            $this->isMultiple(),
+            $this->getSelectionLimit(),
+        );
     }
 
     /**
-     * Ingest one uploaded file with this field's resolved Placement and select
-     * it, or say why the ingest floor would not have it.
-     *
-     * A refusal is absorbed here rather than left to each caller, because the
-     * drop path and the modal path would otherwise each have to remember, and
-     * a forgotten catch is silent: the file simply never appears. It is
-     * absorbed rather than rethrown for the same reason a half-worked drop is,
-     * that one refused file must not cost the person the rest of the gesture.
+     * Take a gesture's staged files into the Picker value. Every Drop surface
+     * ends here, so the one line that selects is written once and the intake
+     * itself never touches the field's state.
      */
-    public function upload(TemporaryUploadedFile $file): ?MediaAsset
+    private function ingestStaged(mixed $staged): void
     {
-        try {
-            $asset = app(IngestService::class)->ingest($file, $this->getPlacement(), $this->getIngestRules());
-        } catch (IngestRefused $refusal) {
-            $this->warn(RefusalNotice::text($refusal));
+        $assets = $this->getDropIntake()->take($staged, count($this->getPickerValue()));
 
-            return null;
-        }
-
-        $this->select([$asset->id]);
-
-        return $asset;
+        $this->select(array_map(fn (MediaAsset $asset): int => $asset->id, $assets));
     }
 
     /**
@@ -673,9 +626,9 @@ class MediaPicker extends Field
 
     /**
      * Something the person should know about a gesture that half worked, a
-     * refusal included. It is a notification rather than a validation error,
-     * because nothing they did was invalid and there is nothing on the field
-     * for them to correct: the file is simply not one the library takes.
+     * selection that would have overflowed above all. It is a notification
+     * rather than a validation error, because nothing they did was invalid and
+     * there is nothing on the field for them to correct.
      */
     private function warn(string $message): void
     {
@@ -719,11 +672,10 @@ class MediaPicker extends Field
 
                 $this->select($selection);
 
-                foreach (Arr::wrap($data['file'] ?? []) as $file) {
-                    if ($file instanceof TemporaryUploadedFile) {
-                        $this->upload($file);
-                    }
-                }
+                // The Upload tab is a Drop surface too; it stages rather than
+                // committing at once, and the confirm that ran this is what
+                // commits it.
+                $this->ingestStaged($data['file'] ?? null);
             });
     }
 

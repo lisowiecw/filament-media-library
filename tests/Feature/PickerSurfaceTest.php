@@ -172,6 +172,20 @@ it('commits a drop at once, where a click in the Library tab waits for the confi
     expect($component->get('data.cover_image'))->toBe([$asset->id]);
 });
 
+it('replaces what a single-selection field holds with a file dropped onto it', function (): void {
+    $host = article();
+    $existing = libraryAsset();
+    attach($host, $existing);
+
+    $component = pickerForm($host);
+
+    dropOnPicker($component, UploadedFile::fake()->image('replacement.png'));
+
+    $uploaded = MediaAsset::query()->where('id', '!=', $existing->id)->firstOrFail();
+
+    expect($component->get('data.cover_image'))->toBe([$uploaded->id]);
+});
+
 it('uses the first of several files dropped on a single-selection field, and says so', function (): void {
     $component = pickerForm(article());
 
