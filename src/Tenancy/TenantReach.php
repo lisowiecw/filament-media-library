@@ -41,7 +41,7 @@ final class TenantReach
             return true;
         }
 
-        $arriving = array_values(array_diff($desired, array_map(intval(...), $attached)));
+        $arriving = self::arriving($desired, $attached);
 
         if ($arriving === []) {
             return true;
@@ -59,5 +59,22 @@ final class TenantReach
         }
 
         return $reachable->count() === count($arriving);
+    }
+
+    /**
+     * The ids that are actually turning up, which is the only set either
+     * question is asked of.
+     *
+     * It is public because the reconciler needs the same set to say which of
+     * its two refusals happened, and a second spelling of it beside this one
+     * would agree until the day one of them changed.
+     *
+     * @param  list<int>  $desired
+     * @param  list<int|string>  $attached
+     * @return list<int>
+     */
+    public static function arriving(array $desired, array $attached): array
+    {
+        return array_values(array_diff($desired, array_map(intval(...), $attached)));
     }
 }

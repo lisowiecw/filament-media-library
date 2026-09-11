@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Lisowiecw\MediaLibrary\Exceptions\AttachRefused;
+use Lisowiecw\MediaLibrary\Models\MediaAsset;
 use Lisowiecw\MediaLibrary\Models\MediaAttachment;
 use Lisowiecw\MediaLibrary\Tenancy\TenantReach;
 
@@ -95,9 +96,26 @@ class AttachmentReconciler
      */
     private function refuseUnreachable(array $desired, array $attached): void
     {
-        if (! TenantReach::reaches($desired, $attached)) {
-            throw AttachRefused::tenantMismatch();
+        if (TenantReach::reaches($desired, $attached)) {
+            return;
         }
+
+        // Which of the two it was costs one query and is asked only once the
+        // refusal is settled, so the reach rule is not consulted for anything
+        // new. It is asked of the arriving ids, the same set reach judged and
+        // the same one it computes, since an id already attached is left
+        // alone whether its asset is still live or not.
+        //
+        // An id naming no live asset is unknown, whatever tenant is current
+        // and whether it never existed or is sitting in the trash, so a
+        // request carrying one unknown id and one cross-tenant id reports the
+        // unknown one: it is the reading that tells the caller least about
+        // the boundary.
+        $arriving = TenantReach::arriving($desired, $attached);
+
+        throw MediaAsset::query()->whereIn('id', $arriving)->count() === count($arriving)
+            ? AttachRefused::tenantMismatch()
+            : AttachRefused::unknownAsset();
     }
 
     /**

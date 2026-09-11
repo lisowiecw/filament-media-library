@@ -196,6 +196,28 @@ describe('attaching', function (): void {
         expect($article->mediaAttachments()->count())->toBe(1);
     });
 
+    it('says an unknown asset rather than a tenant mismatch where the id names nothing', function (): void {
+        $asset = makeAsset(['tenant_id' => 'acme']);
+        $id = $asset->id;
+        $asset->forceDelete();
+        $article = Article::create(['title' => 'Post']);
+
+        tenantIs('acme');
+
+        expect(fn () => app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$id]))
+            ->toThrow(AttachRefused::class, 'No such media asset');
+    });
+
+    it('says a tenant mismatch where the id names an asset in another tenant', function (): void {
+        $asset = makeAsset(['tenant_id' => 'other']);
+        $article = Article::create(['title' => 'Post']);
+
+        tenantIs('acme');
+
+        expect(fn () => app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$asset->id]))
+            ->toThrow(AttachRefused::class, 'outside the current tenant');
+    });
+
     it('refuses to attach a soft-deleted asset that was not attached already', function (): void {
         $asset = makeAsset(['tenant_id' => 'acme']);
         $asset->delete();
@@ -204,7 +226,30 @@ describe('attaching', function (): void {
         tenantIs('acme');
 
         expect(fn () => app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$asset->id]))
-            ->toThrow(AttachRefused::class);
+            ->toThrow(AttachRefused::class, 'No such media asset');
+    });
+
+    it('says an unknown asset where no tenant is configured at all', function (): void {
+        $asset = makeAsset();
+        $id = $asset->id;
+        $asset->forceDelete();
+        $article = Article::create(['title' => 'Post']);
+
+        expect(fn () => app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$id]))
+            ->toThrow(AttachRefused::class, 'No such media asset');
+    });
+
+    it('reports the unknown id where one id is unknown and another is another tenant\'s', function (): void {
+        $theirs = makeAsset(['tenant_id' => 'other']);
+        $gone = makeAsset(['tenant_id' => 'acme', 'object_key' => 'media/two.jpg']);
+        $goneId = $gone->id;
+        $gone->forceDelete();
+        $article = Article::create(['title' => 'Post']);
+
+        tenantIs('acme');
+
+        expect(fn () => app(AttachmentReconciler::class)->reconcile($article, 'cover_image', [$theirs->id, $goneId]))
+            ->toThrow(AttachRefused::class, 'No such media asset');
     });
 
     it('refuses to attach an id that names no asset at all', function (): void {
