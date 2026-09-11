@@ -324,9 +324,8 @@ function readyDerivative(MediaAsset $asset, DerivativeVariant $variant = Derivat
 }
 
 /**
- * A method's source text, for the fitness tests that assert a rule has one
- * home: agreeing on today's answer is what two spellings do right up until
- * one of them changes, so the assertion is made against what is written.
+ * A method's source text, read off disk, for the fitness tests that assert a
+ * rule has one home.
  *
  * @param  class-string  $class
  */

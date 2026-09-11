@@ -274,8 +274,11 @@ describe('attaching', function (): void {
  */
 it('asks one place whether a field context reaches the ids it wants', function (): void {
     $bodies = array_map(
-        fn (array $target): string => methodSource($target[0], $target[1]),
-        [[MediaPicker::class, 'getReachRule'], [AttachmentReconciler::class, 'refuseUnreachable']],
+        fn (array $target): string => methodSource(...$target),
+        [
+            [MediaPicker::class, 'getReachRule'],
+            [AttachmentReconciler::class, 'refuseUnreachable'],
+        ],
     );
 
     foreach ($bodies as $body) {
