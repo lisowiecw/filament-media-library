@@ -38,15 +38,119 @@ it('records the stored size of the sanitized bytes rather than the upload', func
     expect($asset->size)->toBe(strlen(storedBytes($asset)));
 });
 
-// The matcher covers `url()` values alone; the references it misses are what
-// the Delivery route's content policy and, on public placement, the Strict
-// pass are there for (ADR-0005).
+// The matcher reaches `url()` values, bare `href` and `src`, and `url()` or
+// `@import` inside a style; the references it misses are what the Delivery
+// route's content policy and, on public placement, the Strict pass are there
+// for (ADR-0005).
 it('strips the remote references the sanitizer can see', function (): void {
     $asset = ingest(svgUpload(
         '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="url(\'https://tracker.example/x\')" width="1" height="1"/></svg>',
     ));
 
     expect(storedBytes($asset))->not->toContain('tracker.example');
+});
+
+it('strips a bare remote href rather than only a url() one', function (): void {
+    $asset = ingest(svgUpload(
+        '<svg xmlns="http://www.w3.org/2000/svg"><a href="https://tracker.example/x"><rect width="1" height="1"/></a></svg>',
+    ));
+
+    expect(storedBytes($asset))->not->toContain('tracker.example');
+});
+
+it('strips a remote url() carried in a style attribute', function (): void {
+    $asset = ingest(svgUpload(
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect style="fill:red;background:url(https://tracker.example/x.png)" width="1" height="1"/></svg>',
+    ));
+
+    expect(storedBytes($asset))->not->toContain('tracker.example');
+});
+
+it('strips a remote @import from the text of a style element', function (): void {
+    $asset = ingest(svgUpload(
+        '<svg xmlns="http://www.w3.org/2000/svg"><style>@import url("https://tracker.example/x.css");</style><rect width="1" height="1"/></svg>',
+    ));
+
+    expect(storedBytes($asset))->not->toContain('tracker.example');
+});
+
+// GHSA-m9xh-6747-9r6f: a mixed-case spelling used to slip past the check.
+// `href` matching is case-insensitive now, so this is stripped like any other.
+it('strips a remote reference spelled in mixed case', function (): void {
+    $asset = ingest(svgUpload(
+        '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">'
+        .'<use xlink:HrEf="https://tracker.example/x.svg"/></svg>',
+    ));
+
+    expect(storedBytes($asset))->not->toContain('tracker.example');
+});
+
+// A local or fragment reference is not remote, so the stricter matcher must
+// still leave it alone.
+it('keeps a local reference while stripping the remote ones', function (): void {
+    $asset = ingest(svgUpload(
+        '<svg xmlns="http://www.w3.org/2000/svg"><a href="/local/page"><rect width="1" height="1"/></a></svg>',
+    ));
+
+    expect(storedBytes($asset))->toContain('/local/page');
+});
+
+// The doctype is stripped before parsing, so a reference to an entity declared
+// there is left undefined and the parse fails: the refusal is on the use, not
+// on the declaration.
+it('refuses an svg that references a custom entity', function (): void {
+    ingest(svgUpload(
+        '<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY x "hello">]>'
+        .'<svg xmlns="http://www.w3.org/2000/svg"><text>&x;</text></svg>',
+    ));
+})->throws(IngestRefused::class, 'could not be sanitized');
+
+// Declaring an entity and never using it leaves nothing undefined to trip the
+// parse, so the declaration goes with the doctype and the document survives.
+it('accepts an svg that declares a custom entity it never references', function (): void {
+    $asset = ingest(svgUpload(
+        '<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY x "hello">]>'
+        .'<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>',
+    ));
+
+    expect(storedBytes($asset))->toContain('<rect')
+        ->and(storedBytes($asset))->not->toContain('ENTITY');
+});
+
+// A remote `url()` costs the whole style attribute rather than the one
+// declaration, so a co-located `fill` goes with it. That is upstream's choice,
+// pinned here because it is the one narrowing that changes how a file renders.
+it('drops the whole style attribute a remote url() sits in', function (): void {
+    $asset = ingest(svgUpload(
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect style="fill:red;background:url(https://tracker.example/x.png)" width="1" height="1"/></svg>',
+    ));
+
+    expect(storedBytes($asset))->not->toContain('fill:red')
+        ->and(storedBytes($asset))->not->toContain('style=');
+});
+
+// The third leg of the three-way failure check: markup that parses and
+// sanitizes but whose root is not an `svg` is still caught by the root test
+// rather than reaching the caller as bytes.
+it('still refuses a sanitizable document whose root is not an svg', function (): void {
+    (new SvgSanitization)->sanitize(
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>hi</p></body></html>',
+        'logo.svg',
+        strict: false,
+    );
+})->throws(IngestRefused::class, 'could not be sanitized');
+
+// A plain doctype carries no entity declarations, so it is stripped and the
+// document survives.
+it('accepts an svg carrying a plain doctype', function (): void {
+    $asset = ingest(svgUpload(
+        '<?xml version="1.0"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" '
+        .'"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">'
+        .'<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>',
+    ));
+
+    expect(storedBytes($asset))->toContain('<rect')
+        ->and(storedBytes($asset))->not->toContain('DOCTYPE');
 });
 
 it('refuses an svg whose markup cannot be parsed', function (): void {
