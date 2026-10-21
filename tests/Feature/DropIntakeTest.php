@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Filament\Notifications\NotificationMailbox;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Lisowiecw\MediaLibrary\Forms\Components\DropIntake;
@@ -37,9 +38,12 @@ function staged(UploadedFile $file): TemporaryUploadedFile
  */
 function notices(): array
 {
+    $mailbox = app(NotificationMailbox::class);
+    $mailbox->flush();
+
     return array_map(
         fn (array $notification): string => strip_tags((string) ($notification['title'] ?? '')),
-        session('filament.notifications', []),
+        $mailbox->pull(),
     );
 }
 
