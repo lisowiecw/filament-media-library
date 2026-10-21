@@ -25,7 +25,7 @@ use Lisowiecw\MediaLibrary\Tenancy\Tenancy;
  *
  * Offering is not authorization. The scope is ergonomics, so that a field only
  * shows what it could accept; View decides what may be delivered, and is asked
- * per card rather than per row of this query. See CONTEXT.md on Offer.
+ * per card rather than per row of this query. See GLOSSARY.md on Offer.
  */
 final readonly class OfferScope
 {

@@ -238,7 +238,7 @@ final class FacetSidebar
 
     /**
      * The sidebar's dimensions, in the order they are read. Provenance is not
-     * among them and never will be: see CONTEXT.md on the Media Picker.
+     * among them and never will be: see GLOSSARY.md on the Media Picker.
      *
      * @return list<Facet>
      */

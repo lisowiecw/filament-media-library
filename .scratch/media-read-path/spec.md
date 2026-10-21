@@ -2,7 +2,7 @@
 
 Settled by a grilling session on 2026-09-07. Issues #91 (design and in-memory
 read), #93 (`withMedia`/`loadMedia`), #94 (`firstMedia` fallback, trivial),
-#95 (docs and the `CONTEXT.md` invariant). #92 is closed, folded into #91.
+#95 (docs and the `GLOSSARY.md` invariant). #92 is closed, folded into #91.
 Consumer uptake: british-polish-school/british-polish-server#37.
 
 ## The problem
