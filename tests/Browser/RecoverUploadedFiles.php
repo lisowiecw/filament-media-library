@@ -9,38 +9,49 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 
 /**
- * The browser plugin's in-process HTTP server hands Laravel the raw request
- * body but no files (see LaravelHttpServer::handleRequest, which passes an
- * empty files array with a "@TODO files..." note). Every upload in the panel
- * is a multipart POST, so without this the browser suite could not exercise
- * uploading at all. This middleware parses the multipart body back into real
- * UploadedFile instances for the duration of a browser test.
+ * The browser plugin's in-process HTTP server parses multipart bodies with
+ * multibyte string functions, which can corrupt binary file contents. This
+ * middleware reparses the raw body with byte-oriented operations and restores
+ * the file bag with Laravel's test-upload instances.
  */
 final class RecoverUploadedFiles
 {
     public function handle(Request $request, Closure $next): mixed
     {
         $type = (string) $request->headers->get('content-type', '');
+        $temporaryFiles = [];
 
-        if (str_starts_with(strtolower($type), 'multipart/form-data')
-            && $request->files->count() === 0
-            && preg_match('/boundary="?([^";]+)"?/i', $type, $matches) === 1) {
-            $this->recover($request, $matches[1]);
+        if (str_starts_with(strtolower($type), 'multipart/form-data')) {
+            if (preg_match('/boundary="?([^";]+)"?/i', $type, $matches) === 1) {
+                $temporaryFiles = $this->recover($request, $matches[1]);
+            }
         }
 
-        return $next($request);
+        try {
+            return $next($request);
+        } finally {
+            foreach ($temporaryFiles as $path) {
+                if (is_file($path)) {
+                    unlink($path);
+                }
+            }
+        }
     }
 
-    private function recover(Request $request, string $boundary): void
+    /**
+     * @return list<string>
+     */
+    private function recover(Request $request, string $boundary): array
     {
         $body = $request->getContent();
 
         if (! is_string($body) || $body === '') {
-            return;
+            return [];
         }
 
         $files = [];
         $fields = [];
+        $temporaryFiles = [];
 
         foreach (explode('--'.$boundary, $body) as $part) {
             $part = ltrim($part, "\r\n");
@@ -75,6 +86,7 @@ final class RecoverUploadedFiles
             }
 
             file_put_contents($path, $content);
+            $temporaryFiles[] = $path;
 
             preg_match('/Content-Type:\s*([^\r\n]+)/i', $rawHeaders, $mime);
 
@@ -92,6 +104,8 @@ final class RecoverUploadedFiles
 
         $request->files->replace($files);
         $request->request->add($fields);
+
+        return $temporaryFiles;
     }
 
     /**

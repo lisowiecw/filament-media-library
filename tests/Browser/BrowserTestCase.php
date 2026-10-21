@@ -165,15 +165,31 @@ abstract class BrowserTestCase extends Orchestra
 
         // Filament's login inputs carry an id and a Livewire binding but no
         // name attribute, so they are addressed by that id.
-        return visit('/admin/login')
+        $page = visit('/admin/login');
+
+        $page->script(<<<'JS'
+            async () => {
+                const form = document.querySelector('form');
+                const component = window.Livewire?.all?.().find(({ el }) => el.contains(form));
+
+                if (!component) {
+                    throw new Error('Could not find the Livewire component containing the login form.');
+                }
+
+                await component.$wire.$refresh();
+            }
+        JS);
+
+        $page = $page
             ->fill('[id="form.email"]', $user->email)
             ->fill('[id="form.password"]', 'password')
             // By selector rather than by text: the page's heading says "Sign
             // in" too, and the heading is what a text match finds first.
-            ->click('form button[type="submit"]')
-            // The panel has no dashboard, so signing in lands on whichever
-            // page it lists first. That it is no longer the login page is the
-            // part a caller depends on.
+            ->click('form button[type="submit"]');
+
+        // The panel has no dashboard, so signing in lands on whichever page it
+        // lists first. That it is no longer the login page is the part callers depend on.
+        return $page
             ->assertPathBeginsWith('/admin')
             ->assertPathIsNot('/admin/login');
     }
