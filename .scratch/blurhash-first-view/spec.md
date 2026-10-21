@@ -70,7 +70,7 @@ See `docs/adr/0018-the-blurhash-is-computed-apart-from-the-derivative.md`.
 
 **The regeneration command grows a selector** for hashes only, reusing its existing dry run and its `await()` pacing. A second command was rejected: it would duplicate the selector, the dry run and the pacing.
 
-**Glossary and ADR.** `CONTEXT.md` gains a **BlurHash** entry naming the string and its three states as a fact about the asset, with an `_Avoid_` line against Derivative, since coupling them is what caused this. **Placeholder painting** is rewritten to lean on it. ADR 18 records the decoupling. ADR 11 is untouched: it decides how the hash is painted, not when it exists.
+**Glossary and ADR.** `GLOSSARY.md` gains a **BlurHash** entry naming the string and its three states as a fact about the asset, with an `_Avoid_` line against Derivative, since coupling them is what caused this. **Placeholder painting** is rewritten to lean on it. ADR 18 records the decoupling. ADR 11 is untouched: it decides how the hash is painted, not when it exists.
 
 ## Testing Decisions
 

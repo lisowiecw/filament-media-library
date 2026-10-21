@@ -4,7 +4,7 @@
 
 **Research date:** 2026-08-27. All sources below were accessed on that date. Laravel references use the official `13.x` branch source and the 13.x documentation; Flysystem references use the `3.x` branch of `thephpleague/flysystem-aws-s3-v3`; Cloudflare and AWS references are official vendor documentation.
 
-**Local verification note:** this repository contains no `composer.json`, no `vendor/` directory and no PHP source (it holds `CONTEXT.md`, `AGENTS.md`, `docs/` and `.scratch/` only). There is no installed Laravel or Flysystem to read, so every version-specific fact below rests on upstream source rather than on a lockfile. Laravel 13's own documentation pins the S3 requirement as `league/flysystem-aws-s3-v3 "^3.0"`, which is the branch read here.
+**Local verification note:** this repository contains no `composer.json`, no `vendor/` directory and no PHP source (it holds `GLOSSARY.md`, `AGENTS.md`, `docs/` and `.scratch/` only). There is no installed Laravel or Flysystem to read, so every version-specific fact below rests on upstream source rather than on a lockfile. Laravel 13's own documentation pins the S3 requirement as `league/flysystem-aws-s3-v3 "^3.0"`, which is the branch read here.
 
 ## Executive conclusion
 

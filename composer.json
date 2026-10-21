@@ -92,6 +92,7 @@
             "@php -d ffi.enable=1 vendor/bin/pest --parallel --testsuite=Arch,Feature,Unit"
         ],
         "test:browser": [
+            "@php -r \"if (! is_dir('tests/Browser/Traces') && ! mkdir('tests/Browser/Traces', 0755, true) && ! is_dir('tests/Browser/Traces')) { throw new RuntimeException('Could not create browser traces directory.'); }\"",
             "@php vendor/bin/pest --testsuite=Browser"
         ],
         "test": [

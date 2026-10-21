@@ -1,4 +1,4 @@
-# Domain Context
+# Domain Glossary
 
 ## Media Library
 
