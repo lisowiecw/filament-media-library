@@ -38,12 +38,17 @@ function staged(UploadedFile $file): TemporaryUploadedFile
  */
 function notices(): array
 {
-    $mailbox = app(NotificationMailbox::class);
-    $mailbox->flush();
+    if (class_exists(NotificationMailbox::class)) {
+        $mailbox = app(NotificationMailbox::class);
+        $mailbox->flush();
+        $notifications = $mailbox->pull();
+    } else {
+        $notifications = session('filament.notifications', []);
+    }
 
     return array_map(
         fn (array $notification): string => strip_tags((string) ($notification['title'] ?? '')),
-        $mailbox->pull(),
+        $notifications,
     );
 }
 
