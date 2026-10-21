@@ -16,6 +16,10 @@ Use this template for writing the PR body:
 
 <diagram, diff-sketch, or tree>
 
+## Rationale
+
+<why this change is needed>
+
 ## Evidence
 
 - **Before:** <screenshot/output/failing test run>
